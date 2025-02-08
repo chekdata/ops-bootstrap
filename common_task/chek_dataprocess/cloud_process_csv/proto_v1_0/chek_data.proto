@@ -1,0 +1,55 @@
+syntax = "proto3";
+package chek;
+
+enum Gear {
+  P = 0;
+  N = 1;
+  R = 2;
+  D = 3;
+}
+
+enum AutoFlag {
+  NONE       = 0;
+  STANDBY    = 1;
+  ACC_ACTIVE = 2;
+}
+
+message BBox {
+  uint32 x0         = 1;
+  uint32 y0         = 2;
+  uint32 x1         = 3;
+  uint32 y1         = 4;
+  string name       = 5;
+  float  confidence = 6;
+}
+
+message ChekData {
+  uint64 time = 1;  // ms
+
+  float acc_x   = 2;   // m/s^2
+  float acc_y   = 3;   // m/s^2
+  float acc_z   = 19;  // m/s^2
+  float yaw     = 11;  // degree
+  float roll    = 12;  // degree
+  float pitch   = 13;  // degree
+  float w_roll  = 16;  // degree/s
+  float w_pitch = 17;  // degree/s
+  float w_yaw   = 18;  // degree/s
+
+  float         speed     = 4;  // km/h
+  float         odometer  = 5;  // km
+  Gear          gear      = 6;
+  AutoFlag      auto_flag = 7;
+  repeated BBox boxes     = 8;
+
+  float lon = 9;   // degree
+  float lat = 10;  // degree
+
+  float lon_acc = 14;  // m/s^2
+  float lat_acc = 15;  // m/s^2
+
+  reserved 20 to 25;
+  uint64 gps_time_stamp = 26;  // s
+  int32  gps_speed      = 27;  // km/h
+  string keyboard_flag  = 28;  // keyboard button string
+}

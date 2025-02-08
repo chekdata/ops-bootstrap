@@ -1,0 +1,3 @@
+[submodule "common_task/chek_dataprocess"]
+	path = common_task/chek_dataprocess
+	url = https://gitee.com/chek_kk/chek_dataprocess.git

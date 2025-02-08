@@ -1,0 +1,2 @@
+SOCIAL_AUTH_WEIXIN_appid = 'wxe24cb2373dae28a1'
+SOCIAL_AUTH_WEIXIN_secret = 'e08ac201c7fa17bb812e406e0ddbf1f0'

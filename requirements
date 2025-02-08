@@ -1,0 +1,17 @@
+jieba
+django
+djangorestframework
+djangorestframework-simplejwt
+Pillow
+social-auth-app-django
+drf-yasg
+pymysql
+daphne
+tencentcloud-sdk-python
+adrf
+django-cors-headers
+coreapi
+drf-spectacular
+tqdm
+tos
+pymongo

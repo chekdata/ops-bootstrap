@@ -1,0 +1,54 @@
+syntax = "proto3";
+package chek;
+
+message IMU {
+  float x_acc = 1;  // m/s^2
+  float y_acc = 2;  // m/s^2
+  float z_acc = 3;  // m/s^2
+  float x_ang = 4;  // degree
+  float y_ang = 5;  // degree
+  float z_ang = 6;  // degree
+  float x_w   = 7;  // degree/s
+  float y_w   = 8;  // degree/s
+  float z_w   = 9;  // degree/s
+}
+
+message GPS {
+  float  lon   = 1;  // degree
+  float  lat   = 2;  // degree
+  uint64 date  = 3;  // s
+  int32  speed = 4;  // km/h
+}
+
+message Box {
+  uint32 x0         = 1;
+  uint32 y0         = 2;
+  uint32 x1         = 3;
+  uint32 y1         = 4;
+  string name       = 5;
+  float  confidence = 6;
+}
+
+message HMI {
+  repeated Box detections       = 1;
+  repeated Box speed_detections = 2;
+}
+
+message Scene {
+  string road    = 1;
+  string weather = 2;
+  string light   = 3;
+}
+
+message Vehicle { repeated Box detections = 1; }
+
+message ChekDataFrame {
+  uint64  frame_id      = 1;
+  float   timestamp     = 2;  // s
+  IMU     imu           = 3;
+  GPS     gps           = 4;
+  string  keyboard_flag = 5;  // keyboard button string
+  HMI     hmi           = 6;
+  Scene   scene         = 7;
+  Vehicle vehicle       = 8;
+}

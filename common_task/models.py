@@ -1,0 +1,39 @@
+from django.db import models
+import uuid
+from accounts.models import User
+from datetime import  datetime
+
+class analysis_data_app(models.Model):
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4,editable=False, verbose_name='唯一标识ID')
+    user = models.ForeignKey(User, on_delete=models.CASCADE,null=True, blank=True)
+
+    updated_date = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    model = models.CharField(max_length=255,editable=False,null=True, verbose_name='用户使用车型')
+
+    intervention = models.IntegerField(default=0, blank=True, null=True,verbose_name="接管次数")
+    intervention_risk = models.IntegerField(default=0,blank=True, null=True, verbose_name="危险接管次数")
+    mpi = models.FloatField(default=0.0, blank=True, null=True,verbose_name="接管里程")
+    mpi_risk = models.FloatField(default=0.0,blank=True, null=True, verbose_name="危险接管里程")
+    total_mile = models.FloatField(default=0.0,blank=True, null=True, verbose_name="总里程")
+    noa_mile = models.FloatField(default=0.0,blank=True, null=True, verbose_name="NOA总里程")
+    lcc_mile = models.FloatField(default=0.0,blank=True, null=True, verbose_name="LCC总里程")
+    noa_lcc_mile = models.FloatField(default=0.0,blank=True, null=True, verbose_name="NOA LCC总里程")
+    standby_mile = models.FloatField(default=0.0,blank=True, null=True, verbose_name="人类驾驶里程")
+
+    class Meta:
+        db_table = 'analysis_data_app'
+
+
+class tos_csv_app(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, verbose_name='唯一标识ID')
+    user = models.ForeignKey(User, on_delete=models.CASCADE,null=True, blank=True)
+
+    updated_date = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+
+    tos_file_path = models.CharField(max_length=2000, editable=False, verbose_name='tos存储路径')
+    tos_file_type =  models.CharField(max_length=2000, editable=False, verbose_name='tos存储文件类型 inference/analysis')
+
+    approved_status = models.IntegerField(default=0,verbose_name='审核状态：0 未审核， 1 审核通过 2 审核不通过')
+    class Meta:
+        db_table = 'tos_csv_app'

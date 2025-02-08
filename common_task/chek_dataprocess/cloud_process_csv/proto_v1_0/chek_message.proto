@@ -1,0 +1,177 @@
+//////////////////////////////////////////////////////
+// 机构：CHEK车控
+// 功能：小程序行程数据挂载结构
+// 版本：v1.0
+// 时间：-
+// 修改时间：2024.1.22
+// 修改作者：zjx
+/////////////////////////////////////////////////////
+syntax = "proto3";
+import "google/protobuf/empty.proto";
+
+package com.vehicle.control.proto;
+option java_outer_classname = "ResourceMessageHandler";
+option java_multiple_files = false;
+
+service ResourceMessageHandle {
+
+  // 保存资源信息
+  rpc saveResource(ChekMessage) returns (result) {}
+}
+// 返回结果
+message result {
+  string code = 1; // 成功是200
+  bool status = 2; // 新增成功是true，新增失败是false
+  string msg = 3;
+}
+
+message User {
+  uint64 id = 1;    // 用户id
+  string name = 2;  // 用户名
+  string phone = 3; // 用户手机号
+  string MBTI = 4;  // 用户MBTI性格
+}
+
+message Car {
+  string brand = 1;   // 车辆品牌
+  string model = 2;   // 车辆型号
+  string version = 3; // 车机版本
+  string MBTI = 4;    // MBTI性格
+}
+
+message GPSPoint {
+  string datetime = 1;
+  float lon = 2;
+  float lat = 3;
+}
+
+message GPSTrajectory { repeated GPSPoint points = 1; }
+
+// 合并不计算平均速度加速度之类
+//message AutoJourney {
+//  // The same in driver journey
+//  float odometer = 1                  ;       // 里程 km
+//  float speed_average = 2             ;       // 平均速度 km/h
+//  float speed_max = 3                 ;       // 最大速度 km/h
+//  uint32 dcc_cnt = 4                  ;       // 急刹次数
+//  float dcc_frequency = 5             ;       // 急刹频次 km/次
+//  float dcc_average = 6               ;       // 急刹平均减速度 m/s^2
+//  float dcc_max = 7                   ;       // 急刹最大减速度 m/s^2
+//  float dcc_duration = 8              ;       // 总急刹时长 s
+//  uint32 acc_cnt = 9                  ;       // 急加速次数
+//  float acc_frequency = 10            ;       // 急加速频次 km/次
+//  float acc_average = 11              ;       // 急加速平均加速度 m/s^2
+//  float acc_max = 12                  ;       // 急加速大加速度 m/s^2
+//  float acc_duration = 13             ;       // 总急加速时长 s
+//  uint64 truck_avoid_cnt = 14         ;       // 大车避让次数
+//  float truck_avoid_speed_average = 15    ;   // 大车避让时的平均速度 m/s^2
+//  repeated GPSPoint intervention_gps_points = 23;
+//  repeated GPSPoint intervention_risk_gps_points = 24;
+//  repeated GPSTrajectory gps_trajectories = 25;
+
+//  // Only in autopilot
+//  uint64 truck_avoid_intervention = 16        ;   // 大车避让导致的接管次数
+//  uint64 truck_avoid_intervention_risk = 17   ;   // 大车避让导致的危险接管次数
+//  uint32 intervention = 18                    ;   // 总接管次数
+//  uint32 intervention_risk = 19               ;   // 危险接管次数
+//  float mpi = 20                              ;   // 每多少公里产生一次接管 // km/次
+//  float mpi_risk = 21                         ;   // 每多少公里产生一次危险接管 km/次
+//  float risk_rate = 22                        ;   // 危险接管所占比例 %
+//}
+
+//message DriverJourney {
+//  float odometer = 1            ;      // 里程 km
+//  float speed_average = 2       ;      // 平均速度 km/h
+//  float speed_max = 3           ;      // 最大速度 km/h
+//  uint32 dcc_cnt = 4            ;      // 急刹次数
+//  float dcc_frequency = 5       ;      // 急刹频次 km/次
+//  float dcc_average = 6         ;      // 急刹平均减速度 m/s^2
+//  float dcc_max = 7             ;      // 急刹最大减速度 m/s^2
+//  float dcc_duration = 8        ;      // 总急刹时长 s
+//  uint32 acc_cnt = 9            ;      // 急加速次数
+//  float acc_frequency = 10      ;      // 急加速频次 km/次
+//  float acc_average = 11        ;      // 急加速平均加速度 m/s^2
+//  float acc_max = 12            ;      // 急加速大加速度 m/s^2
+//  float acc_duration = 13       ;      // 总急加速时长 s
+//  uint64 truck_avoid_cnt = 14   ;      // 大车避让次数
+//  float truck_avoid_speed_average = 15    ; // 大车避让时的平均速度 m/s^2
+//  repeated GPSTrajectory gps_trajectories = 16;
+//}
+
+
+message AutoJourney {
+  // The same in driver journey
+  float odometer = 1                  ;       // 里程 km
+  uint64 frames       = 2             ;       // 行程统计帧数，静止帧不计入  
+  float speed_average = 3             ;       // 平均速度 km/h
+  float speed_max = 4                 ;       // 最大速度 km/h
+  uint32 dcc_cnt = 5                  ;       // 急刹次数
+  float dcc_frequency = 6             ;       // 急刹频次 km/次
+  float dcc_average = 7               ;       // 急刹平均减速度 m/s^2
+  float dcc_max = 8                   ;       // 急刹最大减速度 m/s^2
+  float dcc_duration = 9              ;       // 总急刹时长 s
+  uint32 acc_cnt = 10                 ;       // 急加速次数
+  float acc_frequency = 11            ;       // 急加速频次 km/次
+  float acc_average = 12              ;       // 急加速平均加速度 m/s^2
+  float acc_max = 13                  ;       // 急加速大加速度 m/s^2
+  float acc_duration = 14             ;       // 总急加速时长 s
+  uint64 truck_avoid_cnt = 15         ;       // 大车避让次数
+  float truck_avoid_speed_average = 16    ;   // 大车避让时的平均速度 m/s^2
+  repeated GPSPoint intervention_gps_points = 24;
+  repeated GPSPoint intervention_risk_gps_points = 25;
+  repeated GPSTrajectory gps_trajectories = 26;
+
+  // Only in autopilot
+  uint64 truck_avoid_intervention = 17        ;   // 大车避让导致的接管次数
+  uint64 truck_avoid_intervention_risk = 18   ;   // 大车避让导致的危险接管次数
+  uint32 intervention = 19                    ;   // 总接管次数
+  uint32 intervention_risk = 20               ;   // 危险接管次数
+  float mpi = 21                              ;   // 每多少公里产生一次接管 // km/次
+  float mpi_risk = 22                         ;   // 每多少公里产生一次危险接管 km/次
+  float risk_rate = 23                        ;   // 危险接管所占比例 %
+}
+
+message DriverJourney {
+  float odometer = 1            ;      // 里程 km
+  uint64 frames       = 2             ;       // 行程统计帧数，静止帧不计入  
+  float speed_average = 3       ;      // 平均速度 km/h
+  float speed_max = 4           ;      // 最大速度 km/h
+  uint32 dcc_cnt = 5            ;      // 急刹次数
+  float dcc_frequency = 6       ;      // 急刹频次 km/次
+  float dcc_average = 7         ;      // 急刹平均减速度 m/s^2
+  float dcc_max = 8             ;      // 急刹最大减速度 m/s^2
+  float dcc_duration = 9        ;      // 总急刹时长 s
+  uint32 acc_cnt = 10           ;      // 急加速次数
+  float acc_frequency = 11      ;      // 急加速频次 km/次
+  float acc_average = 12        ;      // 急加速平均加速度 m/s^2
+  float acc_max = 13            ;      // 急加速大加速度 m/s^2
+  float acc_duration = 14       ;      // 总急加速时长 s
+  uint64 truck_avoid_cnt = 15   ;      // 大车避让次数
+  float truck_avoid_speed_average = 16    ; // 大车避让时的平均速度 m/s^2
+  repeated GPSTrajectory gps_trajectories = 17;
+}
+
+
+
+
+
+message Journey {
+  string datetime = 1;                         // 行程的开始日期 2023.08.31 16:10:59
+  float duration = 2            ; // 行程的时长 h
+  float odometer_total = 3      ; // 行程总里程 km
+  float odometer_auto = 4       ; // 自动驾驶里程 km
+  float odometer_hmi = 5        ; // 车机显示消耗里程 km
+  float odometer_accuracy = 6   ; // 里程准确率=行程总里程/车机显示消耗里程*100%
+  bool is_break = 7             ;         // 该行程是否断点行程
+  uint64 index = 8              ;          // 该行程在所有断点行程中的序号
+  AutoJourney auto = 9;      // Autopilot行程(NOA+LCC)
+  AutoJourney noa = 10;      // NOA行程
+  AutoJourney lcc = 11;      // LCC行程
+  DriverJourney driver = 12; // 司机自驾行程
+}
+
+message ChekMessage {
+  User user = 1;       // 用户数据
+  Car car = 2;         // 车辆数据
+  Journey journey = 3; // 行程数据
+}

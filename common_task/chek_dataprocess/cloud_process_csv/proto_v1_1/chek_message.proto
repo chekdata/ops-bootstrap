@@ -1,0 +1,154 @@
+//////////////////////////////////////////////////////
+// 机构：CHEK车控
+// 功能：高速noa行程数据结构
+// 版本：v1.1
+// 时间：-
+// 修改时间：2024.1.22
+// 修改作者：zjx
+/////////////////////////////////////////////////////
+syntax = "proto3";
+import "google/protobuf/empty.proto";
+
+option java_package         = "com.vehicle.control.proto";
+option java_outer_classname = "ResourceMessageHandler";
+option java_multiple_files  = false;
+
+service ResourceMessageHandle {
+  // 保存资源信息
+  rpc saveResource(ChekMessage) returns (result) {}
+}
+// 返回结果
+message result {
+  string code   = 1;  // 成功是200
+  bool   status = 2;  // 新增成功是true，新增失败是false
+  string msg    = 3;
+}
+
+message User {
+  uint64 id    = 1;  // 用户id
+  string name  = 2;  // 用户名
+  string phone = 3;  // 用户手机号
+  string MBTI  = 4;  // 用户MBTI性格
+}
+
+message Car {
+  string brand   = 1;  // 车辆品牌
+  string model   = 2;  // 车辆型号
+  string version = 3;  // 车机版本
+  string MBTI    = 4;  // MBTI性格
+}
+
+message GPSPoint {
+  string datetime = 1;  // GPS时间
+  float  lon      = 2;  // 经度
+  float  lat      = 3;  // 维度
+}
+
+message GPSTrajectory {
+  repeated GPSPoint points = 1;  // 轨迹点
+}
+
+message TruckAvoidance {
+  string policy                = 1;  // 无: None, 加速: Acc, 减速: Dcc
+  float  duration              = 2;  // 避让耗时 s
+  bool   has_intervention      = 3;  // 避让中是否发生了接管
+  bool   has_intervention_risk = 4;  // 避让中是否发生了危险接管
+  float  min_lat_distance      = 5;  // 避让中最小横向距离 m
+  float  max_lat_distance      = 6;  // 避让中最大横向距离 m
+  uint32 start_frame_id        = 7;  // 避让开始的帧id
+  uint32 end_frame_id          = 8;  // 避让结束的帧id
+
+  GPSPoint gps_position = 9;  // 避让发生时的gps点
+}
+
+message TruckAvoidanceStatistics {
+  float  average_duration      = 1;  // 大车避让的平均时间 s
+  uint32 avoid_cnt             = 2;  // 大车避让的次数
+  uint32 intervention_cnt      = 3;  // 大车避让中发生接管的次数
+  uint32 intervention_risk_cnt = 4;  // 大车避让中发生危险接管的次数
+  float average_min_lat_distance = 5;  // 大车避让中平均最小横向距离 m
+  float average_max_lat_distance = 6;  // 大车避让中平均最大横向距离 m
+  float average_speed            = 7;  // 大车避让时的平均速度 m/s^2
+
+  repeated TruckAvoidance truck_avoidances = 8;  // 每一次的大车避让数据
+}
+
+message Intervention {
+  uint32   frame_id     = 1;  // 接管发生的帧id
+  GPSPoint gps_position = 2;  // 接管发生的gps位置
+  bool     is_risk      = 3;  // 该接管是否为危险接管
+}
+
+message InterventionStatistics {
+  uint32 cnt             = 1;  // 所有接管总次数
+  uint32 risk_cnt        = 2;  // 危险接管次数
+  float  mpi             = 3;  // 每多少公里产生一次接管 km/次
+  float  risk_mpi        = 4;  // 每多少公里产生一次危险接管 km/次
+  float  risk_proportion = 5;  // 危险接管所占比例 %
+
+  repeated Intervention interventions = 6;  // 每一次的接管数据
+}
+
+message Journey {
+  // The same in driver journey
+  float  odometer      = 1;   // 里程 km
+  float  duration      = 2;   // 行程耗时 h
+  uint64 frames        = 3;   // 行程统计帧数，静止帧不计入
+  float  speed_average = 4;   // 平均速度 km/h
+  float  speed_max     = 5;   // 最大速度 km/h
+  uint32 dcc_cnt       = 6;   // 急刹次数
+  float  dcc_frequency = 7;   // 急刹频次 km/次
+  float  dcc_average   = 8;   // 急刹平均减速度 m/s^2
+  float  dcc_max       = 9;   // 急刹最大减速度 m/s^2
+  float  dcc_duration  = 10;  // 总急刹时长 s
+  uint32 acc_cnt       = 11;  // 急加速次数
+  float  acc_frequency = 12;  // 急加速频次 km/次
+  float  acc_average   = 13;  // 急加速平均加速度 m/s^2
+  float  acc_max       = 14;  // 急加速大加速度 m/s^2
+  float  acc_duration  = 15;  // 总急加速时长 s
+
+  repeated GPSTrajectory gps_trajectories             = 16;  // 行程GPS轨迹
+  TruckAvoidanceStatistics truck_avoidance_statistics = 17;  // 行程大车避让数据
+  InterventionStatistics intervention_statistics = 18;  // 行程发生接管数据
+}
+
+message JourneyStatistics {
+  string datetime         = 1;  // 行程的开始日期 2023.08.31 16:10:59
+  float  duration         = 2;  // 行程的时长 h
+  float  odometer_total   = 3;  // 行程总里程 km
+  float  odometer_auto    = 4;  // 自动驾驶里程 km
+  float  odometer_hmi     = 5;  // 车机显示消耗里程 km
+  float odometer_accuracy = 6;  // 里程准确率=行程总里程/车机显示消耗里程*100%
+  Journey auto            = 7;  // Autopilot行程(NOA+LCC) 大车避让数据(NOA+LCC+Driver)
+  Journey noa             = 8;  // NOA行程
+  Journey lcc             = 9;  // LCC行程
+  Journey driver          = 10;  // 司机自驾行程
+}
+
+message Scene {
+  float odometer                = 1;  // 场景里程
+  float auto_odometer           = 2;  // 场景智驾里程
+  float Intervention            = 3;  // 场景智驾接管次数
+  float   risk_intervention     = 4;  // 场景智驾危险接管次数
+  map<string, float> city_dict  = 5;     // 场景中区域以及gps点数占比
+  //Journey journey = 5;  // 场景发生的行程
+  JourneyStatistics journeyStatistics = 6;  // 场景发生的行程
+}
+
+message SceneStatistics {
+  Scene sunny      = 1;  // 晴天
+  Scene rainy      = 2;  // 雨天
+  Scene highway    = 3;  // 高速
+  Scene expressway = 4;  // 城区快速路
+  Scene urban      = 5;  // 城区
+  Scene day        = 6;  // 白天
+  Scene night      = 7;  // 黑夜
+}
+
+message ChekMessage {
+  User                 user    = 1;  // 用户数据
+  Car                  car     = 2;  // 车辆数据
+  JourneyStatistics    journeyStatistics = 3;  // 行程数据
+  SceneStatistics      scene   = 4;  // 场景数据
+  string               filepath= 5;  // 视频文件路径
+}
