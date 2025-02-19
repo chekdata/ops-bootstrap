@@ -166,7 +166,7 @@ def judge_high_way(lon,lat):
         import requests
         # url =  """http://road.jwdou.com/road/findHighSection?location=116.451984,39.01567&sign=rd71345adb7d5d234f979f16f323910859f88"""
         # 120.9910398494324, 31.988758546859902
-        lon, lat = wgs84_to_gcj02(lon, lat)
+        #lon, lat = wgs84_to_gcj02(lon, lat)
         # url = f'http://47.237.20.206:8085/road/findHighSection?location={lon},{lat}&sign={sign}'
         # url = f'http://1.95.87.72:9065/road/findHighSection?location={lon},{lat}'
         url = f'http://1.95.87.72:9065/road/findHighSectionAsync?location={lon},{lat}'
