@@ -503,7 +503,7 @@ async def update_model_tos(request):
                 if brand:
                     item['brand'] = brand
                 if model_guide:
-                    item['model_guide'] = _.get('model_guide')
+                    item['model_guide'] = model_guide
                 if _.get('model'):
                     item['model'] = _.get('model')
                 if _.get('hardware_config_version'):
