@@ -302,7 +302,7 @@ async def search_model_tos(request):
             res_data = list(coll.aggregate(pipeline))
             client.close()
             if res_data:
-                return Response({'code': 200, 'message': '成功','data':{'model_tos_link':res_data[0].get('model_tos_link'),'md5_value':res_data[0].get('md5_value'),'model_guide':res_data[0].get('model_guide')}})
+                return Response({'code': 200, 'message': '成功','data':{'model_tos_link':res_data[0].get('model_tos_link'),'md5_value':res_data[0].get('md5_value'),'model_guide':res_data[0].get('model_guide'),'screen_type':res_data[0].get('screen_type')}})
 
             else:
                 return Response({'code': 400, 'message': '未查询到该数据','data':{}})
@@ -317,7 +317,7 @@ async def search_model_tos(request):
             client.close()
             if res_data:
                 return Response(
-                    {'code': 200, 'message': '成功', 'data': {'model_tos_link': res_data[0].get('model_tos_link'),'md5_value':res_data[0].get('md5_value'),'model_guide':res_data[0].get('model_guide')}})
+                    {'code': 200, 'message': '成功', 'data': {'model_tos_link': res_data[0].get('model_tos_link'),'md5_value':res_data[0].get('md5_value'),'model_guide':res_data[0].get('model_guide'),'screen_type':res_data[0].get('screen_type')}})
             else:
                 return Response({'code': 400, 'message': '未查询到该数据', 'data': {}})
         else:
