@@ -356,7 +356,8 @@ def model_search_pipline(model,hardware_config_version,software_config_version):
                     "model_tos_link": 1,
                     "version": 1,
                     'md5_value': 1,
-                    'model_guide':1
+                    'model_guide':1,
+                     'screen_type':1
                 }
             }
         ]
@@ -387,7 +388,8 @@ def model_search_pipline(model,hardware_config_version,software_config_version):
                     "model_tos_link": 1,
                     "version": 1,
                     'md5_value':1,
-                    'model_guide':1
+                    'model_guide':1,
+                     'screen_type':1
                 }
             }
         ]
@@ -417,7 +419,8 @@ def model_search_pipline(model,hardware_config_version,software_config_version):
                     "model_tos_link": 1,
                     "version": 1,
                     'md5_value': 1,
-                    'model_guide':1
+                    'model_guide':1,
+                    'screen_type':1
                 }
             }
         ]
