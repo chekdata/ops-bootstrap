@@ -780,3 +780,42 @@ async def update_version_vault(request):
     except Exception as e:
     #     print(e)
         return Response({'code': 500, 'message': '内部服务报错', 'data': {}})
+
+    
+
+@extend_schema(
+    # 指定请求体的参数和类型
+    request=ModelConfigUpdateModelTos,
+    # 指定响应的信息
+    responses={
+        200: OpenApiResponse(response=SuccessfulResponseSerializer, description="版本号上传成功"),
+        400: OpenApiResponse(response=SuccessfulResponseSerializer, description="数据缺失"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务错误")
+    },
+    parameters=[
+    ],
+    description="接收用户上传的版本信息判断。处理成功返回200，处理异常返回500。",
+    summary="判断版本信息",
+    tags=['版本包']
+)
+@api_view(['POST'])
+@authentication_classes([])  # 清空认证类
+@permission_classes([AllowAny])  # 允许任何人访问
+async def update_version_vault(request):
+    try:
+        version_profile = await sync_to_async(
+        lambda: version_vault.objects.order_by('-version_code').first(),
+        thread_sensitive=True   
+        )()
+        if version_profile:
+            package_name = version_profile.package_name 
+            version_name = version_profile.version_name 
+            chanel = version_profile.chanel 
+            version_code = version_profile.version_code 
+            return Response({'code': 200, 'message': '数据库缺失数据', 'data': {}})
+     
+
+        
+    except Exception as e:
+    #     print(e)
+        return Response({'code': 500, 'message': '内部服务报错', 'data': {}})
