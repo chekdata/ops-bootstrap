@@ -777,6 +777,8 @@ async def update_version_vault(request):
             VersionVault.version_code = version_code
     
             await sync_to_async(VersionVault.save, thread_sensitive=True)()
+            return Response({'code': 200, 'message': '数据上传成功', 'data': {}})
+            
     except Exception as e:
     #     print(e)
         return Response({'code': 500, 'message': '内部服务报错', 'data': {}})
