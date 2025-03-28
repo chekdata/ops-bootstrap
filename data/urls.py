@@ -12,4 +12,6 @@ urlpatterns = [
     # path('download_file_tos',views.download_file_tos),
     path('judge_high_way_process',views.judge_high_way_process),
     path('update_model_config_app',views.update_model_config_app),
+    path('update_version_vault',views.version_vault),
+    path('judge_version_vault',views.version_vault),
 ]
