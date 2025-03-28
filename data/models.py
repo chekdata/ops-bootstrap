@@ -39,7 +39,7 @@ class version_vault(models.Model):
     version_name = models.CharField(max_length=255, blank=True, null=True, verbose_name='version name')
     chanel = models.CharField(max_length=255, blank=True, null=True, verbose_name='channel')
     link = models.CharField(max_length=255, blank=True, null=True, verbose_name='link')
-    md5 = models.CharField(max_length=255, blank=True, null=True, verbose_name='md5')
+    md5_value = models.CharField(max_length=255, blank=True, null=True, verbose_name='md5_value')
     version_code = models.IntegerField(blank=True, null=True)
 
     class Meta:
