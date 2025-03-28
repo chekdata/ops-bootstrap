@@ -23,7 +23,7 @@ from .serializers import *
 from drf_spectacular.utils import OpenApiResponse
 import tempfile
 from common_task.handle_tos import *
-
+from django.db.models import Q
 import os
 from django.core.files.storage import FileSystemStorage
 import datetime
@@ -749,7 +749,7 @@ async def update_version_vault(request):
         version_code = request.data.get('version_code')
 
         if not package_name:
-            return Response({'code': 500, 'message': '数据缺失 package_name', 'data': {}})
+            return Response({'code': 400, 'message': '数据缺失 package_name', 'data': {}})
 
         # if not md5_value:
         #     return Response({'code': 400, 'message': '数据缺失 md5_value', 'data': {}})
@@ -762,8 +762,21 @@ async def update_version_vault(request):
         
         if not version_code:
             return Response({'code': 400, 'message': '数据缺失 version_code', 'data': {}})
-
         
+        version_profile = await sync_to_async(
+        lambda: version_vault.objects.filter(Q(version_code__gte=version_code)).first(),
+        thread_sensitive=True
+        )()
+        if version_profile:
+            return Response({'code': 400, 'message': 'version code 版本小于现有版本', 'data': {}})
+        else:
+            VersionVault,creat =await sync_to_async(version_vault.objects.get_or_create, thread_sensitive=True)(version_code=version_code)
+            VersionVault.package_name = package_name
+            VersionVault.version_name = version_name
+            VersionVault.chanel = chanel
+            VersionVault.version_code = version_code
+    
+            await sync_to_async(VersionVault.save, thread_sensitive=True)()
     except Exception as e:
     #     print(e)
         return Response({'code': 500, 'message': '内部服务报错', 'data': {}})
