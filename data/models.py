@@ -41,6 +41,8 @@ class version_vault(models.Model):
     link = models.CharField(max_length=255, blank=True, null=True, verbose_name='link')
     md5_value = models.CharField(max_length=255, blank=True, null=True, verbose_name='md5_value')
     version_code = models.IntegerField(blank=True, null=True)
+    created_date = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+
 
     class Meta:
         db_table = 'version_vault'
