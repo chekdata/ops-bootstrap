@@ -721,3 +721,49 @@ def update_model_info_by_match_model(brand,model_config_data):
                     if pre_model.model and pre_model.hardware_config_version and pre_model.software_config_version:
                         pre_model.save()
 
+@extend_schema(
+    # 指定请求体的参数和类型
+    request=ModelConfigUpdateModelTos,
+    # 指定响应的信息
+    responses={
+        200: OpenApiResponse(response=SuccessfulResponseSerializer, description="版本号上传成功"),
+        400: OpenApiResponse(response=SuccessfulResponseSerializer, description="数据缺失"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务错误")
+    },
+    parameters=[
+    ],
+    description="接收用户上传的版本信息并入库。处理成功返回200，处理异常返回500。",
+    summary="上传版本信息",
+    tags=['版本包']
+)
+@api_view(['POST'])
+@authentication_classes([])  # 清空认证类
+@permission_classes([AllowAny])  # 允许任何人访问
+async def update_version_vault(request):
+    try:
+        package_name = request.data.get('package_name')
+        version_name = request.data.get('version_name')
+        chanel = request.data.get('chanel')
+        link = request.data.get('link')
+        md5_value = request.data.get('md5_value')
+        version_code = request.data.get('version_code')
+
+        if not package_name:
+            return Response({'code': 500, 'message': '数据缺失 package_name', 'data': {}})
+
+        # if not md5_value:
+        #     return Response({'code': 400, 'message': '数据缺失 md5_value', 'data': {}})
+
+        if not version_name:
+            return Response({'code': 400, 'message': '数据缺失 version_name', 'data': {}})
+
+        if not chanel:
+            return Response({'code': 400, 'message': '数据缺失 chanel', 'data': {}})
+        
+        if not version_code:
+            return Response({'code': 400, 'message': '数据缺失 version_code', 'data': {}})
+
+        
+    except Exception as e:
+    #     print(e)
+        return Response({'code': 500, 'message': '内部服务报错', 'data': {}})
