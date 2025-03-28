@@ -6,7 +6,7 @@ from rest_framework import generics
 from data.models import Data
 from data.serializers import DataSerializer
 from rest_framework.permissions import IsAuthenticated
-from data.models import model_config,model_config_app_update
+from data.models import model_config,model_config_app_update,version_vault
 from django.views.decorators.http import require_POST
 import jieba
 from rest_framework.response import Response
