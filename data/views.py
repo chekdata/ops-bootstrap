@@ -801,7 +801,7 @@ async def update_version_vault(request):
 @api_view(['POST'])
 @authentication_classes([])  # 清空认证类
 @permission_classes([AllowAny])  # 允许任何人访问
-async def update_version_vault(request):
+async def judge_version_vault(request):
     try:
         version_profile = await sync_to_async(
         lambda: version_vault.objects.order_by('-version_code').first(),
