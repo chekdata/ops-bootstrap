@@ -812,8 +812,7 @@ async def update_version_vault(request):
             version_name = version_profile.version_name 
             chanel = version_profile.chanel 
             version_code = version_profile.version_code 
-            return Response({'code': 200, 'message': '数据库缺失数据', 'data': {}})
-     
+            return Response({'code': 200, 'message': '数据库缺失数据', 'data': {'package_name':package_name,'version_name':version_name,'chanel':chanel,'version_code':version_code}})
 
         
     except Exception as e:
