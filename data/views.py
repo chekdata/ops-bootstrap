@@ -744,9 +744,16 @@ async def update_version_vault(request):
         package_name = request.data.get('package_name')
         version_name = request.data.get('version_name')
         chanel = request.data.get('chanel')
-        link = request.data.get('link')
+        #link = request.data.get('link')
         md5_value = request.data.get('md5_value')
         version_code = request.data.get('version_code')
+
+        version_package_file = request.FILES.get('file')
+        if not version_package_file:
+            return Response({'code': 500, 'message': '没有接收到文件', 'data': {}})
+
+        if not md5_value:
+            return Response({'code': 400, 'message': '数据缺失 md5_value', 'data': {}})
 
         if not package_name:
             return Response({'code': 400, 'message': '数据缺失 package_name', 'data': {}})
@@ -763,22 +770,46 @@ async def update_version_vault(request):
         if not version_code:
             return Response({'code': 400, 'message': '数据缺失 version_code', 'data': {}})
         
-        version_profile = await sync_to_async(
-        lambda: version_vault.objects.filter(Q(version_code__gte=version_code)).first(),
-        thread_sensitive=True
-        )()
-        if version_profile:
-            return Response({'code': 400, 'message': 'version code 版本小于现有版本', 'data': {}})
+         # 使用 tempfile 创建一个临时文件夹
+        temp_dir = tempfile.gettempdir()
+
+        # 创建一个 FileSystemStorage 实例，指向临时目录
+        fs = FileSystemStorage(location=temp_dir)
+
+        # 保存文件
+        # filename = fs.save(csv_file.name, csv_file)
+        filename = await sync_to_async(fs.save, thread_sensitive=True)(model_pt_file.name, model_pt_file)
+        # 获取保存后的文件的完整路径
+        file_url = fs.path(filename)
+
+        md5_cal_value = calculate_md5_value(file_url)
+        if md5_cal_value == md5_value:
+            upload_file_path = f'release_package/{version_package_file.name}'
+            # 保存文件
+            tinder_os = TinderOS()
+            tinder_os.upload_file('chek', upload_file_path, file_url)
+            os.remove(file_url)
+
+            version_profile = await sync_to_async(
+            lambda: version_vault.objects.filter(Q(version_code__gte=version_code)).first(),
+            thread_sensitive=True
+            )()
+            if version_profile:
+                return Response({'code': 400, 'message': 'version code 版本小于现有版本', 'data': {}})
+            else:
+                VersionVault,creat =await sync_to_async(version_vault.objects.get_or_create, thread_sensitive=True)(version_code=version_code)
+                VersionVault.package_name = package_name
+                VersionVault.version_name = version_name
+                VersionVault.chanel = chanel
+                VersionVault.version_code = version_code
+                VersionVault.md5_value = md5_value
+                VersionVault.link = upload_file_path
+                await sync_to_async(VersionVault.save, thread_sensitive=True)()
+                return Response({'code': 200, 'message': '数据上传成功', 'data': {}})
         else:
-            VersionVault,creat =await sync_to_async(version_vault.objects.get_or_create, thread_sensitive=True)(version_code=version_code)
-            VersionVault.package_name = package_name
-            VersionVault.version_name = version_name
-            VersionVault.chanel = chanel
-            VersionVault.version_code = version_code
-    
-            await sync_to_async(VersionVault.save, thread_sensitive=True)()
-            return Response({'code': 200, 'message': '数据上传成功', 'data': {}})
-            
+            os.remove(file_url)
+            return Response({'code': 400, 'message': 'md5 不准确', 'data': {}})
+        
     except Exception as e:
     #     print(e)
         return Response({'code': 500, 'message': '内部服务报错', 'data': {}})
