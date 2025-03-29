@@ -814,7 +814,9 @@ async def judge_version_vault(request):
             version_name = version_profile.version_name 
             chanel = version_profile.chanel 
             version_code = version_profile.version_code 
-            return Response({'code': 200, 'message': '成功', 'data': {'package_name':package_name,'version_name':version_name,'chanel':chanel,'version_code':version_code}})
+            md5_value = version_profile.md5_value 
+            link = version_profile.link 
+            return Response({'code': 200, 'message': '成功', 'data': {'package_name':package_name,'version_name':version_name,'chanel':chanel,'version_code':version_code,                           'md5_value':md5_value,'link':link}})
 
         
     except Exception as e:
