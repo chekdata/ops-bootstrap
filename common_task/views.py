@@ -1,4 +1,5 @@
 from django.shortcuts import render
+# from common_task.tasks import merge_trip_chunks , check_and_merge_trip # Import the missing task
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import  permission_classes
 from adrf.decorators import api_view
@@ -20,6 +21,8 @@ from common_task.handle_tos_play_link import *
 
 import re
 import os
+import json
+from django.db import transaction
 from asgiref.sync import sync_to_async
 from django.core.files.storage import FileSystemStorage
 import tempfile
@@ -29,14 +32,23 @@ from drf_spectacular.types import OpenApiTypes
 from rest_framework import status,serializers
 from common_task.serializers import *
 from data.models import model_config
+from .models import Trip, ChunkFile
 #from .chek_dataprocess.cloud_process_csv.wechat_csv_process import process_csv
 from .chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
+from common_task.task_handlers import trigger_merge_trip_chunks, trigger_check_and_merge_trip
 
 # 限制并发任务5
 semaphore = asyncio.Semaphore(5)
 # 用于管理所有后台任务的列表
 background_tasks = []
 
+from .tasks import (
+    upload_chunk_file, 
+    check_chunks_complete, 
+    start_merge_async, 
+    check_timeout_trip,
+    force_merge_trip
+)
 
 
 def is_valiad_phone_number(phone):
@@ -446,3 +458,130 @@ async def process_tos_play_link(request):
     except Exception as e:
         return Response({'code': 500, 'message': '内部服务报错','data':{}})
 
+@extend_schema(
+    # 指定请求体的参数和类型
+    request=InferenceDetialDetDataSerializer,
+    # 指定响应的信息
+    responses={
+        200: OpenApiResponse(response=SuccessResponseSerializer, description="处理成功"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务错误")
+    },
+    parameters=[
+        OpenApiParameter(name="Authorization", description="认证令牌，格式为：Bearer <token>", required=True, type=OpenApiTypes.STR, location=OpenApiParameter.HEADER)
+    ],
+    description="根据传入的tos路径获取点播链接，处理成功返回200，处理异常返回500。",
+    summary="分片上传数据",
+    tags=['数据']
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+async def upload_chunk(request):
+    """上传分片文件"""
+    try:
+        # 获取上传文件
+        file = request.FILES.get('file')
+        if not file:
+            return JsonResponse({'success': False, 'message': '没有接收到文件'})
+        
+        # 获取元数据
+        trip_id = request.POST.get('trip_id')
+        chunk_index = int(request.POST.get('chunk_index', 0))
+        file_type = request.POST.get('file_type', 'csv')
+        
+        if not trip_id:
+            return JsonResponse({'success': False, 'message': '缺少trip_id参数'})
+        
+        # 构建元数据
+        metadata = {
+            'device_id': request.POST.get('device_id'),
+            'car_name': request.POST.get('car_name'),
+            'start_time': request.POST.get('start_time'),
+            'end_time': request.POST.get('end_time'),
+            'total_chunks': int(request.POST.get('total_chunks', 0)),
+            'is_last_chunk': request.POST.get('is_last_chunk') == 'true'
+        }
+        
+        # 上传分片
+        success, message, chunk_file = await upload_chunk_file(
+            trip_id, 
+            chunk_index, 
+            file, 
+            file_type,
+            metadata
+        )
+        
+        if not success:
+            return JsonResponse({'success': False, 'message': message})
+        
+        # 如果是最后一个分片，触发合并
+        if metadata.get('is_last_chunk'):
+            asyncio.create_task(start_merge_async(trip_id))
+        else:
+            # 检查是否需要触发自动合并
+            asyncio.create_task(check_timeout_trip(trip_id))
+        
+        return JsonResponse({
+            'success': True, 
+            'message': '分片上传成功',
+            'data': {
+                'trip_id': trip_id,
+                'chunk_index': chunk_index,
+                'file_type': file_type
+            }
+        })
+    
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'请求处理失败: {str(e)}'})
+
+@csrf_exempt
+@require_http_methods(["POST"])
+async def complete_upload(request):
+    """完成上传，开始合并文件"""
+    try:
+        data = json.loads(request.body)
+        trip_id = data.get('trip_id')
+        total_chunks = data.get('total_chunks')  # 预期的分片总数
+        force = data.get('force', False)  # 是否强制合并
+        
+        if not trip_id:
+            return JsonResponse({'success': False, 'message': '缺少trip_id参数'})
+        
+        # 检查分片完整性
+        is_complete, missing_chunks = await check_chunks_complete(trip_id, total_chunks)
+        
+        if not is_complete and not force:
+            return JsonResponse({
+                'success': False, 
+                'message': '分片不完整',
+                'missing_chunks': missing_chunks
+            })
+        
+        # 启动合并任务
+        success, message = await force_merge_trip(trip_id)
+        
+        return JsonResponse({
+            'success': success, 
+            'message': message
+        })
+    
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'请求处理失败: {str(e)}'})
+
+@require_http_methods(["GET"])
+async def check_chunks(request, trip_id):
+    """检查分片状态"""
+    try:
+        total_chunks = request.GET.get('total_chunks')
+        if total_chunks:
+            total_chunks = int(total_chunks)
+        
+        is_complete, missing_chunks = await check_chunks_complete(trip_id, total_chunks)
+        
+        return JsonResponse({
+            'success': True,
+            'is_complete': is_complete,
+            'missing_chunks': missing_chunks
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'请求处理失败: {str(e)}'})
+    

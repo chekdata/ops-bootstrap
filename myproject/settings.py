@@ -192,3 +192,31 @@ SOCIAL_AUTH_WEIXIN_SECRET = 'e08ac201c7fa17bb812e406e0ddbf1f0'
 AUTH_USER_MODEL = 'accounts.User'
 os.environ['DJANGO_ALLOW_ASYNC_UNSAFE'] = 'true'
 AUTHENTICATION_BACKENDS = ['path.to.UserIDAuthBackend']
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} {module} {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+
+    },
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'debug.log',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['file'],
+            'level' : 'INFO',
+            'propagate': True,
+        },
+    },
+}

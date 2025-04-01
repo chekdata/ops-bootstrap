@@ -1,4 +1,5 @@
 from django.db import models
+import os
 import uuid
 from accounts.models import User
 from datetime import  datetime
@@ -37,3 +38,28 @@ class tos_csv_app(models.Model):
     approved_status = models.IntegerField(default=0,verbose_name='审核状态：0 未审核， 1 审核通过 2 审核不通过')
     class Meta:
         db_table = 'tos_csv_app'
+
+
+class Trip(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100)
+    is_completed = models.BooleanField(default=False)
+    last_update = models.DateTimeField(auto_now=True)
+    merged_csv_path = models.CharField(max_length=255, null=True, blank=True)
+    merged_det_path = models.CharField(max_length=255, null=True, blank=True)
+    
+    def __str__(self):
+        return f"Trip {self.name}"
+
+class ChunkFile(models.Model):
+    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='chunks')
+    chunk_index = models.IntegerField()
+    file_path = models.CharField(max_length=255)
+    file_type = models.CharField(max_length=10)  # 'csv' 或 'det'
+    upload_time = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('trip', 'chunk_index', 'file_type')
+        
+    def __str__(self):
+        return f"Chunk {self.chunk_index} of {self.trip.name}"
