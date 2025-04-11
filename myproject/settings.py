@@ -103,7 +103,7 @@ DATABASES = {
         'NAME': 'app_project',
         'USER': 'root',
         'PASSWORD': 'Qwer4321@',
-        'HOST': '62.234.57.136',
+        'HOST': '101.126.6.116',
         'PORT': '3306',
     }
 }
@@ -205,6 +205,11 @@ LOGGING = {
 
     },
     'handlers': {
+        'console': {  # 添加 console handler
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
         'file': {
             'level': 'INFO',
             'class': 'logging.FileHandler',
@@ -214,9 +219,24 @@ LOGGING = {
     },
     'loggers': {
         'django': {
-            'handlers': ['file'],
+            'handlers': ['file','console'],
             'level' : 'INFO',
             'propagate': True,
         },
+        'common_task': {  # 添加你的应用日志器
+            'handlers': ['file', 'console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+        'accounts': {  # 添加账户应用日志器
+            'handlers': ['file', 'console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+        'data': {  # 添加数据应用日志器
+            'handlers': ['file', 'console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        }
     },
 }

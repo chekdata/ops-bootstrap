@@ -12,6 +12,7 @@ from adrf.decorators import api_view
 from rest_framework.response import Response
 import io
 import csv
+import logging
 import asyncio
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -35,20 +36,30 @@ from data.models import model_config
 from .models import Trip, ChunkFile
 #from .chek_dataprocess.cloud_process_csv.wechat_csv_process import process_csv
 from .chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
-from common_task.task_handlers import trigger_merge_trip_chunks, trigger_check_and_merge_trip
-
-# 限制并发任务5
-semaphore = asyncio.Semaphore(5)
-# 用于管理所有后台任务的列表
-background_tasks = []
-
 from .tasks import (
     upload_chunk_file, 
     check_chunks_complete, 
     start_merge_async, 
-    check_timeout_trip,
-    force_merge_trip
-)
+    check_timeout_trip, 
+    force_merge_trip, 
+    handle_merge_task,
+    cleanup_background_tasks,
+    background_tasks)
+
+
+logger = logging.getLogger('common_task')
+
+# 限制并发任务5
+semaphore = asyncio.Semaphore(5)
+
+
+# from .tasks import (
+#     upload_chunk_file, 
+#     check_chunks_complete, 
+#     start_merge_async, 
+#     check_timeout_trip,
+#     force_merge_trip
+# )
 
 
 def is_valiad_phone_number(phone):
@@ -477,29 +488,31 @@ async def process_tos_play_link(request):
 @permission_classes([IsAuthenticated])
 async def upload_chunk(request):
     """上传分片文件"""
+    user = request.user  # 获取当前登录用户
+    _id = user.id
     try:
         # 获取上传文件
         file = request.FILES.get('file')
         if not file:
-            return JsonResponse({'success': False, 'message': '没有接收到文件'})
+            return JsonResponse({'code':500, 'success': False, 'message': '没有接收到文件', 'data':{}})
         
-        # 获取元数据
-        trip_id = request.POST.get('trip_id')
-        chunk_index = int(request.POST.get('chunk_index', 0))
-        file_type = request.POST.get('file_type', 'csv')
+        # 获取并解析 metadata JSON
+        metadata_str = request.POST.get('metadata')
+        if not metadata_str:
+            return JsonResponse({'code':500,'success': False, 'message': '缺少 metadata', 'data':{}})
+            
+        try:
+            metadata = json.loads(metadata_str)
+        except json.JSONDecodeError:
+            return JsonResponse({'code':500, 'success': False, 'message': 'metadata 格式错误', 'data':{}})
+        
+        # 从 metadata 中获取必要信息
+        trip_id = metadata.get('trip_id')
+        chunk_index = int(metadata.get('chunk_index', 0))
+        file_type = metadata.get('file_type', 'csv')
         
         if not trip_id:
-            return JsonResponse({'success': False, 'message': '缺少trip_id参数'})
-        
-        # 构建元数据
-        metadata = {
-            'device_id': request.POST.get('device_id'),
-            'car_name': request.POST.get('car_name'),
-            'start_time': request.POST.get('start_time'),
-            'end_time': request.POST.get('end_time'),
-            'total_chunks': int(request.POST.get('total_chunks', 0)),
-            'is_last_chunk': request.POST.get('is_last_chunk') == 'true'
-        }
+            return JsonResponse({'code':500,'success': False, 'message': '缺少 trip_id', 'data':{}})
         
         # 上传分片
         success, message, chunk_file = await upload_chunk_file(
@@ -511,30 +524,41 @@ async def upload_chunk(request):
         )
         
         if not success:
-            return JsonResponse({'success': False, 'message': message})
+            return JsonResponse({'code':500,'success': False, 'message': message, 'data':{}})
         
-        # 如果是最后一个分片，触发合并
-        if metadata.get('is_last_chunk'):
-            asyncio.create_task(start_merge_async(trip_id))
-        else:
-            # 检查是否需要触发自动合并
-            asyncio.create_task(check_timeout_trip(trip_id))
+        # # 如果是最后一个分片，触发合并
+        # if metadata.get('is_last_chunk'):
+        #     asyncio.create_task(start_merge_async(_id, trip_id))
+        # else:
+        #     # 检查是否需要触发自动合并
+        #     asyncio.create_task(check_timeout_trip(_id, trip_id))
+        
+        #创建后台任务
+        merge_task = asyncio.create_task(
+            handle_merge_task(_id,trip_id, is_last_chunk=metadata.get('is_last_chunk'))
+        )
+        background_tasks.append(merge_task)
+
+        await cleanup_background_tasks()
         
         return JsonResponse({
+            'code':200,
             'success': True, 
             'message': '分片上传成功',
             'data': {
                 'trip_id': trip_id,
                 'chunk_index': chunk_index,
-                'file_type': file_type
+                'file_type': file_type,
+                'session_id': metadata.get('session_id')
             }
         })
     
     except Exception as e:
-        return JsonResponse({'success': False, 'message': f'请求处理失败: {str(e)}'})
+        logger.error(f"上传分片失败: {str(e)}")
+        return JsonResponse({'code':500,'success': False, 'message': f'请求处理失败: {str(e)}', 'data':{}})
 
 @csrf_exempt
-@require_http_methods(["POST"])
+@api_view(['POST'])
 async def complete_upload(request):
     """完成上传，开始合并文件"""
     try:
@@ -544,30 +568,33 @@ async def complete_upload(request):
         force = data.get('force', False)  # 是否强制合并
         
         if not trip_id:
-            return JsonResponse({'success': False, 'message': '缺少trip_id参数'})
+            return JsonResponse({'code':500,'success': False, 'message': '缺少trip_id参数', 'data':{}})
         
         # 检查分片完整性
         is_complete, missing_chunks = await check_chunks_complete(trip_id, total_chunks)
         
         if not is_complete and not force:
             return JsonResponse({
+                'code':500,
                 'success': False, 
                 'message': '分片不完整',
-                'missing_chunks': missing_chunks
+                'data':{'missing_chunks': missing_chunks}
             })
         
         # 启动合并任务
         success, message = await force_merge_trip(trip_id)
         
         return JsonResponse({
+            'code':200,
             'success': success, 
-            'message': message
+            'message': message,
+            'data':{}
         })
     
     except Exception as e:
-        return JsonResponse({'success': False, 'message': f'请求处理失败: {str(e)}'})
+        return JsonResponse({'success': False, 'message': f'请求处理失败: {str(e)}','data':{}})
 
-@require_http_methods(["GET"])
+@api_view(['POST'])
 async def check_chunks(request, trip_id):
     """检查分片状态"""
     try:
@@ -580,8 +607,8 @@ async def check_chunks(request, trip_id):
         return JsonResponse({
             'success': True,
             'is_complete': is_complete,
-            'missing_chunks': missing_chunks
+            'data':{'missing_chunks': missing_chunks}
         })
     except Exception as e:
-        return JsonResponse({'success': False, 'message': f'请求处理失败: {str(e)}'})
+        return JsonResponse({'success': False, 'message': f'请求处理失败: {str(e)}','data':{}})
     
