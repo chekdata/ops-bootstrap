@@ -63,6 +63,7 @@ async def merge_files(user_id, trip_id):
         # 使用sync_to_async包装事务操作
         @sync_to_async(thread_sensitive=True)
         def _merge_files_sync():
+            logger.info(f"开始合并文件, 用户ID: {user_id}, 行程ID: {trip_id}")
             with transaction.atomic():
                 trip = Trip.objects.select_for_update().get(trip_id=trip_id)
                 
@@ -90,7 +91,7 @@ async def merge_files(user_id, trip_id):
                             merged_csv_filename = chunk.file_name.split('/')[-1]
                             break
                     if not merged_csv_filename:
-                        merged_csv_filename = trip.file_name if trip.file_name else f"merged_{trip_id}"
+                        merged_csv_filename = trip.file_name.split('/')[-1] if trip.file_name else f"merged_{trip_id}"
 
                     if not merged_csv.empty:
                         # 创建合并目录
@@ -112,11 +113,12 @@ async def merge_files(user_id, trip_id):
                     
                     merged_det_filename = None
                     for chunk in det_chunks:
+                        logger.info(f"chunk.file_name: {chunk.file_name}")
                         if 'spcialPoint' in chunk.file_name:
                             merged_det_filename = chunk.file_name.split('/')[-1]
                             break
                     if not merged_det_filename:
-                        merged_det_filename = trip.file_name if trip.file_name else f"merged_{trip_id}"
+                        merged_det_filename = trip.file_name.split('/')[-1] if trip.file_name else f"merged_{trip_id}"
 
                     det_merged_path = os.path.join(merged_dir, merged_det_filename)
                     with open(det_merged_path, 'wb') as outfile:
@@ -190,14 +192,14 @@ async def check_timeout_trips():
                 Trip.objects.filter(
                     is_completed=False, 
                     last_update__lt=timeout
-                ).values('trip_id')  # 只获取trip_id字段
+                ).values('trip_id', 'user_id')  # 只获取trip_id字段
             )
             
             # 为每个超时的Trip创建合并任务
             tasks = []
             for trip in trips:
-                logger.info(f"检测到超时Trip {trip['trip_id']}，开始异步合并")
-                task = asyncio.create_task(start_merge_async(trip['trip_id']))
+                logger.info(f"检测到超时Trip {trip['trip_id']}，用户ID: {trip['user_id']}  开始异步合并")
+                task = asyncio.create_task(start_merge_async(trip['user_id'],trip['trip_id']))
                 tasks.append(task)
             
             # 等待所有任务完成
@@ -296,7 +298,7 @@ async def check_timeout_trip(user_id,trip_id):
     except Exception as e:
         logger.error(f"检查行程超时失败: {e}")
 
-async def upload_chunk_file(trip_id, chunk_index, file_obj, file_type, metadata=None):
+async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, metadata=None):
     """
     上传分片文件（异步版本）
     
@@ -329,8 +331,10 @@ async def upload_chunk_file(trip_id, chunk_index, file_obj, file_type, metadata=
             #     defaults['start_time'] = metadata['start_time']
             # if 'total_chunks' in metadata:
             #     defaults['total_chunks'] = metadata['total_chunks']
+            defaults['file_name'] = metadata['file_name']
         
         trip, created = await sync_to_async(Trip.objects.get_or_create, thread_sensitive=True)(
+            user_id = user_id,
             trip_id=trip_id, 
             defaults=defaults
         )
@@ -398,7 +402,7 @@ async def force_merge_trip(trip_id):
         trip = await sync_to_async(Trip.objects.get, thread_sensitive=True)(trip_id=trip_id)
         
         # 开始合并
-        result = await start_merge_async(trip_id)
+        result = await start_merge_async(trip.user_id, trip_id)
         
         if result:
             return True, "行程合并成功"
@@ -427,7 +431,7 @@ async def prepare_upload_tos_file_path(_id,status_tag,file_name):
     brand = middle_model.brand
 
     if middle_model:
-        upload_file_path = f"""app_project/{_id}/{status_tag}/{brand}/{model}/{time_line.split(' ')[0]}/{time_line}/{file_name}"""
+        upload_file_path = f"""temp/app_project/{_id}/{status_tag}/{brand}/{model}/{time_line.split(' ')[0]}/{time_line}/{file_name}"""
         return upload_file_path
     else:
         return None

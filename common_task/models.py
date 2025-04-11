@@ -43,6 +43,7 @@ class tos_csv_app(models.Model):
 
 class Trip(models.Model):
     trip_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user_id = models.CharField(max_length=50, blank=True)
     car_name = models.CharField(max_length=100)
     file_name = models.CharField(max_length=500, blank=True)
     is_completed = models.BooleanField(default=False)

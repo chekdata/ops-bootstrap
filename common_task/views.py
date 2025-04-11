@@ -516,6 +516,7 @@ async def upload_chunk(request):
         
         # 上传分片
         success, message, chunk_file = await upload_chunk_file(
+            _id,
             trip_id, 
             chunk_index, 
             file, 
