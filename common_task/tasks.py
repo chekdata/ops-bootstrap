@@ -117,8 +117,9 @@ async def merge_files(user_id, trip_id):
                         if 'spcialPoint' in chunk.file_name:
                             merged_det_filename = chunk.file_name.split('/')[-1]
                             break
+                    # NOTE: 非打点det文件重命名，取csv文件名，后缀改为det
                     if not merged_det_filename:
-                        merged_det_filename = trip.file_name.split('/')[-1] if trip.file_name else f"merged_{trip_id}"
+                        merged_det_filename = trip.file_name.split('/')[-1].split('.')[0] + '.det' if trip.file_name else f"merged_{trip_id}"
 
                     det_merged_path = os.path.join(merged_dir, merged_det_filename)
                     with open(det_merged_path, 'wb') as outfile:
