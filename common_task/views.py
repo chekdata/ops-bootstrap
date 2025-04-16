@@ -130,7 +130,7 @@ async def prepare_upload_file_path(_id,status_tag,file_name):
     brand = middle_model.brand
 
     if middle_model:
-        upload_file_path = f"""temp/app_project/{_id}/{status_tag}/{brand}/{model}/{time_line.split(' ')[0]}/{time_line}/{file_name}"""
+        upload_file_path = f"""app_project/{_id}/{status_tag}/{brand}/{model}/{time_line.split(' ')[0]}/{time_line}/{file_name}"""
         return upload_file_path
     else:
         return None
