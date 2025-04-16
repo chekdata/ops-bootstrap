@@ -120,11 +120,9 @@ async def shutdown_background_tasks():
         await asyncio.gather(*background_tasks, return_exceptions=True)
 
 async def prepare_upload_file_path(_id,status_tag,file_name):
-    # temp/app_project/{_id}/inference_data/品牌名/车型/2024-08-25/2024-08-25 21-32-12/file
     file_name = file_name.name
     model = file_name.split('_')[0]
     time_line = file_name.split('_')[-1].split('.')[0]
-    # middle_model = await sync_to_async(model_config.objects.get, thread_sensitive=True)(model=model)
     # 异步环境下获取满足条件的第一条记录
     middle_model = await sync_to_async(model_config.objects.filter(model=model).first, thread_sensitive=True)()
     brand = middle_model.brand
@@ -135,7 +133,6 @@ async def prepare_upload_file_path(_id,status_tag,file_name):
     else:
         return None
 
-# Create your views here.
 @extend_schema(
     # 指定请求体的参数和类型
     request=AfterAnalysisDataSerializer,
