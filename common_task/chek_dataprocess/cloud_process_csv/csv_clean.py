@@ -103,45 +103,97 @@ class DataProcessor:
         self.df['lon'] = df_lon
         self.df['lat'] = df_lat
 
+    # def process_speed(self):
+    #     df_speed = self.df['speed'].copy()
+    #     self.df.insert(4, 'speed_old', df_speed)
+    #     next_valid_idx = -1
+    #     pre_valid_v, pre_valid_gps_v = None, None
+    #     # gps speed has about 1s delay
+    #     for i, v in enumerate(self.df['speed']):
+    #         gps_v = self.df['gps_speed'][self.get_idx_after_seconds(i, 1)[0]]
+    #         is_valid_gps = self.is_valid_gps(i)
+    #         # When gps is valid
+    #         if is_valid_gps:
+    #             if not pd.isna(v) and abs(gps_v - v) < 10:
+    #                 pre_valid_v = v
+    #                 pre_valid_gps_v = gps_v
+    #             elif pre_valid_gps_v is not None and is_valid_gps:
+    #                 df_speed[i] = max(
+    #                     0, pre_valid_v + (gps_v - pre_valid_gps_v))
+    #             else:
+    #                 df_speed[i] = gps_v
+    #             continue
+    #         # If current gps is not valid, find the next valid v
+    #         if next_valid_idx is not None and i > next_valid_idx:
+    #             next_valid_idx = self.get_next_valid_speed_idx(i)
+    #         expected_v = None
+    #         if next_valid_idx is None:
+    #             expected_v = df_speed[max(0, i-1)]
+    #         else:
+    #             pre_v, pre_t = df_speed[max(
+    #                 0, i-1)], self.df['time'][max(0, i-1)]
+    #             next_v, next_t = df_speed[next_valid_idx], self.df['time'][next_valid_idx]
+    #             if i == 0:
+    #                 expected_v = next_v
+    #             else:
+    #                 p = (self.df['time'][i] - pre_t) / (next_t - pre_t)
+    #                 expected_v = p*next_v + (1-p)*pre_v
+    #         if not pd.isna(v) and abs(v - expected_v) < 10:
+    #             continue
+    #         df_speed[i] = expected_v
+    #     self.df['speed'] = df_speed
+
+    # NOTE: 8000行 总耗时566s -> 5.14
     def process_speed(self):
+        import numpy as np
+        
+        # 预先复制数据
         df_speed = self.df['speed'].copy()
-        self.df.insert(4, 'speed_old', df_speed)
-        next_valid_idx = -1
-        pre_valid_v, pre_valid_gps_v = None, None
-        # gps speed has about 1s delay
-        for i, v in enumerate(self.df['speed']):
-            gps_v = self.df['gps_speed'][self.get_idx_after_seconds(i, 1)[0]]
-            is_valid_gps = self.is_valid_gps(i)
-            # When gps is valid
-            if is_valid_gps:
+        df_time = self.df['time'].values
+        df_gps_speed = self.df['gps_speed'].values
+        
+        # 创建数组存储结果
+        speed_values = df_speed.values
+        data_len = len(speed_values)
+        
+        # 预计算1秒后的索引
+        future_indices = np.zeros(data_len, dtype=int)
+        for i in range(data_len):
+            current_t = df_time[i]
+            future_idx = i
+            while future_idx < data_len - 1 and df_time[future_idx] - current_t < 1:
+                future_idx += 1
+            future_indices[i] = future_idx
+        
+        # 主处理循环
+        pre_valid_v = None
+        pre_valid_gps_v = None
+        
+        for i in range(data_len):
+            gps_v = df_gps_speed[future_indices[i]]
+            v = speed_values[i]
+            
+            # 检查GPS是否有效
+            if not pd.isna(gps_v):
                 if not pd.isna(v) and abs(gps_v - v) < 10:
                     pre_valid_v = v
                     pre_valid_gps_v = gps_v
-                elif pre_valid_gps_v is not None and is_valid_gps:
-                    df_speed[i] = max(
-                        0, pre_valid_v + (gps_v - pre_valid_gps_v))
+                elif pre_valid_gps_v is not None:
+                    speed_values[i] = max(0, pre_valid_v + (gps_v - pre_valid_gps_v))
                 else:
-                    df_speed[i] = gps_v
+                    speed_values[i] = gps_v
                 continue
-            # If current gps is not valid, find the next valid v
-            if next_valid_idx is not None and i > next_valid_idx:
-                next_valid_idx = self.get_next_valid_speed_idx(i)
-            expected_v = None
-            if next_valid_idx is None:
-                expected_v = df_speed[max(0, i-1)]
-            else:
-                pre_v, pre_t = df_speed[max(
-                    0, i-1)], self.df['time'][max(0, i-1)]
-                next_v, next_t = df_speed[next_valid_idx], self.df['time'][next_valid_idx]
-                if i == 0:
-                    expected_v = next_v
-                else:
-                    p = (self.df['time'][i] - pre_t) / (next_t - pre_t)
-                    expected_v = p*next_v + (1-p)*pre_v
-            if not pd.isna(v) and abs(v - expected_v) < 10:
-                continue
-            df_speed[i] = expected_v
-        self.df['speed'] = df_speed
+                
+            # GPS无效时的处理
+            if i > 0:
+                expected_v = speed_values[i-1]
+                if not pd.isna(v) and abs(v - expected_v) < 10:
+                    continue
+                speed_values[i] = expected_v
+        
+        # 更新DataFrame
+        self.df.insert(4, 'speed_old', df_speed)
+        self.df['speed'] = pd.Series(speed_values)
 
     def process_acc(self):
         df_speed = self.df['speed']

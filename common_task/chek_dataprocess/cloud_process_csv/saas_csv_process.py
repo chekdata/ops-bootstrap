@@ -5,13 +5,13 @@ import shutil
 from pathlib import Path
 import argparse
 import asyncio
-# from .csv_clean import DataProcessor
+from .csv_clean import DataProcessor as DataProcessor_sync
 from .csv_process import CSVProcess
 from .special_point_to_json import special_point2_json
 from .json2excel import process_json_file_list
 from .file_operater import download_file_tos, upload_files_tos
 
-from .async_csv_clean import DataProcessor
+from .async_csv_clean import DataProcessor as DataProcessor_async
 
 
 
@@ -80,7 +80,7 @@ def process_journey(file_path, user_id, user_name, phone,
     else:
         print(f"process data clean!")
         # csv->pro.csv
-        data_processor = DataProcessor()
+        data_processor = DataProcessor_sync()
         pro_csv_list = []
         file_parts = str(file_path).split('/')
         file_parts[-1] = file_parts[-1].replace('.csv', '.pro.csv')
@@ -134,7 +134,8 @@ async def async_process_journey(file_path, user_id, user_name, phone,
         #     file_path = copy_file_path
         #     print(f'copy file is : {file_path}')
         # csv->pro.csv
-        data_processor = DataProcessor()
+        # data_processor = DataProcessor()
+        data_processor = DataProcessor_async()
         pro_csv_list = []
         file_parts = str(file_path).split('/')
         file_parts[-1] = file_parts[-1].replace('.csv', '.pro.csv')
