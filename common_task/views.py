@@ -539,8 +539,6 @@ async def upload_chunk(request):
             handle_merge_task(_id,trip_id, is_last_chunk=metadata.get('is_last_chunk'))
         )
         background_tasks.append(merge_task)
-
-        await cleanup_background_tasks()
         
         return JsonResponse({
             'code':200,

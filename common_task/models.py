@@ -47,6 +47,7 @@ class Trip(models.Model):
     car_name = models.CharField(max_length=100)
     file_name = models.CharField(max_length=500, blank=True)
     is_completed = models.BooleanField(default=False)
+    is_merging = models.BooleanField(default=False)
     last_update = models.DateTimeField(auto_now=True)
     merged_csv_path = models.CharField(max_length=255, null=True, blank=True)
     merged_det_path = models.CharField(max_length=255, null=True, blank=True)
