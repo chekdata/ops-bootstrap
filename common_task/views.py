@@ -185,7 +185,7 @@ async def process_after_inference_data(request):
         # upload_file_path = f'temp/app_project/{_id}/inference_data/{csv_file.name}'
         # 保存文件
         tinder_os = TinderOS()
-        tinder_os.upload_file('chek',upload_file_path , file_url)
+        tinder_os.upload_file('chek-app',upload_file_path , file_url)
         # os.remove(file_url)
 
         data_tos_model, creat = await sync_to_async(tos_csv_app.objects.get_or_create, thread_sensitive=True)(
@@ -250,7 +250,7 @@ async def process_after_analysis_data_csv(request):
         # upload_file_path = f'temp/app_project/{_id}/analysis_data/{csv_file.name}'
         # 保存文件
         tinder_os = TinderOS()
-        tinder_os.upload_file('chek',upload_file_path , file_url)
+        tinder_os.upload_file('chek-app',upload_file_path , file_url)
         os.remove(file_url)
 
         data_tos_model,creat =await sync_to_async(tos_csv_app.objects.get_or_create, thread_sensitive=True)(
@@ -388,7 +388,7 @@ async def process_inference_detial_det_data(request):
 
         # 保存文件
         tinder_os = TinderOS()
-        tinder_os.upload_file('chek',upload_file_path , file_url)
+        tinder_os.upload_file('chek-app',upload_file_path , file_url)
         os.remove(file_url)
 
         data_tos_model, creat = await sync_to_async(tos_csv_app.objects.get_or_create, thread_sensitive=True)(
