@@ -761,6 +761,8 @@ class CSVProcess:
                 if rows_id == 5081:
                     k = 100
                 frames_time = self.df.iloc[rows_id]['time']
+                # NOTE: frams_time_next 赋初值
+                frams_time_next = frames_time
                 for i in range(rows_id, len(self.df)):
                     if self.df.iloc[i]['state'] != 'noa' and self.df.iloc[i]['state'] != 'lcc':
                         frams_time_next = self.df.iloc[i]['time']
@@ -772,6 +774,8 @@ class CSVProcess:
                 # 计算当前帧time_thre之前的连续状态为智驾
                 #start_frame_id = min(max(0,(rows_id - fps * time_thre)), len(df) - 1)
                 start_frame_id = min(max(0,(rows_id - 1)), len(self.df) - 1)
+                # NOTE： frames_time_before 赋初值
+                frames_time_before = self.df.iloc[start_frame_id]['time']
                 for i in range(start_frame_id, -1, -1):
                     if start_frame_id == 11063:
                         a = 100
