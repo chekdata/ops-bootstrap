@@ -143,22 +143,19 @@ async def shutdown_background_tasks():
         await asyncio.gather(*background_tasks, return_exceptions=True)
 
 async def prepare_upload_file_path(_id,status_tag,file_name):
-    # temp/app_project/{_id}/inference_data/品牌名/车型/2024-08-25/2024-08-25 21-32-12/file
     file_name = file_name.name
     model = file_name.split('_')[0]
     time_line = file_name.split('_')[-1].split('.')[0]
-    # middle_model = await sync_to_async(model_config.objects.get, thread_sensitive=True)(model=model)
     # 异步环境下获取满足条件的第一条记录
     middle_model = await sync_to_async(model_config.objects.filter(model=model).first, thread_sensitive=True)()
     brand = middle_model.brand
 
     if middle_model:
-        upload_file_path = f"""temp/app_project/{_id}/{status_tag}/{brand}/{model}/{time_line.split(' ')[0]}/{time_line}/{file_name}"""
+        upload_file_path = f"""app_project/{_id}/{status_tag}/{brand}/{model}/{time_line.split(' ')[0]}/{time_line}/{file_name}"""
         return upload_file_path
     else:
         return None
 
-# Create your views here.
 @extend_schema(
     # 指定请求体的参数和类型
     request=AfterAnalysisDataSerializer,
@@ -211,7 +208,7 @@ async def process_after_inference_data(request):
         # upload_file_path = f'temp/app_project/{_id}/inference_data/{csv_file.name}'
         # 保存文件
         tinder_os = TinderOS()
-        tinder_os.upload_file('chek',upload_file_path , file_url)
+        tinder_os.upload_file('chek-app',upload_file_path , file_url)
         # os.remove(file_url)
 
         data_tos_model, creat = await sync_to_async(tos_csv_app.objects.get_or_create, thread_sensitive=True)(
@@ -276,7 +273,7 @@ async def process_after_analysis_data_csv(request):
         # upload_file_path = f'temp/app_project/{_id}/analysis_data/{csv_file.name}'
         # 保存文件
         tinder_os = TinderOS()
-        tinder_os.upload_file('chek',upload_file_path , file_url)
+        tinder_os.upload_file('chek-app',upload_file_path , file_url)
         os.remove(file_url)
 
         data_tos_model,creat =await sync_to_async(tos_csv_app.objects.get_or_create, thread_sensitive=True)(
@@ -414,7 +411,7 @@ async def process_inference_detial_det_data(request):
 
         # 保存文件
         tinder_os = TinderOS()
-        tinder_os.upload_file('chek',upload_file_path , file_url)
+        tinder_os.upload_file('chek-app',upload_file_path , file_url)
         os.remove(file_url)
 
         data_tos_model, creat = await sync_to_async(tos_csv_app.objects.get_or_create, thread_sensitive=True)(

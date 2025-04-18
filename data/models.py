@@ -33,6 +33,20 @@ class model_config(models.Model):
     class Meta:
         db_table = 'model_config'
 
+class version_vault(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4,editable=False, verbose_name='唯一标识ID')
+    package_name = models.CharField(max_length=255, blank=True, null=True, verbose_name='package name')
+    version_name = models.CharField(max_length=255, blank=True, null=True, verbose_name='version name')
+    chanel = models.CharField(max_length=255, blank=True, null=True, verbose_name='channel')
+    link = models.CharField(max_length=255, blank=True, null=True, verbose_name='link')
+    md5_value = models.CharField(max_length=255, blank=True, null=True, verbose_name='md5_value')
+    version_code = models.IntegerField(blank=True, null=True)
+    created_date = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+
+
+    class Meta:
+        db_table = 'version_vault'
+
 class model_config_app_update(models.Model):
     id = models.AutoField(primary_key=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE,null=True, blank=True)

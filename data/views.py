@@ -6,7 +6,7 @@ from rest_framework import generics
 from data.models import Data
 from data.serializers import DataSerializer
 from rest_framework.permissions import IsAuthenticated
-from data.models import model_config,model_config_app_update
+from data.models import model_config,model_config_app_update,version_vault
 from django.views.decorators.http import require_POST
 import jieba
 from rest_framework.response import Response
@@ -23,7 +23,7 @@ from .serializers import *
 from drf_spectacular.utils import OpenApiResponse
 import tempfile
 from common_task.handle_tos import *
-
+from django.db.models import Q
 import os
 from django.core.files.storage import FileSystemStorage
 import datetime
@@ -302,7 +302,7 @@ async def search_model_tos(request):
             res_data = list(coll.aggregate(pipeline))
             client.close()
             if res_data:
-                return Response({'code': 200, 'message': '成功','data':{'model_tos_link':res_data[0].get('model_tos_link'),'md5_value':res_data[0].get('md5_value'),'model_guide':res_data[0].get('model_guide')}})
+                return Response({'code': 200, 'message': '成功','data':{'model_tos_link':res_data[0].get('model_tos_link'),'md5_value':res_data[0].get('md5_value'),'model_guide':res_data[0].get('model_guide'),'screen_type':res_data[0].get('screen_type')}})
 
             else:
                 return Response({'code': 400, 'message': '未查询到该数据','data':{}})
@@ -317,7 +317,7 @@ async def search_model_tos(request):
             client.close()
             if res_data:
                 return Response(
-                    {'code': 200, 'message': '成功', 'data': {'model_tos_link': res_data[0].get('model_tos_link'),'md5_value':res_data[0].get('md5_value'),'model_guide':res_data[0].get('model_guide')}})
+                    {'code': 200, 'message': '成功', 'data': {'model_tos_link': res_data[0].get('model_tos_link'),'md5_value':res_data[0].get('md5_value'),'model_guide':res_data[0].get('model_guide'),'screen_type':res_data[0].get('screen_type')}})
             else:
                 return Response({'code': 400, 'message': '未查询到该数据', 'data': {}})
         else:
@@ -356,7 +356,8 @@ def model_search_pipline(model,hardware_config_version,software_config_version):
                     "model_tos_link": 1,
                     "version": 1,
                     'md5_value': 1,
-                    'model_guide':1
+                    'model_guide':1,
+                     'screen_type':1
                 }
             }
         ]
@@ -387,7 +388,8 @@ def model_search_pipline(model,hardware_config_version,software_config_version):
                     "model_tos_link": 1,
                     "version": 1,
                     'md5_value':1,
-                    'model_guide':1
+                    'model_guide':1,
+                     'screen_type':1
                 }
             }
         ]
@@ -417,7 +419,8 @@ def model_search_pipline(model,hardware_config_version,software_config_version):
                     "model_tos_link": 1,
                     "version": 1,
                     'md5_value': 1,
-                    'model_guide':1
+                    'model_guide':1,
+                    'screen_type':1
                 }
             }
         ]
@@ -718,3 +721,135 @@ def update_model_info_by_match_model(brand,model_config_data):
                     if pre_model.model and pre_model.hardware_config_version and pre_model.software_config_version:
                         pre_model.save()
 
+@extend_schema(
+    # 指定请求体的参数和类型
+    request=ModelConfigUpdateModelTos,
+    # 指定响应的信息
+    responses={
+        200: OpenApiResponse(response=SuccessfulResponseSerializer, description="版本号上传成功"),
+        400: OpenApiResponse(response=SuccessfulResponseSerializer, description="数据缺失"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务错误")
+    },
+    parameters=[
+    ],
+    description="接收用户上传的版本信息并入库。处理成功返回200，处理异常返回500。",
+    summary="上传版本信息",
+    tags=['版本包']
+)
+@api_view(['POST'])
+@authentication_classes([])  # 清空认证类
+@permission_classes([AllowAny])  # 允许任何人访问
+async def update_version_vault(request):
+    try:
+        package_name = request.data.get('package_name')
+        version_name = request.data.get('version_name')
+        chanel = request.data.get('chanel')
+        #link = request.data.get('link')
+        #md5_value = request.data.get('md5_value')
+        version_code = request.data.get('version_code')
+
+        #version_package_file = request.FILES.get('file')
+        #if not version_package_file:
+        #    return Response({'code': 500, 'message': '没有接收到文件', 'data': {}})
+
+        #if not md5_value:
+        #    return Response({'code': 400, 'message': '数据缺失 md5_value', 'data': {}})
+
+        if not package_name:
+            return Response({'code': 400, 'message': '数据缺失 package_name', 'data': {}})
+
+        # if not md5_value:
+        #     return Response({'code': 400, 'message': '数据缺失 md5_value', 'data': {}})
+
+        if not version_name:
+            return Response({'code': 400, 'message': '数据缺失 version_name', 'data': {}})
+
+        if not chanel:
+            return Response({'code': 400, 'message': '数据缺失 chanel', 'data': {}})
+        
+        if not version_code:
+            return Response({'code': 400, 'message': '数据缺失 version_code', 'data': {}})
+        
+         # 使用 tempfile 创建一个临时文件夹
+        #temp_dir = tempfile.gettempdir()
+
+        # 创建一个 FileSystemStorage 实例，指向临时目录
+        #fs = FileSystemStorage(location=temp_dir)
+
+        # 保存文件
+        # filename = fs.save(csv_file.name, csv_file)
+        #filename = await sync_to_async(fs.save, thread_sensitive=True)(version_package_file.name,version_package_file)
+        # 获取保存后的文件的完整路径
+        #file_url = fs.path(filename)
+
+        #md5_cal_value = calculate_md5_value(file_url)
+        #if md5_cal_value == md5_value:
+            #upload_file_path = f'release_package/{version_package_file.name}'
+            # 保存文件
+            #tinder_os = TinderOS()
+            #tinder_os.upload_file('chek', upload_file_path, file_url)
+            #os.remove(file_url)
+
+        version_profile = await sync_to_async(
+            lambda: version_vault.objects.filter(Q(version_code__gte=version_code)).first(),
+            thread_sensitive=True
+            )()
+        if version_profile:
+            return Response({'code': 400, 'message': 'version code 版本小于现有版本', 'data': {}})
+        else:
+            VersionVault,creat =await sync_to_async(version_vault.objects.get_or_create, thread_sensitive=True)(version_code=version_code)
+            VersionVault.package_name = package_name
+            VersionVault.version_name = version_name
+            VersionVault.chanel = chanel
+            VersionVault.version_code = version_code
+                #VersionVault.md5_value = md5_value
+                #VersionVault.link = "chek/{upload_file_path}"
+            await sync_to_async(VersionVault.save, thread_sensitive=True)()
+            return Response({'code': 200, 'message': '数据上传成功', 'data': {}})
+       # else:
+        #    os.remove(file_url)
+        #    return Response({'code': 400, 'message': 'md5 不准确', 'data': {}})
+        
+    except Exception as e:
+    #     print(e)
+        return Response({'code': 500, 'message': '内部服务报错', 'data': {}})
+
+    
+
+@extend_schema(
+    # 指定请求体的参数和类型
+    request=ModelConfigUpdateModelTos,
+    # 指定响应的信息
+    responses={
+        200: OpenApiResponse(response=SuccessfulResponseSerializer, description="版本号上传成功"),
+        400: OpenApiResponse(response=SuccessfulResponseSerializer, description="数据缺失"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务错误")
+    },
+    parameters=[
+    ],
+    description="接收用户上传的版本信息判断。处理成功返回200，处理异常返回500。",
+    summary="判断版本信息",
+    tags=['版本包']
+)
+@api_view(['POST'])
+@authentication_classes([])  # 清空认证类
+@permission_classes([AllowAny])  # 允许任何人访问
+async def judge_version_vault(request):
+    try:
+        version_profile = await sync_to_async(
+        lambda: version_vault.objects.order_by('-version_code').first(),
+        thread_sensitive=True   
+        )()
+        if version_profile:
+            package_name = version_profile.package_name 
+            version_name = version_profile.version_name 
+            chanel = version_profile.chanel 
+            version_code = version_profile.version_code 
+            md5_value = version_profile.md5_value 
+            link = version_profile.link 
+            return Response({'code': 200, 'message': '成功', 'data': {'package_name':package_name,'version_name':version_name,'chanel':chanel,'version_code':version_code,                           'md5_value':md5_value,'link':link}})
+
+        
+    except Exception as e:
+    #     print(e)
+        return Response({'code': 500, 'message': '内部服务报错', 'data': {}})
