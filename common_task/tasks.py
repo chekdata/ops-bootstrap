@@ -1010,10 +1010,10 @@ def process_and_upload_files_sync(user_id, csv_path, det_path):
             middle_model = model_config.objects.filter(model=model).first()
             if middle_model:
                 brand = middle_model.brand
-                upload_path = f"temp/app_project/{user_id}/inference_data/{brand}/{model}/{time_line.split(' ')[0]}/{time_line}/{file_name.name}"
+                upload_path = f"app_project/{user_id}/inference_data/{brand}/{model}/{time_line.split(' ')[0]}/{time_line}/{file_name.name}"
                 
                 # 上传文件
-                tinder_os.upload_file('chek', upload_path, file_path)
+                tinder_os.upload_file('chek-app', upload_path, file_path)
                 
                 # 记录到数据库
                 data_tos_model = tos_csv_app.objects.create(
