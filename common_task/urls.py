@@ -15,4 +15,5 @@ urlpatterns = [
     path('upload_chunk', views.upload_chunk),
     path('complete_upload', views.complete_upload),  # 完成上传
     path('check_chunks/<uuid:trip_id>/', views.check_chunks),  # 检查分片状态
+    path('setStartMerge', views.setStartMerge),  # 检查分片状态
 ]

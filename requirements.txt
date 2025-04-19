@@ -59,6 +59,7 @@ Pillow==10.1.0
 pipreqs==0.4.13
 proglog==0.1.10
 protobuf==3.20.3
+psutil==7.0.0
 pyasn1==0.6.1
 pyasn1_modules==0.4.1
 pycparser==2.21

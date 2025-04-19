@@ -608,3 +608,35 @@ async def check_chunks(request, trip_id):
     except Exception as e:
         return JsonResponse({'success': False, 'message': f'请求处理失败: {str(e)}','data':{}})
     
+
+@api_view(['POST'])
+async def setStartMerge(request):
+    """设置开始合并分片状态"""
+    user = request.user  # 获取当前登录用户
+    _id = user.id
+    user_name = user.name
+    try:
+
+        # 获取并解析 metadata JSON
+        metadata_str = request.POST.get('metadata')
+        if not metadata_str:
+            return JsonResponse({'code':500,'success': False, 'message': '缺少 metadata', 'data':{}})
+            
+        try:
+            metadata = json.loads(metadata_str)
+        except json.JSONDecodeError:
+            return JsonResponse({'code':500, 'success': False, 'message': 'metadata 格式错误', 'data':{}})
+        
+        # 从 metadata 中获取必要信息
+        trip_id = metadata.get('trip_id')
+
+        logger.info(f"用户: {user_name}, id: {_id}, 已经开始点击上传行程, trip_id: {trip_id}.")
+        
+        return JsonResponse({
+            'code':200,
+            'success': True, 
+            'message': '设置开始合并分片状态成功',
+            'data': {}
+        })
+    except Exception as e:
+        return JsonResponse({'code':500,'success': False, 'message': '设置开始合并分片状态失败', 'data':{}})
