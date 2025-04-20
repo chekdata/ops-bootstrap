@@ -69,38 +69,90 @@ def process(args):
     #     print(f'文件夹 /tmp/rawData 及其所有子文件夹已被成功删除')
 
 
+# # NOTE: 单个行程合并版本
+# def process_journey(file_path, user_id, user_name, phone, 
+#                  car_brand, car_model, car_hardware_version, car_software_version):
+#     # csv文件
+    
+#     if len(file_path) == 0:
+#         print(f'file path is empty : {file_path}')
+#         pass
+#     else:
+#         print(f"process data clean!")
+#         # csv->pro.csv
+#         data_processor = DataProcessor_sync()
+#         pro_csv_list = []
+#         file_parts = str(file_path).split('/')
+#         file_parts[-1] = file_parts[-1].replace('.csv', '.pro.csv')
+#         new_file_path = '/'.join(file_parts)
+#         if Path(new_file_path).exists():
+#             print(f'文件已存在: {str(new_file_path)}')
+#             pro_csv_list.append(new_file_path)
 
-def process_journey(file_path, user_id, user_name, phone, 
+#         data_processor.recover(str(file_path))
+#         data_processor.process()
+#         data_processor.save(new_file_path)
+#         pro_csv_list.append(new_file_path)
+
+#         print(f"process data process!")
+#         csvProcess = CSVProcess(pro_csv_list, user_id = user_id, user_name = user_name, user_phone = phone, 
+#                  car_brand = car_brand, car_model = car_model, car_hardware_version = car_hardware_version, car_software_version = car_software_version) 
+
+
+#         # frame_intervention_file, frame_intervention_risk_file, json_file_list = csvProcess.process_list_csv_save_journey(upload_journey=True)
+#         frame_intervention_file, frame_intervention_risk_file, json_file_list = csvProcess.process_save_journey(upload_journey=True)
+#         # statistics_xlsx_file_list, truck_avoid_xlsx_file_list = process_json_file_list(json_file_list)
+#         # special_point_json_list = special_point2_json(frame_intervention_file, frame_intervention_risk_file)
+
+#         # upload_files_tos(args.bucket,  pro_csv_list)
+#         # upload_files_tos(args.bucket,  statistics_xlsx_file_list)
+#         # upload_files_tos(args.bucket,  truck_avoid_xlsx_file_list)
+#         # upload_files_tos(args.bucket,  special_point_json_list)
+    
+#         if Path(new_file_path).exists():
+#             os.remove(str(new_file_path))
+#             print(f'remove file: {new_file_path}')
+        
+#         for json_file in json_file_list:
+#             if Path(json_file).exists():
+#                 os.remove(str(json_file))
+#                 print(f'remove file: {json_file}')
+
+
+# NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
+def process_journey(file_path_list, user_id, user_name, phone, 
                  car_brand, car_model, car_hardware_version, car_software_version):
     # csv文件
     
-    if len(file_path) == 0:
-        print(f'file path is empty : {file_path}')
+    if file_path_list and isinstance(file_path_list, list) and len(file_path_list) > 0:
+        print(f'file_path_list path is empty : {len(file_path_list)}')
         pass
     else:
         print(f"process data clean!")
         # csv->pro.csv
         data_processor = DataProcessor_sync()
         pro_csv_list = []
-        file_parts = str(file_path).split('/')
-        file_parts[-1] = file_parts[-1].replace('.csv', '.pro.csv')
-        new_file_path = '/'.join(file_parts)
-        if Path(new_file_path).exists():
-            print(f'文件已存在: {str(new_file_path)}')
-            pro_csv_list.append(new_file_path)
+        for file_path in file_path_list:
 
-        data_processor.recover(str(file_path))
-        data_processor.process()
-        data_processor.save(new_file_path)
-        pro_csv_list.append(new_file_path)
+            file_parts = str(file_path).split('/')
+            file_parts[-1] = file_parts[-1].replace('.csv', '.pro.csv')
+            new_file_path = '/'.join(file_parts)
+            if Path(new_file_path).exists():
+                print(f'文件已存在: {str(new_file_path)}')
+                pro_csv_list.append(new_file_path)
+
+            data_processor.recover(str(file_path))
+            data_processor.process()
+            data_processor.save(new_file_path)
+            pro_csv_list.append(new_file_path)
 
         print(f"process data process!")
         csvProcess = CSVProcess(pro_csv_list, user_id = user_id, user_name = user_name, user_phone = phone, 
                  car_brand = car_brand, car_model = car_model, car_hardware_version = car_hardware_version, car_software_version = car_software_version) 
 
 
-        # frame_intervention_file, frame_intervention_risk_file, json_file_list = csvProcess.process_list_csv_save_journey(upload_journey=True)
-        frame_intervention_file, frame_intervention_risk_file, json_file_list = csvProcess.process_save_journey(upload_journey=True)
+        frame_intervention_file, frame_intervention_risk_file, json_file_list = csvProcess.process_list_csv_save_journey(upload_journey=True)
+        # frame_intervention_file, frame_intervention_risk_file, json_file_list = csvProcess.process_save_journey(upload_journey=True)
         # statistics_xlsx_file_list, truck_avoid_xlsx_file_list = process_json_file_list(json_file_list)
         # special_point_json_list = special_point2_json(frame_intervention_file, frame_intervention_risk_file)
 
@@ -108,10 +160,10 @@ def process_journey(file_path, user_id, user_name, phone,
         # upload_files_tos(args.bucket,  statistics_xlsx_file_list)
         # upload_files_tos(args.bucket,  truck_avoid_xlsx_file_list)
         # upload_files_tos(args.bucket,  special_point_json_list)
-    
-        if Path(new_file_path).exists():
-            os.remove(str(new_file_path))
-            print(f'remove file: {new_file_path}')
+        for file_path in file_path_list:
+            if Path(file_path).exists():
+                os.remove(str(file_path))
+                print(f'remove file: {file_path}')
         
         for json_file in json_file_list:
             if Path(json_file).exists():
