@@ -867,6 +867,8 @@ def merge_files_sync(user_id, trip_id):
             # if trip.is_completed:
             #     logger.info(f"行程 {trip_id} 已完成合并，返回已存在的文件路径")
             #     return True, None, None
+            logger.info(f"用户ID: {user_id}, 行程ID: {trip_id} 未完成合并，开始进行合并处理！")
+
             try:  
                 # 获取所有分片
                 chunks = ChunkFile.objects.filter(trip=trip).order_by('chunk_index')
@@ -874,6 +876,7 @@ def merge_files_sync(user_id, trip_id):
                 
                 # 合并CSV文件
                 csv_chunks = chunks.filter(file_type='csv')
+                logger.info(f"CSV分片数量: {csv_chunks.count()} !")
                 if csv_chunks.exists():
                     merged_csv = pd.DataFrame()
                     for chunk in csv_chunks:
@@ -906,6 +909,7 @@ def merge_files_sync(user_id, trip_id):
                 
                 # 合并DET文件
                 det_chunks = chunks.filter(file_type='det')
+                logger.info(f"DET分片数量: {det_chunks.count()} !")
                 if det_chunks.exists():
                     merged_dir = os.path.join(settings.MEDIA_ROOT, 'merged', str(trip_id))
                     os.makedirs(merged_dir, exist_ok=True)
@@ -1125,11 +1129,11 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False):
                 else:
                     logger.info(f"CSV文件 {csv_path} 时间间隔大于300秒，正常处理")
 
-            if Path(csv_path).exists():
+            if (csv_path is not None) and Path(csv_path).exists():
                 os.remove(str(csv_path))
                 logger.info(f'删除合并csv文件: {csv_path}')
 
-            if Path(det_path).exists():
+            if (det_path is not None) and Path(det_path).exists():
                 os.remove(str(det_path))
                 logger.info(f'删除合并det文件: {det_path}')
 
@@ -1196,7 +1200,19 @@ def get_user_sync(_id):
         if connection.connection and not connection.is_usable():
             connection.close()
         # _id去掉中间横线
-        user_id = _id.hex
+        
+        # user_id = _id.hex
+
+        # 处理用户ID
+        if hasattr(_id, 'hex'):
+            user_id = _id.hex
+        elif isinstance(_id, str):
+            # 如果是字符串,去掉横线
+            user_id = _id.replace('-', '')
+        else:
+            logger.error(f"无效的用户ID格式: {_id}, 类型: {type(_id)}")
+            return None
+
         user = User.objects.get(id=user_id)
         if user:
             return user
