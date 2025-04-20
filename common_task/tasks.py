@@ -215,7 +215,61 @@ async def start_merge_async(user_id,trip_id):
     except Exception as e:
         logger.error(f"用户:{user_id}, 行程: {trip_id}. 合并任务异常: {e}")
         return False
+# # NOTE: 单个行程合并版本
+# # 定期检查超时任务
+# async def check_timeout_trips():
+#     """检查超时的上传任务并触发合并（异步版本）"""
+#     from django.utils import timezone
+#     from datetime import timedelta
+    
+#     global timeout_checker_running
 
+#     while timeout_checker_running:
+#         try:
+#             # 查找所有未完成且超过5分钟未更新的Trip
+#             timeout = timezone.now() - timedelta(minutes=5)
+            
+#             # 使用正确的异步查询方法组合
+#             trips = await sync_to_async(list, thread_sensitive=True)(
+#                 Trip.objects.filter(
+#                     is_completed=False, 
+#                     last_update__lt=timeout
+#                 ).values('trip_id', 'user_id')  # 只获取trip_id字段
+#             )
+            
+#             # 为每个超时的Trip创建合并任务
+#             tasks = []
+#             for trip in trips:
+#                 logger.info(f"检测到超时Trip {trip['trip_id']}，用户ID: {trip['user_id']}  开始异步合并")
+#                 # task = asyncio.create_task(start_merge_async(trip['user_id'],trip['trip_id']))
+#                 task = asyncio.create_task(
+#                     handle_merge_task(
+#                         trip['user_id'],
+#                         trip['trip_id'], 
+#                         is_last_chunk=True  # 模拟最后一个分片
+#                     )
+#                 )
+#                 tasks.append(task)
+            
+#             # 等待所有任务完成
+#             if tasks:
+#                 await asyncio.gather(*tasks)
+            
+#         except Exception as e:
+#             logger.error(f"超时检查失败: {str(e)}")
+#             await asyncio.sleep(60)  # 发生错误时等待1分钟再重试
+#             continue
+        
+#         # 每5分钟检查一次
+#         # await asyncio.sleep(300)
+#         # 每5分钟检查一次
+#         for _ in range(30):  # 分成30次等待，便于及时响应停止信号
+#             if not timeout_checker_running:
+#                 break
+#             await asyncio.sleep(10)
+
+
+# NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
 # 定期检查超时任务
 async def check_timeout_trips():
     """检查超时的上传任务并触发合并（异步版本）"""
@@ -224,6 +278,7 @@ async def check_timeout_trips():
     
     global timeout_checker_running
 
+    time_interval_thre = 300
     while timeout_checker_running:
         try:
             # 查找所有未完成且超过5分钟未更新的Trip
@@ -234,26 +289,82 @@ async def check_timeout_trips():
                 Trip.objects.filter(
                     is_completed=False, 
                     last_update__lt=timeout
-                ).values('trip_id', 'user_id')  # 只获取trip_id字段
+                ).values('trip_id', 'user_id', 
+                         'car_name', 'device_id', 
+                         'hardware_version', 
+                         'software_version', 
+                         'last_update')  # 只获取trip_id字段
             )
-            
-            # 为每个超时的Trip创建合并任务
-            tasks = []
-            for trip in trips:
-                logger.info(f"检测到超时Trip {trip['trip_id']}，用户ID: {trip['user_id']}  开始异步合并")
-                # task = asyncio.create_task(start_merge_async(trip['user_id'],trip['trip_id']))
-                task = asyncio.create_task(
-                    handle_merge_task(
+
+            if not trips:
+                logger.info("没有找到超时的行程")
+            else:
+                logger.info(f"找到 {len(trips)} 个超时行程")
+                # 按照相同特征分组
+                trip_groups = {}
+                for trip in trips:
+                    # 创建分组键
+                    group_key = (
                         trip['user_id'],
-                        trip['trip_id'], 
-                        is_last_chunk=True  # 模拟最后一个分片
-                    )
-                )
-                tasks.append(task)
+                        trip['car_name'],
+                        trip['device_id'],
+                        trip['hardware_version'],
+                        trip['software_version']
+                    )       
+
+                    # 将行程添加到对应的组
+                    if group_key not in trip_groups:
+                        trip_groups[group_key] = []
+                    trip_groups[group_key].append(trip)                
+                        
+                    
             
-            # 等待所有任务完成
-            if tasks:
-                await asyncio.gather(*tasks)
+                # 为每个超时的Trip创建合并任务
+                tasks = []
+                for group_key, group_trips in trip_groups.items():
+                    user_id, car_name, device_id, hw_version, sw_version = group_key
+                    
+                    # 按最后更新时间排序
+                    sorted_trips = sorted(group_trips, key=lambda x: x['last_update'])
+                    
+                    # 找出每个与下一个行程间隔大于5分钟的行程
+                    trips_to_merge = []
+                    for i in range(len(sorted_trips) - 1):
+                        current_trip = sorted_trips[i]
+                        next_trip = sorted_trips[i + 1]
+                        
+                        # 计算当前行程与下一个行程的时间间隔（秒）
+                        time_diff = (next_trip['last_update'] - current_trip['last_update']).total_seconds()
+                        
+                        if time_diff > time_interval_thre:  # 5分钟 = 300秒
+                            # 如果间隔大于5分钟，则当前行程是一个需要合并的行程
+                            trips_to_merge.append(current_trip)
+                            logger.info(f"找到间隔大于5分钟的行程: 用户ID {user_id}, 设备ID {device_id}, "
+                                       f"行程ID {current_trip['trip_id']}, 与下一行程间隔: {time_diff}秒")
+                    
+                    # 最后一个行程也需要检查是否超时
+                    if sorted_trips and sorted_trips[-1]['last_update'] < timeout:
+                        trips_to_merge.append(sorted_trips[-1])
+                        logger.info(f"添加最后一个超时行程: 用户ID {user_id}, 设备ID {device_id}, "
+                                   f"行程ID {sorted_trips[-1]['trip_id']}, 最后更新时间: {sorted_trips[-1]['last_update']}")
+                    
+                    # 为每个需要合并的行程创建任务
+                    for trip_to_merge in trips_to_merge:
+                        task = asyncio.create_task(
+                            handle_merge_task(
+                                user_id, 
+                                trip_to_merge['trip_id'], 
+                                is_last_chunk=True  # 模拟最后一个分片
+                            )
+                        )
+                        tasks.append(task)
+                
+                # 等待所有任务完成
+                if tasks:
+                    logger.info(f"开始执行 {len(tasks)} 个合并任务")
+                    await asyncio.gather(*tasks)
+                else:
+                    logger.info("没有找到需要合并的行程")
             
         except Exception as e:
             logger.error(f"超时检查失败: {str(e)}")
@@ -263,10 +374,11 @@ async def check_timeout_trips():
         # 每5分钟检查一次
         # await asyncio.sleep(300)
         # 每5分钟检查一次
-        for _ in range(30):  # 分成30次等待，便于及时响应停止信号
+        for _ in range(18):  # 分成18次等待，便于及时响应停止信号
             if not timeout_checker_running:
                 break
             await asyncio.sleep(10)
+
 
 # 启动超时检查任务
 # def start_timeout_checker():
@@ -1012,6 +1124,8 @@ async def cleanup_resources():
 # NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
 def merge_files_sync(user_id, trip_id):
     """同步版本的合并文件函数，用于进程池执行"""
+    
+    time_interval_thre = 300
     try:
         logger.info(f"开始合并文件, 用户ID: {user_id}, 行程ID: {trip_id}")
         with transaction.atomic():
@@ -1026,34 +1140,67 @@ def merge_files_sync(user_id, trip_id):
                     return None, None
                 
                 if getattr(main_trip, 'is_merging', False):
-                    logger.info(f"行程 {main_trip} 正在合并中，跳过处理")
+                    logger.info(f"行程 {main_trip.trip_id} 正在合并中，跳过处理")
                     return None, None
                 
-                # 标记正在合并
-                main_trip.is_merging = True
-                # trip.save()
-                main_trip.save(update_fields=['is_merging'])
+                # # 标记正在合并
+                # main_trip.is_merging = True
+                # # trip.save()
+                # main_trip.save(update_fields=['is_merging'])
 
             except DatabaseError:
-                logger.info(f"行程 {main_trip} 正在被其他进程处理，跳过")
+                logger.info(f"行程 {main_trip.trip_id} 正在被其他进程处理，跳过")
                 return None, None
 
             # # 检查是否已经完成
             # if trip.is_completed:
             #     logger.info(f"行程 {trip_id} 已完成合并，返回已存在的文件路径")
             #     return True, None, None
-            logger.info(f"用户ID: {user_id}, 行程ID: {main_trip} 未完成合并，开始进行合并处理！")
+            logger.info(f"用户ID: {user_id}, 行程ID: {main_trip.trip_id} 未完成合并，开始进行合并处理！")
             # 找到所有和trip相同的carname hardware_version software_version device_id相同的trip,确保数据不会在进程间产生竞争
             try:
-                trips = Trip.objects.filter(
-                    device_id = main_trip.device_id,
-                    car_name = main_trip.car_name,
-                    hardware_version = main_trip.hardware_version,
-                    software_version = main_trip.software_version,
-                )
+                # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
+                all_similar_trips = Trip.objects.filter(
+                    is_completed=False,
+                    user_id=user_id,
+                    device_id=main_trip.device_id,
+                    car_name=main_trip.car_name,
+                    hardware_version=main_trip.hardware_version,
+                    software_version=main_trip.software_version,
+                ).order_by('-last_update')  # 降序排列，从最新到最旧
+
+                # 筛选出需要合并的行程
+                trips_to_merge = []
+                prev_trip = None
+
+                for trip in all_similar_trips:
+                    if not prev_trip:  # 第一个行程（最新的行程）
+                        trips_to_merge.append(trip)
+                        prev_trip = trip
+                        continue
+                    
+                    # 计算当前行程与前一个行程的时间间隔（秒）
+                    # 注意：由于是降序排列，所以是prev_trip.last_update - trip.last_update
+                    time_diff = (prev_trip.last_update - trip.last_update).total_seconds()
+                    
+                    if time_diff <= time_interval_thre:  # 5分钟 = 300秒
+                        # 如果间隔小于等于5分钟，则添加到合并行程列表
+                        trips_to_merge.append(trip)
+                        prev_trip = trip
+                    else:
+                        # 找到了间隔超过5分钟的行程，停止查找
+                        logger.info(f"找到间隔超过5分钟的行程，停止查找。行程ID: {trip.trip_id}, 时间间隔: {time_diff}秒")
+                        break
+
+                # 按照时间升序排序（从旧到新），便于处理
+                trips_to_merge.sort(key=lambda x: x.last_update)
+
+                logger.info(f"找到 {len(trips_to_merge)} 个需要合并的行程，时间范围: {trips_to_merge[0].last_update} 到 {trips_to_merge[-1].last_update}")
+                trips = trips_to_merge
+
 
                 # 记录锁定的行程数量
-                trips_count = trips.count()
+                trips_count = len(trips) if isinstance(trips, list) else trips.count()
                 logger.info(f"已锁定 {trips_count} 个相关行程记录")
 
                 csv_merged_results = []
@@ -1065,10 +1212,17 @@ def merge_files_sync(user_id, trip_id):
                         if trip.is_completed:
                             logger.info(f"行程 {trip.trip_id} 已完成合并，跳过处理")
                             continue
-
+                        
                         if getattr(trip, 'is_merging', False):
-                            logger.info(f"行程 {trip.trip_id} 正在其他进程中进行合并，跳过处理")
+                            logger.info(f"行程 {trip.trip_id} 正在合并中，跳过处理")
                             continue
+                        
+                        logger.info(f"行程 {trip.trip_id} 马上开始合并处理！")
+                        # 标记正在合并
+                        trip.is_merging = True
+                        # trip.save()
+                        trip.save(update_fields=['is_merging'])
+
 
                         logger.info(f"用户Id {user_id}, 行程 {trip.trip_id}  正在合并中...")
                         # 获取所有分片
@@ -1137,9 +1291,9 @@ def merge_files_sync(user_id, trip_id):
                             merged_results['det'] = det_merged_path
                             logger.info(f"合并DET文件成功.保存到 {det_merged_path}")
 
-                        if Path(merged_results['csv']).exists():
+                        if merged_results['csv'] is not None and Path(merged_results['csv']).exists():
                             csv_merged_results.append(merged_results['csv'])
-                        if Path(merged_results['det']).exists():
+                        if merged_results['det'] is not None and Path(merged_results['det']).exists():
                             det_merged_results.append(merged_results['det'])
 
 
@@ -1482,27 +1636,31 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False):
                         process_executor,
                         process_wechat_data_sync,
                         user,
-                        csv_path
+                        csv_path_list
                     )
                     if success:
                         logger.info(f"进程池处理行程数据成功，{message}")
                     else:
                         logger.error(f"进程池处理数据失败，用户: {user.name}, 错误信息: {message}")
                 else:
-                    logger.error(f"用户 {_id} 不存在, 无法处理行程数据 {csv_path}.")
+                    logger.error(f"用户 {_id} 不存在, 无法处理行程数据 {csv_path_list}.")
 
                 if not is_valid_interval:    
-                    logger.warning(f"CSV文件 {csv_path} 时间间隔小于300秒，跳过处理")
+                    logger.warning(f"CSV文件 {csv_path_list} 时间间隔小于300秒，跳过处理")
                 else:
-                    logger.info(f"CSV文件 {csv_path} 时间间隔大于300秒，正常处理")
+                    logger.info(f"CSV文件 {csv_path_list} 时间间隔大于300秒，正常处理")
 
-            if (csv_path is not None) and Path(csv_path).exists():
-                os.remove(str(csv_path))
-                logger.info(f'删除合并csv文件: {csv_path}')
+            if csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0:
+                for csv_path in csv_path_list:
+                    if Path(csv_path).exists():
+                        os.remove(str(csv_path))
+                        logger.info(f'删除合并csv文件: {csv_path}')
 
-            if (det_path is not None) and Path(det_path).exists():
-                os.remove(str(det_path))
-                logger.info(f'删除合并det文件: {det_path}')
+            if det_path_list and isinstance(det_path_list, list) and len(det_path_list) > 0:
+                for det_path in det_path_list:
+                    if Path(det_path).exists():
+                        os.remove(str(det_path))
+                        logger.info(f'删除合并det文件: {det_path}')
 
         else:
             # 检查是否需要触发自动合并
@@ -1583,7 +1741,7 @@ def process_wechat_data_sync(user, file_path_list):
             if is_valiad_phone_number_sync(user.phone):
                 # # NOTE: 确保phone和小程序phone对应一致
                 
-                process_journey(file_path, 
+                process_journey(file_path_list, 
                                 user_id=100000, 
                                 user_name=user.name, 
                                 phone=user.phone, 
