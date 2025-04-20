@@ -7,6 +7,9 @@ import os
 import logging
 import psutil
 from typing import Optional
+from django.db import connections
+from django.db.utils import OperationalError
+import time
 
 logger = logging.getLogger('common_task')
 
@@ -16,6 +19,7 @@ class MyappConfig(AppConfig):
     cleanup_initialized = False
     cleanup_thread: Optional[threading.Thread] = None
     timeout_thread: Optional[threading.Thread] = None
+    db_checker_thread: Optional[threading.Thread] = None
 
     def ready(self):
         """
@@ -56,6 +60,26 @@ class MyappConfig(AppConfig):
             logger.error(f"任务初始化检查失败: {e}")
             return False
 
+    def _check_db_connection(self, max_retries=3, retry_delay=5):
+        """
+        检查数据库连接并尝试重连
+        """
+        retries = 0
+        while retries < max_retries:
+            try:
+                connections['default'].ensure_connection()
+                logger.info("数据库连接成功")
+                return True
+            except OperationalError as e:
+                retries += 1
+                logger.warning(f"数据库连接失败 (尝试 {retries}/{max_retries}): {str(e)}")
+                if retries < max_retries:
+                    time.sleep(retry_delay)
+                connections['default'].close()
+        
+        logger.error("无法建立数据库连接")
+        return False
+
     def _initialize_background_tasks(self) -> None:
         """
         初始化并启动后台任务
@@ -64,10 +88,16 @@ class MyappConfig(AppConfig):
             return
 
         try:
+            # 首先检查数据库连接
+            if not self._check_db_connection():
+                logger.error("由于数据库连接问题，后台任务初始化失败")
+                return
+
             from .tasks import (
                 start_background_cleanup,
                 start_timeout_checker,
-                cleanup_resources
+                cleanup_resources,
+                start_db_connection_checker  # 新增
             )
 
             # 创建并启动清理线程
@@ -80,6 +110,12 @@ class MyappConfig(AppConfig):
             self.timeout_thread = self._create_thread(
                 start_timeout_checker,
                 "TimeoutChecker"
+            )
+
+            # 创建并启动数据库连接检查线程
+            self.db_checker_thread = self._create_thread(
+                start_db_connection_checker,
+                "DBConnectionChecker"
             )
 
             # 启动线程
@@ -118,6 +154,10 @@ class MyappConfig(AppConfig):
                 self.timeout_thread.start()
                 logger.info(f"超时检查线程已启动: {self.timeout_thread.name}")
 
+            if self.db_checker_thread:
+                self.db_checker_thread.start()
+                logger.info(f"数据库连接检查线程已启动: {self.db_checker_thread.name}")
+
             self.cleanup_initialized = True
 
         except Exception as e:
@@ -130,6 +170,9 @@ class MyappConfig(AppConfig):
         退出时的资源清理
         """
         try:
+            # 确保数据库连接正常
+            self._check_db_connection(max_retries=1, retry_delay=1)
+            
             # 创建新的事件循环
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -152,6 +195,11 @@ class MyappConfig(AppConfig):
         except Exception as e:
             logger.error(f"清理资源时发生错误: {e}")
 
+        finally:
+            # 确保关闭所有数据库连接
+            for conn in connections.all():
+                conn.close()
+
     def _wait_for_threads(self, timeout: int = 5) -> None:
         """
         等待线程结束
@@ -166,6 +214,11 @@ class MyappConfig(AppConfig):
                 self.timeout_thread.join(timeout=timeout)
                 if self.timeout_thread.is_alive():
                     logger.warning("超时检查线程未能在超时时间内结束")
+
+            if self.db_checker_thread and self.db_checker_thread.is_alive():
+                self.db_checker_thread.join(timeout=timeout)
+                if self.db_checker_thread.is_alive():
+                    logger.warning("数据库连接检查线程未能在超时时间内结束")
 
         except Exception as e:
             logger.error(f"等待线程结束失败: {e}")
@@ -184,6 +237,11 @@ class MyappConfig(AppConfig):
                 from .tasks import timeout_checker_running
                 timeout_checker_running = False
                 self.timeout_thread.join(timeout=1)
+
+            if self.db_checker_thread and self.db_checker_thread.is_alive():
+                from .tasks import db_checker_running
+                db_checker_running = False
+                self.db_checker_thread.join(timeout=1)
 
         except Exception as e:
             logger.error(f"清理运行中的线程失败: {e}")

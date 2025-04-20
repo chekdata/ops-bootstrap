@@ -51,6 +51,9 @@ class Trip(models.Model):
     last_update = models.DateTimeField(auto_now=True)
     merged_csv_path = models.CharField(max_length=255, null=True, blank=True)
     merged_det_path = models.CharField(max_length=255, null=True, blank=True)
+    hardware_version = models.CharField(max_length=64, null=True, blank=True)
+    software_version = models.CharField(max_length=64, null=True, blank=True)
+    device_id = models.CharField(max_length=255, null=True, blank=True)
     
     def __str__(self):
         return f"Trip {self.car_name}"
@@ -65,6 +68,10 @@ class ChunkFile(models.Model):
     file_type = models.CharField(max_length=10)  # 'csv' 或 'det'
     file_name = models.CharField(max_length=500, blank=True)
     upload_time = models.DateTimeField(auto_now_add=True)
+    car_name = models.CharField(max_length=100)
+    hardware_version = models.CharField(max_length=64, null=True, blank=True)
+    software_version = models.CharField(max_length=64, null=True, blank=True)
+    device_id = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         unique_together = ('trip', 'chunk_index', 'file_type')

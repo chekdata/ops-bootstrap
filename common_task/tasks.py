@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from django.db import transaction, DatabaseError
 from functools import partial
+from django.db import connections
 from concurrent.futures import ThreadPoolExecutor
 from django.conf import settings
 from django.db import transaction
@@ -225,8 +226,8 @@ async def check_timeout_trips():
 
     while timeout_checker_running:
         try:
-            # 查找所有未完成且超过30分钟未更新的Trip
-            timeout = timezone.now() - timedelta(minutes=10)
+            # 查找所有未完成且超过5分钟未更新的Trip
+            timeout = timezone.now() - timedelta(minutes=5)
             
             # 使用正确的异步查询方法组合
             trips = await sync_to_async(list, thread_sensitive=True)(
@@ -404,7 +405,14 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
             #     defaults['start_time'] = metadata['start_time']
             # if 'total_chunks' in metadata:
             #     defaults['total_chunks'] = metadata['total_chunks']
-            defaults['file_name'] = metadata['file_name']
+            if 'file_name' in metadata:
+                defaults['file_name'] = metadata['file_name']
+            if 'hardware_version' in metadata:
+                defaults['hardware_version'] = metadata['hardware_version']
+            if 'software_version' in metadata:
+                defaults['software_version'] = metadata['software_version']
+            if 'device_id' in metadata:
+                defaults['device_id'] = metadata['device_id']
         
         trip, created = await sync_to_async(Trip.objects.get_or_create, thread_sensitive=True)(
             user_id = user_id,
@@ -441,7 +449,19 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
             #     chunk_defaults['end_time'] = metadata['end_time']
             # if 'checksum' in metadata:
             #     chunk_defaults['checksum'] = metadata['checksum']
-            chunk_defaults['file_name'] = metadata['file_name']
+            if 'file_name' in metadata:
+                chunk_defaults['file_name'] = metadata['file_name']
+
+            if 'car_name' in metadata:
+                chunk_defaults['car_name'] = metadata['car_name']
+
+            if 'hardware_version' in metadata:
+                chunk_defaults['hardware_version'] = metadata['hardware_version']
+            if 'software_version' in metadata:
+                chunk_defaults['software_version'] = metadata['software_version']
+            if 'device_id' in metadata:
+                chunk_defaults['device_id'] = metadata['device_id']
+
         
         chunk_file, created = await sync_to_async(ChunkFile.objects.update_or_create, thread_sensitive=True)(
             trip=trip,
@@ -800,17 +820,17 @@ async def cleanup_resources():
         except Exception as e:
             logger.error(f"清理后台任务失败: {e}")
 
-        # 4. 清理临时文件
-        try:
-            temp_dirs = ['chunks', 'merged']
-            for dir_name in temp_dirs:
-                dir_path = os.path.join(settings.MEDIA_ROOT, dir_name)
-                if os.path.exists(dir_path):
-                    import shutil
-                    shutil.rmtree(dir_path)
-                    logger.info(f"临时目录已清理: {dir_path}")
-        except Exception as e:
-            logger.error(f"清理临时文件失败: {e}")
+        # # 4. 清理临时文件
+        # try:
+        #     temp_dirs = ['chunks', 'merged']
+        #     for dir_name in temp_dirs:
+        #         dir_path = os.path.join(settings.MEDIA_ROOT, dir_name)
+        #         if os.path.exists(dir_path):
+        #             import shutil
+        #             shutil.rmtree(dir_path)
+        #             logger.info(f"临时目录已清理: {dir_path}")
+        # except Exception as e:
+        #     logger.error(f"清理临时文件失败: {e}")
 
         # # 5. 重置全局变量
         # try:
@@ -834,7 +854,162 @@ async def cleanup_resources():
 
 
 
+# NOTE: 单个行程合并版本
+# def merge_files_sync(user_id, trip_id):
+#     """同步版本的合并文件函数，用于进程池执行"""
+#     try:
+#         logger.info(f"开始合并文件, 用户ID: {user_id}, 行程ID: {trip_id}")
+#         with transaction.atomic():
+#             # trip = Trip.objects.select_for_update().get(trip_id=trip_id)
+            
+#             try:
+#                 trip = Trip.objects.select_for_update(nowait=True).get(trip_id=trip_id)
 
+#                 # 检查是否正在合并或已完成
+#                 if trip.is_completed:
+#                     logger.info(f"行程 {trip_id} 已完成合并，跳过处理")
+#                     return None, None
+                
+#                 if getattr(trip, 'is_merging', False):
+#                     logger.info(f"行程 {trip_id} 正在合并中，跳过处理")
+#                     return None, None
+                
+#                 # 标记正在合并
+#                 trip.is_merging = True
+#                 # trip.save()
+#                 trip.save(update_fields=['is_merging'])
+
+#             except DatabaseError:
+#                 logger.info(f"行程 {trip_id} 正在被其他进程处理，跳过")
+#                 return None, None
+
+#             # # 检查是否已经完成
+#             # if trip.is_completed:
+#             #     logger.info(f"行程 {trip_id} 已完成合并，返回已存在的文件路径")
+#             #     return True, None, None
+#             logger.info(f"用户ID: {user_id}, 行程ID: {trip_id} 未完成合并，开始进行合并处理！")
+
+#             try:  
+#                 # 获取所有分片
+#                 chunks = ChunkFile.objects.filter(trip=trip).order_by('chunk_index')
+#                 merged_results = {'csv': None, 'det': None}
+                
+#                 # 合并CSV文件
+#                 csv_chunks = chunks.filter(file_type='csv')
+#                 logger.info(f"CSV分片数量: {csv_chunks.count()} !")
+#                 if csv_chunks.exists():
+#                     merged_csv = pd.DataFrame()
+#                     for chunk in csv_chunks:
+#                         try:
+#                             df = pd.read_csv(chunk.file_path)
+#                             merged_csv = pd.concat([merged_csv, df])
+#                         except Exception as e:
+#                             logger.error(f"读取CSV分片失败 {chunk.chunk_index}: {e}")
+
+#                     if not merged_csv.empty:
+#                         # 处理文件名
+#                         merged_csv_filename = None
+#                         for chunk in chunks:
+#                             if 'spcialPoint' in chunk.file_name:
+#                                 merged_csv_filename = chunk.file_name.split('/')[-1]
+#                                 break
+#                         if not merged_csv_filename:
+#                             merged_csv_filename = trip.file_name.split('/')[-1] if trip.file_name else f"merged_{trip_id}.csv"
+
+#                         # 创建合并目录
+#                         merged_dir = os.path.join(settings.MEDIA_ROOT, 'merged', str(trip_id))
+#                         os.makedirs(merged_dir, exist_ok=True)
+                        
+#                         # 保存合并文件
+#                         merged_path = os.path.join(merged_dir, merged_csv_filename)
+#                         merged_csv.to_csv(merged_path, index=False)
+#                         trip.merged_csv_path = merged_path
+#                         merged_results['csv'] = merged_path
+#                         logger.info(f"合并CSV文件成功.保存到 {merged_path}")
+                
+#                 # 合并DET文件
+#                 det_chunks = chunks.filter(file_type='det')
+#                 logger.info(f"DET分片数量: {det_chunks.count()} !")
+#                 if det_chunks.exists():
+#                     merged_dir = os.path.join(settings.MEDIA_ROOT, 'merged', str(trip_id))
+#                     os.makedirs(merged_dir, exist_ok=True)
+                    
+#                     # 处理文件名
+#                     merged_det_filename = None
+#                     for chunk in det_chunks:
+#                         if 'spcialPoint' in chunk.file_name:
+#                             merged_det_filename = chunk.file_name.split('/')[-1]
+#                             break
+#                     if not merged_det_filename:
+#                         merged_det_filename = trip.file_name.split('/')[-1][:-4] + '.det' if trip.file_name else f"merged_{trip_id}.det"
+
+#                     det_merged_path = os.path.join(merged_dir, merged_det_filename)
+#                     with open(det_merged_path, 'wb') as outfile:
+#                         for chunk in det_chunks:
+#                             try:
+#                                 with open(chunk.file_path, 'rb') as infile:
+#                                     outfile.write(infile.read())
+#                             except Exception as e:
+#                                 logger.error(f"读取DET分片失败 {chunk.chunk_index}: {e}")
+                    
+#                     trip.merged_det_path = det_merged_path
+#                     merged_results['det'] = det_merged_path
+#                     logger.info(f"合并DET文件成功.保存到 {det_merged_path}")
+                
+#                 try:
+#                     # 更新状态
+#                     trip.refresh_from_db()
+#                     if not trip.is_completed:
+#                         trip.is_completed = True
+#                         trip.is_merging = False
+#                         # trip.save()
+#                         update_fields = ['is_merging']
+#                         update_fields.append('is_completed')
+#                         if merged_results['csv']:
+#                             trip.merged_csv_path = merged_results['csv']
+#                             update_fields.append('merged_csv_path')
+#                         if merged_results['det']:
+#                             trip.merged_det_path = merged_results['det']
+#                             update_fields.append('merged_det_path')
+
+#                         trip.save(update_fields=update_fields)
+
+#                         logger.info(
+#                             f"行程 {trip_id} 更新完成:\n"
+#                             f"- 完成状态: {trip.is_completed}\n"
+#                             f"- 合并状态: {trip.is_merging}\n"
+#                             f"- CSV路径: {trip.merged_csv_path}\n"
+#                             f"- DET路径: {trip.merged_det_path}"
+#                         )
+#                 except Exception as e:
+#                     logger.error(f"更新行程状态失败: {e}")
+#                     # 发生错误时回滚事务
+#                     transaction.set_rollback(True)
+
+#                 chunks = ChunkFile.objects.filter(trip=trip).order_by('chunk_index')
+#                 # 清理分片文件
+#                 for chunk in chunks:
+#                     try:
+#                         if os.path.exists(chunk.file_path):
+#                             os.remove(chunk.file_path)
+#                         chunk.delete()
+#                     except Exception as e:
+#                         logger.error(f"清理分片文件失败 {chunk.chunk_index}: {e}")
+#                 csv_merged_results = merged_results['csv'] if merged_results['csv'] else None
+#                 det_merged_results = merged_results['det'] if merged_results['det'] else None
+#                 return csv_merged_results, det_merged_results
+#             except Exception as e:
+#                 # 发生错误时重置合并状态
+#                 trip.is_merging = False
+#                 trip.save()
+#                 logger.error(f"合并文件失败: {e}")
+#                 return None, None
+            
+#     except Exception as e:
+#         logger.error(f"合并文件失败: {e}")
+#         return None, None
+
+# NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
 def merge_files_sync(user_id, trip_id):
     """同步版本的合并文件函数，用于进程池执行"""
     try:
@@ -843,163 +1018,265 @@ def merge_files_sync(user_id, trip_id):
             # trip = Trip.objects.select_for_update().get(trip_id=trip_id)
             
             try:
-                trip = Trip.objects.select_for_update(nowait=True).get(trip_id=trip_id)
+                main_trip = Trip.objects.select_for_update(nowait=True).get(trip_id=trip_id)
 
                 # 检查是否正在合并或已完成
-                if trip.is_completed:
-                    logger.info(f"行程 {trip_id} 已完成合并，跳过处理")
+                if main_trip.is_completed:
+                    logger.info(f"行程 {main_trip} 已完成合并，跳过处理")
                     return None, None
                 
-                if getattr(trip, 'is_merging', False):
-                    logger.info(f"行程 {trip_id} 正在合并中，跳过处理")
+                if getattr(main_trip, 'is_merging', False):
+                    logger.info(f"行程 {main_trip} 正在合并中，跳过处理")
                     return None, None
                 
                 # 标记正在合并
-                trip.is_merging = True
+                main_trip.is_merging = True
                 # trip.save()
-                trip.save(update_fields=['is_merging'])
+                main_trip.save(update_fields=['is_merging'])
 
             except DatabaseError:
-                logger.info(f"行程 {trip_id} 正在被其他进程处理，跳过")
+                logger.info(f"行程 {main_trip} 正在被其他进程处理，跳过")
                 return None, None
 
             # # 检查是否已经完成
             # if trip.is_completed:
             #     logger.info(f"行程 {trip_id} 已完成合并，返回已存在的文件路径")
             #     return True, None, None
-            logger.info(f"用户ID: {user_id}, 行程ID: {trip_id} 未完成合并，开始进行合并处理！")
+            logger.info(f"用户ID: {user_id}, 行程ID: {main_trip} 未完成合并，开始进行合并处理！")
+            # 找到所有和trip相同的carname hardware_version software_version device_id相同的trip,确保数据不会在进程间产生竞争
+            try:
+                trips = Trip.objects.filter(
+                    device_id = main_trip.device_id,
+                    car_name = main_trip.car_name,
+                    hardware_version = main_trip.hardware_version,
+                    software_version = main_trip.software_version,
+                )
 
-            try:  
-                # 获取所有分片
-                chunks = ChunkFile.objects.filter(trip=trip).order_by('chunk_index')
-                merged_results = {'csv': None, 'det': None}
-                
-                # 合并CSV文件
-                csv_chunks = chunks.filter(file_type='csv')
-                logger.info(f"CSV分片数量: {csv_chunks.count()} !")
-                if csv_chunks.exists():
-                    merged_csv = pd.DataFrame()
-                    for chunk in csv_chunks:
-                        try:
-                            df = pd.read_csv(chunk.file_path)
-                            merged_csv = pd.concat([merged_csv, df])
-                        except Exception as e:
-                            logger.error(f"读取CSV分片失败 {chunk.chunk_index}: {e}")
+                # 记录锁定的行程数量
+                trips_count = trips.count()
+                logger.info(f"已锁定 {trips_count} 个相关行程记录")
 
-                    if not merged_csv.empty:
-                        # 处理文件名
-                        merged_csv_filename = None
-                        for chunk in chunks:
-                            if 'spcialPoint' in chunk.file_name:
-                                merged_csv_filename = chunk.file_name.split('/')[-1]
-                                break
-                        if not merged_csv_filename:
-                            merged_csv_filename = trip.file_name.split('/')[-1] if trip.file_name else f"merged_{trip_id}.csv"
+                csv_merged_results = []
+                det_merged_results = []
 
-                        # 创建合并目录
-                        merged_dir = os.path.join(settings.MEDIA_ROOT, 'merged', str(trip_id))
-                        os.makedirs(merged_dir, exist_ok=True)
-                        
-                        # 保存合并文件
-                        merged_path = os.path.join(merged_dir, merged_csv_filename)
-                        merged_csv.to_csv(merged_path, index=False)
-                        trip.merged_csv_path = merged_path
-                        merged_results['csv'] = merged_path
-                        logger.info(f"合并CSV文件成功.保存到 {merged_path}")
-                
-                # 合并DET文件
-                det_chunks = chunks.filter(file_type='det')
-                logger.info(f"DET分片数量: {det_chunks.count()} !")
-                if det_chunks.exists():
-                    merged_dir = os.path.join(settings.MEDIA_ROOT, 'merged', str(trip_id))
-                    os.makedirs(merged_dir, exist_ok=True)
-                    
-                    # 处理文件名
-                    merged_det_filename = None
-                    for chunk in det_chunks:
-                        if 'spcialPoint' in chunk.file_name:
-                            merged_det_filename = chunk.file_name.split('/')[-1]
-                            break
-                    if not merged_det_filename:
-                        merged_det_filename = trip.file_name.split('/')[-1][:-4] + '.det' if trip.file_name else f"merged_{trip_id}.det"
-
-                    det_merged_path = os.path.join(merged_dir, merged_det_filename)
-                    with open(det_merged_path, 'wb') as outfile:
-                        for chunk in det_chunks:
-                            try:
-                                with open(chunk.file_path, 'rb') as infile:
-                                    outfile.write(infile.read())
-                            except Exception as e:
-                                logger.error(f"读取DET分片失败 {chunk.chunk_index}: {e}")
-                    
-                    trip.merged_det_path = det_merged_path
-                    merged_results['det'] = det_merged_path
-                    logger.info(f"合并DET文件成功.保存到 {det_merged_path}")
-                
-                try:
-                    # 更新状态
-                    trip.refresh_from_db()
-                    if not trip.is_completed:
-                        trip.is_completed = True
-                        trip.is_merging = False
-                        # trip.save()
-                        update_fields = ['is_merging']
-                        update_fields.append('is_completed')
-                        if merged_results['csv']:
-                            trip.merged_csv_path = merged_results['csv']
-                            update_fields.append('merged_csv_path')
-                        if merged_results['det']:
-                            trip.merged_det_path = merged_results['det']
-                            update_fields.append('merged_det_path')
-
-                        trip.save(update_fields=update_fields)
-
-                        logger.info(
-                            f"行程 {trip_id} 更新完成:\n"
-                            f"- 完成状态: {trip.is_completed}\n"
-                            f"- 合并状态: {trip.is_merging}\n"
-                            f"- CSV路径: {trip.merged_csv_path}\n"
-                            f"- DET路径: {trip.merged_det_path}"
-                        )
-                except Exception as e:
-                    logger.error(f"更新行程状态失败: {e}")
-                    # 发生错误时回滚事务
-                    transaction.set_rollback(True)
-
-                chunks = ChunkFile.objects.filter(trip=trip).order_by('chunk_index')
-                # 清理分片文件
-                for chunk in chunks:
+                for trip in trips:
                     try:
-                        if os.path.exists(chunk.file_path):
-                            os.remove(chunk.file_path)
-                        chunk.delete()
+                        # 检查是否正在合并或生成
+                        if trip.is_completed:
+                            logger.info(f"行程 {trip.trip_id} 已完成合并，跳过处理")
+                            continue
+
+                        if getattr(trip, 'is_merging', False):
+                            logger.info(f"行程 {trip.trip_id} 正在其他进程中进行合并，跳过处理")
+                            continue
+
+                        logger.info(f"用户Id {user_id}, 行程 {trip.trip_id}  正在合并中...")
+                        # 获取所有分片
+                        chunks = ChunkFile.objects.filter(trip=trip).order_by('chunk_index')
+                        merged_results = {'csv': None, 'det': None}
+
+                        # 合并CSV文件
+                        csv_chunks = chunks.filter(file_type='csv')
+                        logger.info(f"行程 {trip.trip_id} CSV分片数量: {csv_chunks.count()} !")
+                        if csv_chunks.exists():
+                            merged_csv = pd.DataFrame()
+                            for chunk in csv_chunks:
+                                try:
+                                    df = pd.read_csv(chunk.file_path)
+                                    merged_csv = pd.concat([merged_csv, df])
+                                except Exception as e:
+                                    logger.error(f"读取CSV分片失败 {chunk.chunk_index}: {e}")
+
+                            if not merged_csv.empty:
+                                # 处理文件名
+                                merged_csv_filename = None
+                                for chunk in chunks:
+                                    if hasattr(chunk, 'file_name') and chunk.file_name and 'spcialPoint' in chunk.file_name:
+                                        merged_csv_filename = chunk.file_name.split('/')[-1]
+                                        break
+                                if not merged_csv_filename:
+                                    merged_csv_filename = trip.file_name.split('/')[-1] if trip.file_name else f"merged_{trip.trip_id}.csv"
+
+                                # 创建合并目录
+                                merged_dir = os.path.join(settings.MEDIA_ROOT, 'merged', str(trip.trip_id))
+                                os.makedirs(merged_dir, exist_ok=True)
+
+                                # 保存合并文件
+                                merged_path = os.path.join(merged_dir, merged_csv_filename)
+                                merged_csv.to_csv(merged_path, index=False)
+                                trip.merged_csv_path = merged_path
+                                merged_results['csv'] = merged_path
+                                logger.info(f"合并CSV文件成功.保存到 {merged_path}")
+
+                        # 合并DET文件
+                        det_chunks = chunks.filter(file_type='det')
+                        logger.info(f"行程 {trip.trip_id} DET分片数量: {det_chunks.count()} !")
+                        if det_chunks.exists():
+                            merged_dir = os.path.join(settings.MEDIA_ROOT, 'merged', str(trip.trip_id))
+                            os.makedirs(merged_dir, exist_ok=True)
+
+                            # 处理文件名
+                            merged_det_filename = None
+                            for chunk in det_chunks:
+                                if hasattr(chunk, 'file_name') and chunk.file_name and 'spcialPoint' in chunk.file_name:
+                                    merged_det_filename = chunk.file_name.split('/')[-1]
+                                    break
+                            if not merged_det_filename:
+                                merged_det_filename = trip.file_name.split('/')[-1][:-4] + '.det' if trip.file_name else f"merged_{trip.trip_id}.det"
+
+                            det_merged_path = os.path.join(merged_dir, merged_det_filename)
+                            with open(det_merged_path, 'wb') as outfile:
+                                for chunk in det_chunks:
+                                    try:
+                                        with open(chunk.file_path, 'rb') as infile:
+                                            outfile.write(infile.read())
+                                    except Exception as e:
+                                        logger.error(f"读取DET分片失败 {chunk.chunk_index}: {e}")
+
+                            trip.merged_det_path = det_merged_path
+                            merged_results['det'] = det_merged_path
+                            logger.info(f"合并DET文件成功.保存到 {det_merged_path}")
+
+                        if Path(merged_results['csv']).exists():
+                            csv_merged_results.append(merged_results['csv'])
+                        if Path(merged_results['det']).exists():
+                            det_merged_results.append(merged_results['det'])
+
+
+                        chunks = ChunkFile.objects.filter(trip=trip).order_by('chunk_index')
+                        # 清理分片文件
+                        for chunk in chunks:
+                            try:
+                                if os.path.exists(chunk.file_path):
+                                    os.remove(chunk.file_path)
+                                chunk.delete()
+                            except Exception as e:
+                                logger.error(f"清理分片文件失败 {chunk.chunk_index}: {e}")
+
+
+                        try:
+                            # 更新状态
+                            trip.refresh_from_db()
+                            if not trip.is_completed:
+                                trip.is_completed = True
+                                trip.is_merging = False
+                                # trip.save()
+                                update_fields = ['is_merging']
+                                update_fields.append('is_completed')
+                                if merged_results['csv']:
+                                    trip.merged_csv_path = merged_results['csv']
+                                    update_fields.append('merged_csv_path')
+                                if merged_results['det']:
+                                    trip.merged_det_path = merged_results['det']
+                                    update_fields.append('merged_det_path')
+
+                                trip.save(update_fields=update_fields)
+
+                                logger.info(
+                                    f"行程 {trip_id} 更新完成:\n"
+                                    f"- 完成状态: {trip.is_completed}\n"
+                                    f"- 合并状态: {trip.is_merging}\n"
+                                    f"- CSV路径: {trip.merged_csv_path}\n"
+                                    f"- DET路径: {trip.merged_det_path}"
+                                )
+                        except Exception as e:
+                            logger.error(f"更新行程状态失败: {e}")
+                            # 发生错误时回滚事务
+                            transaction.set_rollback(True)
+
                     except Exception as e:
-                        logger.error(f"清理分片文件失败 {chunk.chunk_index}: {e}")
-                csv_merged_results = merged_results['csv'] if merged_results['csv'] else None
-                det_merged_results = merged_results['det'] if merged_results['det'] else None
+                        # 发生错误时重置合并状态
+                        trip.is_merging = False
+                        trip.save()
+                        logger.error(f"合并文件失败: {e}")
+                        return None, None
+
                 return csv_merged_results, det_merged_results
-            except Exception as e:
-                # 发生错误时重置合并状态
-                trip.is_merging = False
-                trip.save()
-                logger.error(f"合并文件失败: {e}")
+
+            except DatabaseError as e:
+                # 如果无法获取锁（其他进程正在处理），记录并跳过
+                logger.warning(f"无法锁定相关行程记录，可能有其他进程正在处理: {e}")
+                # 可以选择稍后重试或跳过
                 return None, None
             
     except Exception as e:
         logger.error(f"合并文件失败: {e}")
         return None, None
 
-def process_and_upload_files_sync(user_id, csv_path, det_path):
+
+# # NOTE: 单个行程合并版本
+# def process_and_upload_files_sync(user_id, csv_path, det_path):
+#     """同步版本的文件处理和上传函数"""
+#     try:
+#         tinder_os = TinderOS()
+#         results = []
+        
+#         files_to_process = []
+#         if csv_path and Path(csv_path).exists():
+#             files_to_process.append((csv_path, 'csv'))
+#         if det_path and Path(det_path).exists():
+#             files_to_process.append((det_path, 'det'))        
+
+#         # for file_path, file_type in [(csv_path, 'csv'), (det_path, 'det')]:
+#         for file_path, file_type in files_to_process:
+#             if not file_path:
+#                 continue
+                
+#             file_name = Path(file_path)
+#             model = file_name.name.split('_')[0]
+#             time_line = file_name.name.split('_')[-1].split('.')[0]
+            
+#             # 获取品牌信息
+#             middle_model = model_config.objects.filter(model=model).first()
+#             if middle_model:
+#                 brand = middle_model.brand
+#                 upload_path = f"app_project/{user_id}/inference_data/{brand}/{model}/{time_line.split(' ')[0]}/{time_line}/{file_name.name}"
+                
+#                 # 上传文件
+#                 tinder_os.upload_file('chek-app', upload_path, file_path)
+                
+#                 # 记录到数据库
+#                 data_tos_model = tos_csv_app.objects.create(
+#                     user_id=user_id,
+#                     tos_file_path=upload_path,
+#                     tos_file_type='inference'
+#                 )
+
+#                 data_tos_model.user_id = user_id
+#                 data_tos_model.tos_file_path =upload_path
+#                 data_tos_model.tos_file_type = 'inference'
+#                 data_tos_model.save()
+
+#                 results.append((file_type, upload_path))
+                
+#                 # # 可以选择删除本地文件
+#                 # os.remove(file_path)
+        
+#         return True, results
+#     except Exception as e:
+#         logger.error(f"处理和上传文件失败: {e}")
+#         return False, []
+
+
+
+
+# NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
+def process_and_upload_files_sync(user_id, csv_path_list, det_path_list):
     """同步版本的文件处理和上传函数"""
     try:
         tinder_os = TinderOS()
         results = []
         
         files_to_process = []
-        if csv_path and Path(csv_path).exists():
-            files_to_process.append((csv_path, 'csv'))
-        if det_path and Path(det_path).exists():
-            files_to_process.append((det_path, 'det'))        
+        if csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0:
+            for csv_path in csv_path_list:
+                if csv_path and Path(csv_path).exists():
+                    files_to_process.append((csv_path, 'csv'))
+
+        if det_path_list and isinstance(det_path_list, list) and len(det_path_list) > 0:   
+            for det_path in det_path_list:                 
+                if det_path and Path(det_path).exists():
+                    files_to_process.append((det_path, 'det'))        
 
         # for file_path, file_type in [(csv_path, 'csv'), (det_path, 'det')]:
         for file_path, file_type in files_to_process:
@@ -1041,7 +1318,114 @@ def process_and_upload_files_sync(user_id, csv_path, det_path):
         logger.error(f"处理和上传文件失败: {e}")
         return False, []
 
-# 修改合并任务处理函数
+
+
+
+# # NOTE: 单个行程合并版本
+# # 修改合并任务处理函数
+# async def handle_merge_task(_id, trip_id, is_last_chunk=False):
+#     """处理合并任务"""
+#     try:
+#         if is_last_chunk:
+#             # 检查进程池状态
+#             stats = get_process_pool_stats()
+#             if stats and stats['available_workers'] <= 1:
+#                 logger.warning(f"进程池资源紧张: 活跃进程{stats['active_processes']}/{stats['max_workers']}")
+#                 await asyncio.sleep(0.5)
+
+#             # 使用进程池执行合并操作
+#             # trip = await sync_to_async(Trip.objects.select_for_update().get, thread_sensitive=True)(trip_id=trip_id)
+#             # if trip.is_completed:
+#             #     logger.info(f"行程 {trip_id} 已完成，跳过合并处理")
+#             #     return 
+            
+#             # # 使用事务和select_for_update检查状态
+#             # @sync_to_async(thread_sensitive=True)
+#             # def check_trip_status():
+#             #     with transaction.atomic():
+#             #         trip = Trip.objects.select_for_update(nowait=True).get(trip_id=trip_id)
+#             #         return trip.is_completed
+
+#             # # 检查任务是否已完成
+#             # if await check_trip_status():
+#             #     logger.info(f"行程 {trip_id} 已完成，跳过合并处理")
+#             #     return 
+
+
+#             loop = asyncio.get_event_loop()
+#             csv_path, det_path = await loop.run_in_executor(
+#                 process_executor,
+#                 merge_files_sync,
+#                 _id,
+#                 trip_id
+#             )
+            
+#             is_valid_interval = False
+#             if csv_path:
+#                 is_valid_interval = await loop.run_in_executor(
+#                         process_executor,
+#                         get_csv_time_interval,
+#                         csv_path
+#                 )
+
+#             if (csv_path or det_path) and is_valid_interval:
+#                 # 在进程池中执行文件处理和上传
+#                 success, results = await loop.run_in_executor(
+#                     process_executor,
+#                     process_and_upload_files_sync,
+#                     _id,
+#                     csv_path,
+#                     det_path
+#                 )
+                
+#                 if success:
+#                     logger.info(f"文件处理和上传成功: {results}")
+#                 else:
+#                     logger.error("文件处理和上传失败")
+
+#             if csv_path:
+#                 # 使用_id查询account models中用户信息
+#                 user = await loop.run_in_executor(
+#                     process_executor,
+#                     get_user_sync,
+#                     _id
+#                 )
+#                 if user and is_valid_interval:
+#                     # 处理行程数据
+#                     success, message = await loop.run_in_executor(
+#                         process_executor,
+#                         process_wechat_data_sync,
+#                         user,
+#                         csv_path
+#                     )
+#                     if success:
+#                         logger.info(f"进程池处理行程数据成功，{message}")
+#                     else:
+#                         logger.error(f"进程池处理数据失败，用户: {user.name}, 错误信息: {message}")
+#                 else:
+#                     logger.error(f"用户 {_id} 不存在, 无法处理行程数据 {csv_path}.")
+
+#                 if not is_valid_interval:    
+#                     logger.warning(f"CSV文件 {csv_path} 时间间隔小于300秒，跳过处理")
+#                 else:
+#                     logger.info(f"CSV文件 {csv_path} 时间间隔大于300秒，正常处理")
+
+#             if (csv_path is not None) and Path(csv_path).exists():
+#                 os.remove(str(csv_path))
+#                 logger.info(f'删除合并csv文件: {csv_path}')
+
+#             if (det_path is not None) and Path(det_path).exists():
+#                 os.remove(str(det_path))
+#                 logger.info(f'删除合并det文件: {det_path}')
+
+#         else:
+#             # 检查是否需要触发自动合并
+#             await check_timeout_trip(_id, trip_id)
+            
+#     except Exception as e:
+#         logger.error(f"合并任务处理失败: {e}")
+
+# 
 async def handle_merge_task(_id, trip_id, is_last_chunk=False):
     """处理合并任务"""
     try:
@@ -1052,27 +1436,8 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False):
                 logger.warning(f"进程池资源紧张: 活跃进程{stats['active_processes']}/{stats['max_workers']}")
                 await asyncio.sleep(0.5)
 
-            # 使用进程池执行合并操作
-            # trip = await sync_to_async(Trip.objects.select_for_update().get, thread_sensitive=True)(trip_id=trip_id)
-            # if trip.is_completed:
-            #     logger.info(f"行程 {trip_id} 已完成，跳过合并处理")
-            #     return 
-            
-            # # 使用事务和select_for_update检查状态
-            # @sync_to_async(thread_sensitive=True)
-            # def check_trip_status():
-            #     with transaction.atomic():
-            #         trip = Trip.objects.select_for_update(nowait=True).get(trip_id=trip_id)
-            #         return trip.is_completed
-
-            # # 检查任务是否已完成
-            # if await check_trip_status():
-            #     logger.info(f"行程 {trip_id} 已完成，跳过合并处理")
-            #     return 
-
-
             loop = asyncio.get_event_loop()
-            csv_path, det_path = await loop.run_in_executor(
+            csv_path_list, det_path_list = await loop.run_in_executor(
                 process_executor,
                 merge_files_sync,
                 _id,
@@ -1080,21 +1445,23 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False):
             )
             
             is_valid_interval = False
-            if csv_path:
+            if csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0:
                 is_valid_interval = await loop.run_in_executor(
                         process_executor,
                         get_csv_time_interval,
-                        csv_path
+                        csv_path_list
                 )
 
-            if (csv_path or det_path) and is_valid_interval:
+            if ((csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0) or \
+                (det_path_list and isinstance(det_path_list, list) and len(det_path_list) > 0)) and \
+                    is_valid_interval:
                 # 在进程池中执行文件处理和上传
                 success, results = await loop.run_in_executor(
                     process_executor,
                     process_and_upload_files_sync,
                     _id,
-                    csv_path,
-                    det_path
+                    csv_path_list,
+                    det_path_list
                 )
                 
                 if success:
@@ -1102,7 +1469,7 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False):
                 else:
                     logger.error("文件处理和上传失败")
 
-            if csv_path:
+            if (csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0):
                 # 使用_id查询account models中用户信息
                 user = await loop.run_in_executor(
                     process_executor,
@@ -1154,14 +1521,57 @@ def is_valiad_phone_number_sync(phone):
     else:
         return False
 
+# # NOTE: 单个行程合并版本
+# # 小程序proto1.0版本
+# # 没有上传中间结果
+# def process_wechat_data_sync(user, file_path):
+#     try:
+#         if file_path is None or not os.path.exists(file_path):
+#             logger.error(f"process_wechat_data_sync 文件不存在: {file_path}")
+#             return False, "文件不存在"
+        
+#         file_name = file_path.split('/')[-1]
+#         infos = file_name.split('_')
+#         if len(infos) > 3:
+#             model = infos[0]
+#             hardware_version = infos[1]
+#             software_version = infos[2]
+#             logger.info(f"开始处理用户 {user.name} 的行程数据: {file_name}")
+
+#             if is_valiad_phone_number_sync(user.phone):
+#                 # # NOTE: 确保phone和小程序phone对应一致
+                
+#                 process_journey(file_path, 
+#                                 user_id=100000, 
+#                                 user_name=user.name, 
+#                                 phone=user.phone, 
+#                                 car_brand =model, 
+#                                 car_model='', 
+#                                 car_hardware_version=hardware_version,
+#                                 car_software_version=software_version
+#                 )
+#                 return True, f"数据处理成功. 用户名: {user.name}, 行程数据: {file_name}"
+#             else:
+#                 logger.warning(f"用户手机号 {user.phone} 格式不正确, 行程未处理！")
+#                 return False, "手机号格式不正确"    
+#         else:
+#             logger.warning(f"file name:{file_name} 格式不正确, 行程未处理！")
+#             return False, "文件名格式不正确"
+#     except Exception as e:
+#         logger.error(f"处理app数据失败: {e}")
+#         return False, str(e)
+
+
+# NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
 # 小程序proto1.0版本
 # 没有上传中间结果
-def process_wechat_data_sync(user, file_path):
+def process_wechat_data_sync(user, file_path_list):
     try:
-        if file_path is None or not os.path.exists(file_path):
-            logger.error(f"process_wechat_data_sync 文件不存在: {file_path}")
+        if not (file_path_list and isinstance(file_path_list, list) and len(file_path_list) > 0):
+            logger.error(f"process_wechat_data_sync 文件不存在,文件列表为空! ")
             return False, "文件不存在"
         
+        file_path = file_path_list[0]
         file_name = file_path.split('/')[-1]
         infos = file_name.split('_')
         if len(infos) > 3:
@@ -1192,6 +1602,9 @@ def process_wechat_data_sync(user, file_path):
     except Exception as e:
         logger.error(f"处理app数据失败: {e}")
         return False, str(e)
+
+
+
  
 def get_user_sync(_id):
     """同步获取用户信息"""
@@ -1227,26 +1640,85 @@ def get_user_sync(_id):
         logger.error(f"获取用户信息失败： {e}")
         return None
     
+# #NOTE: 单个行程合并版本
+# def get_csv_time_interval(csv_path):
+#     """
+#     获取CSV文件时间间隔
+#     """
+#     try:
+#         if csv_path is None or not os.path.exists(csv_path):
+#             logger.error(f"CSV文件不存在: {csv_path}")
+#             return False
+        
+#         df = pd.read_csv(csv_path)
+#         if 'time' in df.columns:
+#             min_time = df['time'].min()
+#             max_time = df['time'].max()
+#             time_interval = max((max_time - min_time), 0)
+#             return time_interval > 300
+#         else:
+#             logger.error(f"CSV文件中没有time列")
+#             return False
+        
+#     except Exception as e:
+#         logger.error(f"获取时间间隔失败: {e}")
+#         return False
 
-def get_csv_time_interval(csv_path):
+
+# NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
+def get_csv_time_interval(csv_path_list):
     """
     获取CSV文件时间间隔
     """
     try:
-        if csv_path is None or not os.path.exists(csv_path):
-            logger.error(f"CSV文件不存在: {csv_path}")
+        if not (csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0):
+            logger.error(f"CSV文件列表为空!")
             return False
-        
-        df = pd.read_csv(csv_path)
-        if 'time' in df.columns:
-            min_time = df['time'].min()
-            max_time = df['time'].max()
-            time_interval = max((max_time - min_time), 0)
-            return time_interval > 300
-        else:
-            logger.error(f"CSV文件中没有time列")
-            return False
+
+        total_time = 0
+
+        for csv_path in csv_path_list:
+            if not Path(csv_path).exists():
+                logger.info(f"csv文件不存在： {csv_path}")
+                continue
+            df = pd.read_csv(csv_path)
+            if 'time' in df.columns:
+                min_time = df['time'].min()
+                max_time = df['time'].max()
+                time_interval = max((max_time - min_time), 0)
+                total_time +=  time_interval
+            else:
+                logger.error(f"CSV文件{csv_path}中没有time列")
+                continue
+            if total_time > 300:
+                logger.info(f"CSV文件 {csv_path} 时间间隔大于300秒，正常处理")
+                return True
+            else:
+                logger.warning(f"CSV文件 {csv_path} 时间间隔小于300秒，不做处理")
+                return False
         
     except Exception as e:
         logger.error(f"获取时间间隔失败: {e}")
         return False
+
+
+
+db_checker_running = True
+
+def start_db_connection_checker():
+    """
+    启动数据库连接检查任务
+    """
+    while db_checker_running:
+        logger.info(f"开始数据库连接检查!")
+        try:
+            connections['default'].ensure_connection()
+        except Exception as e:
+            logger.error(f"数据库连接检查失败: {e}")
+            # 关闭连接以便重新建立
+            try:
+                connections['default'].close()
+            except:
+                pass
+        finally:
+            time.sleep(60)  # 每60秒检查一次

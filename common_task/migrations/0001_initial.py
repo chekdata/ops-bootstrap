@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+        ('accounts', '0001_initial'),  # 确保依赖于accounts应用的迁移
     ]
 
     operations = [
@@ -27,6 +27,9 @@ class Migration(migrations.Migration):
                 ('last_update', models.DateTimeField(auto_now=True)),
                 ('merged_csv_path', models.CharField(blank=True, max_length=255, null=True)),
                 ('merged_det_path', models.CharField(blank=True, max_length=255, null=True)),
+                ('hardware_version', models.CharField(blank=True, max_length=64, null=True)),
+                ('software_version', models.CharField(blank=True, max_length=64, null=True)),
+                ('device_id', models.CharField(blank=True, max_length=255, null=True)),
             ],
             options={
                 'db_table': 'Trip',
@@ -47,7 +50,7 @@ class Migration(migrations.Migration):
                 ('lcc_mile', models.FloatField(blank=True, default=0.0, null=True, verbose_name='LCC总里程')),
                 ('noa_lcc_mile', models.FloatField(blank=True, default=0.0, null=True, verbose_name='NOA LCC总里程')),
                 ('standby_mile', models.FloatField(blank=True, default=0.0, null=True, verbose_name='人类驾驶里程')),
-                ('user', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
+                ('user', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='accounts.user')),
             ],
             options={
                 'db_table': 'analysis_data_app',
@@ -61,7 +64,7 @@ class Migration(migrations.Migration):
                 ('tos_file_path', models.CharField(editable=False, max_length=2000, verbose_name='tos存储路径')),
                 ('tos_file_type', models.CharField(editable=False, max_length=2000, verbose_name='tos存储文件类型 inference/analysis')),
                 ('approved_status', models.IntegerField(default=0, verbose_name='审核状态：0 未审核， 1 审核通过 2 审核不通过')),
-                ('user', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
+                ('user', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='accounts.user')),
             ],
             options={
                 'db_table': 'tos_csv_app',
@@ -76,6 +79,10 @@ class Migration(migrations.Migration):
                 ('file_type', models.CharField(max_length=10)),
                 ('file_name', models.CharField(blank=True, max_length=500)),
                 ('upload_time', models.DateTimeField(auto_now_add=True)),
+                ('car_name', models.CharField(max_length=100)),
+                ('hardware_version', models.CharField(blank=True, max_length=64, null=True)),
+                ('software_version', models.CharField(blank=True, max_length=64, null=True)),
+                ('device_id', models.CharField(blank=True, max_length=255, null=True)),
                 ('trip', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='chunks', to='common_task.trip')),
             ],
             options={

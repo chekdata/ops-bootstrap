@@ -103,8 +103,8 @@ DATABASES = {
         'NAME': 'app_project',
         'USER': 'root',
         'PASSWORD': 'Qwer4321@',
-        # 'HOST': '101.126.6.116',
-        'HOST': '62.234.57.136',
+        'HOST': '101.126.6.116',
+        # 'HOST': '62.234.57.136',
         'PORT': '3306',
     }
 }
