@@ -24,7 +24,8 @@ from functools import partial
 from concurrent.futures import ProcessPoolExecutor
 import multiprocessing
 from accounts.models import User
-from .chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
+# from .chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
+from .chek_dataprocess.cloud_process_csv.wechat_csv_process import process_csv
 
 # 创建进程池，数量为CPU核心数
 process_pool = Pool(processes=cpu_count())
@@ -1752,15 +1753,27 @@ def process_wechat_data_sync(user, file_path_list):
             if is_valiad_phone_number_sync(user.phone):
                 # # NOTE: 确保phone和小程序phone对应一致
                 
-                process_journey(file_path_list, 
+                # # saas 协议
+                # process_journey(file_path_list, 
+                #                 user_id=100000, 
+                #                 user_name=user.name, 
+                #                 phone=user.phone, 
+                #                 car_brand =model, 
+                #                 car_model='', 
+                #                 car_hardware_version=hardware_version,
+                #                 car_software_version=software_version
+                # )
+
+                # 小程序协议
+                process_csv(file_path_list, 
                                 user_id=100000, 
                                 user_name=user.name, 
                                 phone=user.phone, 
                                 car_brand =model, 
                                 car_model='', 
-                                car_hardware_version=hardware_version,
-                                car_software_version=software_version
+                                car_version=software_version
                 )
+
                 return True, f"数据处理成功. 用户名: {user.name}, 行程数据: {file_name}"
             else:
                 logger.warning(f"用户手机号 {user.phone} 格式不正确, 行程未处理！")

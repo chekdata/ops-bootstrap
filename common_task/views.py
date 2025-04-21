@@ -35,7 +35,7 @@ from common_task.serializers import *
 from data.models import model_config
 from .models import Trip, ChunkFile
 #from .chek_dataprocess.cloud_process_csv.wechat_csv_process import process_csv
-from .chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
+# from .chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
 from .tasks import (
     upload_chunk_file, 
     check_chunks_complete, 
@@ -111,14 +111,15 @@ async def process_wechat_data(user, file_path):
             #                                                         car_hardware_version=hardware_version,
             #                                                         car_software_version=software_version)
             
-            await async_process_journey(file_path, 
-                                        user_id=100000, 
-                                        user_name=user.name, 
-                                        phone=user.phone, 
-                                        car_brand =model, 
-                                        car_model='', 
-                                        car_hardware_version=hardware_version,
-                                        car_software_version=software_version)
+            # await async_process_journey(file_path, 
+            #                             user_id=100000, 
+            #                             user_name=user.name, 
+            #                             phone=user.phone, 
+            #                             car_brand =model, 
+            #                             car_model='', 
+            #                             car_hardware_version=hardware_version,
+            #                             car_software_version=software_version)
+            i = 0
 
         else:
             print(f"user phone:{user.phone} is not correct! journey not to be processed!")     
