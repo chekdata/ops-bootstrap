@@ -48,6 +48,7 @@ class Trip(models.Model):
     file_name = models.CharField(max_length=500, blank=True)
     is_completed = models.BooleanField(default=False)
     is_merging = models.BooleanField(default=False)
+    first_update = models.DateTimeField(auto_now_add=True) #记录第一次生成时间，后面不做更新
     last_update = models.DateTimeField(auto_now=True)
     merged_csv_path = models.CharField(max_length=255, null=True, blank=True)
     merged_det_path = models.CharField(max_length=255, null=True, blank=True)

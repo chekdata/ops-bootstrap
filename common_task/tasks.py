@@ -285,14 +285,15 @@ async def check_timeout_trips():
             timeout = timezone.now() - timedelta(minutes=5)
             
             # 使用正确的异步查询方法组合
+            # 查找所有还未进行合并的行程
             trips = await sync_to_async(list, thread_sensitive=True)(
                 Trip.objects.filter(
                     is_completed=False, 
-                    last_update__lt=timeout
                 ).values('trip_id', 'user_id', 
                          'car_name', 'device_id', 
                          'hardware_version', 
                          'software_version', 
+                         'first_update',
                          'last_update')  # 只获取trip_id字段
             )
 
@@ -334,9 +335,10 @@ async def check_timeout_trips():
                         next_trip = sorted_trips[i + 1]
                         
                         # 计算当前行程与下一个行程的时间间隔（秒）
-                        time_diff = (next_trip['last_update'] - current_trip['last_update']).total_seconds()
+                        time_diff = (next_trip['first_update'] - current_trip['last_update']).total_seconds()
                         
-                        if time_diff > time_interval_thre:  # 5分钟 = 300秒
+                        # 找到时间间隔大于5分钟的行程，且最后一个行程和当前时间间隔5分钟以上
+                        if time_diff > time_interval_thre and current_trip['last_update'] < timeout:  # 5分钟 = 300秒
                             # 如果间隔大于5分钟，则当前行程是一个需要合并的行程
                             trips_to_merge.append(current_trip)
                             logger.info(f"找到间隔大于5分钟的行程: 用户ID {user_id}, 设备ID {device_id}, "
@@ -525,7 +527,17 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
                 defaults['software_version'] = metadata['software_version']
             if 'device_id' in metadata:
                 defaults['device_id'] = metadata['device_id']
-        
+        # 当第一次写入时，写入first_update
+        trip_exists = await sync_to_async(Trip.objects.filter(trip_id=trip_id).exists, thread_sensitive=True)()
+        if not trip_exists:
+            defaults['first_update'] = timezone.now()
+            logger.info(f"创建新行程记录: {trip_id}, 设置首次更新时间: {defaults['first_update']}")
+        else:
+            # 如果记录已存在，确保不更新first_update字段
+            if 'first_update' in defaults:
+                del defaults['first_update']
+                logger.debug(f"行程记录 {trip_id} 已存在，不更新首次更新时间")
+
         trip, created = await sync_to_async(Trip.objects.get_or_create, thread_sensitive=True)(
             user_id = user_id,
             trip_id=trip_id, 
@@ -1136,7 +1148,7 @@ def merge_files_sync(user_id, trip_id):
 
                 # 检查是否正在合并或已完成
                 if main_trip.is_completed:
-                    logger.info(f"行程 {main_trip} 已完成合并，跳过处理")
+                    logger.info(f"行程 {main_trip.trip_id} 已完成合并，跳过处理")
                     return None, None
                 
                 if getattr(main_trip, 'is_merging', False):
@@ -1180,8 +1192,8 @@ def merge_files_sync(user_id, trip_id):
                         continue
                     
                     # 计算当前行程与前一个行程的时间间隔（秒）
-                    # 注意：由于是降序排列，所以是prev_trip.last_update - trip.last_update
-                    time_diff = (prev_trip.last_update - trip.last_update).total_seconds()
+                    # 注意：由于是降序排列，所以是prev_trip.first_update - trip.last_update
+                    time_diff = (prev_trip.first_update - trip.last_update).total_seconds()
                     
                     if time_diff <= time_interval_thre:  # 5分钟 = 300秒
                         # 如果间隔小于等于5分钟，则添加到合并行程列表
@@ -1607,8 +1619,7 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False):
                 )
 
             if ((csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0) or \
-                (det_path_list and isinstance(det_path_list, list) and len(det_path_list) > 0)) and \
-                    is_valid_interval:
+                (det_path_list and isinstance(det_path_list, list) and len(det_path_list) > 0)) :
                 # 在进程池中执行文件处理和上传
                 success, results = await loop.run_in_executor(
                     process_executor,
@@ -1643,7 +1654,7 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False):
                     else:
                         logger.error(f"进程池处理数据失败，用户: {user.name}, 错误信息: {message}")
                 else:
-                    logger.error(f"用户 {_id} 不存在, 无法处理行程数据 {csv_path_list}.")
+                    logger.error(f"用户 {_id} 不存在, 或行程持续时间小于300s. 无法处理行程数据 {csv_path_list}.")
 
                 if not is_valid_interval:    
                     logger.warning(f"CSV文件 {csv_path_list} 时间间隔小于300秒，跳过处理")
@@ -1844,16 +1855,17 @@ def get_csv_time_interval(csv_path_list):
                 min_time = df['time'].min()
                 max_time = df['time'].max()
                 time_interval = max((max_time - min_time), 0)
+                logger.info(f"CSV文件 {csv_path} 时间间隔: {time_interval} 秒")
                 total_time +=  time_interval
             else:
                 logger.error(f"CSV文件{csv_path}中没有time列")
                 continue
-            if total_time > 300:
-                logger.info(f"CSV文件 {csv_path} 时间间隔大于300秒，正常处理")
-                return True
-            else:
-                logger.warning(f"CSV文件 {csv_path} 时间间隔小于300秒，不做处理")
-                return False
+        if total_time > 300:
+            logger.info(f"CSV文件 {csv_path} 时间间隔大于300秒，正常处理")
+            return True
+        else:
+            logger.warning(f"CSV文件 {csv_path} 时间间隔小于300秒，不做处理")
+            return False
         
     except Exception as e:
         logger.error(f"获取时间间隔失败: {e}")
