@@ -60,7 +60,7 @@ class WeChatCSVProcess:
         self.car_model = car_model
         self.car_version = car_version
         self.car_MBTI = car_MBTI
-        self.odometer_thresh = 5
+        self.odometer_thresh = 0
 
     def change_road_state(self, row, model = 0):
         if model == 0:
@@ -290,7 +290,7 @@ class WeChatCSVProcess:
             if math.isnan(lat):
                 lat = pre_lat
 
-            processed_frames = i
+            self.processed_frames = i
 
             start_gps_time = str(
                 gps_time) if start_gps_time is None and gps_time != '' else None

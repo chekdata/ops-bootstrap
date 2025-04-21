@@ -85,10 +85,12 @@ def process(args):
 
 # 处理本地csv文件
 def process_csv(csv_files, user_id, user_name, phone, car_brand, car_model, car_version):
-    if len(csv_files) == 0:
+
+    if not (csv_files and isinstance(csv_files, list) and len(csv_files) > 0):
+        print(f'file_path_list path is empty : {len(csv_files)}')
         pass
     else:
-        
+        print(f"process data clean!")
         data_processor = DataProcessor()
         pro_csv_list = []
         for csv in csv_files:
@@ -104,7 +106,8 @@ def process_csv(csv_files, user_id, user_name, phone, car_brand, car_model, car_
             data_processor.process()
             data_processor.save(new_file_path)
             pro_csv_list.append(new_file_path)
-
+            
+        print(f"process data process!")
         csvProcess = WeChatCSVProcess(pro_csv_list, user_id = user_id, user_name = user_name, user_phone = phone, 
                  car_brand = car_brand, car_model = car_model, car_version = car_version) 
         csvProcess.process()       
