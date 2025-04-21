@@ -124,7 +124,7 @@ def process_journey(file_path_list, user_id, user_name, phone,
                  car_brand, car_model, car_hardware_version, car_software_version):
     # csv文件
     
-    if file_path_list and isinstance(file_path_list, list) and len(file_path_list) > 0:
+    if not (file_path_list and isinstance(file_path_list, list) and len(file_path_list) > 0):
         print(f'file_path_list path is empty : {len(file_path_list)}')
         pass
     else:
