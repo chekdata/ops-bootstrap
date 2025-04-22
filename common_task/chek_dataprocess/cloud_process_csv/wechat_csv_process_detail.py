@@ -370,17 +370,25 @@ class WeChatCSVProcess:
                         
                         road_scene = self.df.iloc[i]['road_scene']
 
-                        # 若是在urban 则认为是lcc
-                        if road_scene == 'urban':
+                        # # 若是在urban 则认为是lcc
+                        # if road_scene == 'urban':
+                        #         self.calculate_intervention(
+                        #             self.journey.lcc, near_max_dcc, gps_time, lon, lat)                        
+                        # else:
+                        #     if pre_state == 'noa':
+                        #         self.calculate_intervention(
+                        #             self.journey.noa, near_max_dcc, gps_time, lon, lat)
+                        #     elif pre_state == 'lcc':
+                        #         self.calculate_intervention(
+                        #             self.journey.lcc, near_max_dcc, gps_time, lon, lat)
+
+                        if pre_state == 'noa':
+                            self.calculate_intervention(
+                                     self.journey.noa, near_max_dcc, gps_time, lon, lat)
+                        elif pre_state == 'lcc':
                                 self.calculate_intervention(
-                                    self.journey.lcc, near_max_dcc, gps_time, lon, lat)                        
-                        else:
-                            if pre_state == 'noa':
-                                self.calculate_intervention(
-                                    self.journey.noa, near_max_dcc, gps_time, lon, lat)
-                            elif pre_state == 'lcc':
-                                self.calculate_intervention(
-                                    self.journey.lcc, near_max_dcc, gps_time, lon, lat)
+                                     self.journey.lcc, near_max_dcc, gps_time, lon, lat)
+
                                 
                 self.add_to(self.journey.driver, d_odo, in_acc, in_dcc, pre_a, dt, v, a,
                     state == pre_state, gps_time, lon, lat, is_driver=True, is_intervention=is_intervention)
