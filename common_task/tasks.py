@@ -24,6 +24,7 @@ from functools import partial
 from concurrent.futures import ProcessPoolExecutor
 import multiprocessing
 from accounts.models import User
+from .db_utils import db_retry, ensure_connection
 # from .chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
 from .chek_dataprocess.cloud_process_csv.wechat_csv_process import process_csv
 
@@ -1592,6 +1593,7 @@ def process_and_upload_files_sync(user_id, csv_path_list, det_path_list):
 #     except Exception as e:
 #         logger.error(f"合并任务处理失败: {e}")
 
+
 # 
 async def handle_merge_task(_id, trip_id, is_last_chunk=False):
     """处理合并任务"""
@@ -1604,12 +1606,22 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False):
                 await asyncio.sleep(0.5)
 
             loop = asyncio.get_event_loop()
+
+
+             # 使用外部定义的函数，传递参数
             csv_path_list, det_path_list = await loop.run_in_executor(
                 process_executor,
-                merge_files_sync,
+                ensure_db_connection_and_merge,
                 _id,
                 trip_id
             )
+
+            # csv_path_list, det_path_list = await loop.run_in_executor(
+            #     process_executor,
+            #     merge_files_sync,
+            #     _id,
+            #     trip_id
+            # )
             
             is_valid_interval = False
             if csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0:
@@ -1680,6 +1692,41 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False):
             
     except Exception as e:
         logger.error(f"合并任务处理失败: {e}")
+
+
+
+
+# 将嵌套函数移到外部作为独立函数
+def ensure_db_connection_and_merge(user_id, trip_id):
+    """确保数据库连接并执行合并操作"""
+    # 最大重试次数
+    max_retries = 3
+    retry_delay = 1.0
+    
+    for attempt in range(max_retries):
+        try:
+            # 确保数据库连接有效
+            ensure_connection()
+            # 测试连接是否正常
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            
+            logger.info(f"数据库连接正常，开始执行合并操作")
+            # 连接正常，执行合并操作
+            return merge_files_sync(user_id, trip_id)
+        except Exception as e:
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                # 关闭所有连接并等待重试
+                from django.db import connections
+                connections.close_all()
+                time.sleep(retry_delay * (attempt + 1))
+            else:
+                # 最后一次尝试也失败
+                logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
+                return None, None
 
 
 def is_valiad_phone_number_sync(phone):
