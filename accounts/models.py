@@ -100,7 +100,6 @@ class SMSVerification(models.Model):
 
 class ProjectVersion(models.Model):
     id = models.AutoField(primary_key=True)
-    #user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     code = models.CharField(max_length=30,blank=True, null=True)
     project_version = models.CharField(max_length=30,blank=True, null=True)
     created_at = models.DateTimeField(auto_now=True)
