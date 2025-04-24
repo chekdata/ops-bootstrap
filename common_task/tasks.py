@@ -1633,27 +1633,44 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False):
 
             if ((csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0) or \
                 (det_path_list and isinstance(det_path_list, list) and len(det_path_list) > 0)) :
+                # # 在进程池中执行文件处理和上传
+                # success, results = await loop.run_in_executor(
+                #     process_executor,
+                #     process_and_upload_files_sync,
+                #     _id,
+                #     csv_path_list,
+                #     det_path_list
+                # )
+
+
                 # 在进程池中执行文件处理和上传
                 success, results = await loop.run_in_executor(
                     process_executor,
-                    process_and_upload_files_sync,
+                    ensure_db_connection_and_process_and_upload_files_sync,
                     _id,
                     csv_path_list,
                     det_path_list
                 )
-                
+
                 if success:
                     logger.info(f"文件处理和上传成功: {results}")
                 else:
                     logger.error("文件处理和上传失败")
 
             if (csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0):
-                # 使用_id查询account models中用户信息
+                # # 使用_id查询account models中用户信息
+                # user = await loop.run_in_executor(
+                #     process_executor,
+                #     get_user_sync,
+                #     _id
+                # )
+
                 user = await loop.run_in_executor(
                     process_executor,
-                    get_user_sync,
+                    ensure_db_connection_and_get_user,
                     _id
                 )
+
                 if user and is_valid_interval:
                     # 处理行程数据
                     success, message = await loop.run_in_executor(
@@ -1727,6 +1744,71 @@ def ensure_db_connection_and_merge(user_id, trip_id):
                 # 最后一次尝试也失败
                 logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
                 return None, None
+
+# 将嵌套函数移到外部作为独立函数
+def ensure_db_connection_and_process_and_upload_files_sync(user_id, csv_path_list, det_path_list):
+    """确保数据库连接并执行合并操作"""
+    # 最大重试次数
+    max_retries = 3
+    retry_delay = 1.0
+    
+    for attempt in range(max_retries):
+        try:
+            # 确保数据库连接有效
+            ensure_connection()
+            # 测试连接是否正常
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            
+            logger.info(f"数据库连接正常，开始执行数据上传操作")
+            # 连接正常，执行合并操作
+            return process_and_upload_files_sync(user_id, csv_path_list, det_path_list)
+        except Exception as e:
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                # 关闭所有连接并等待重试
+                from django.db import connections
+                connections.close_all()
+                time.sleep(retry_delay * (attempt + 1))
+            else:
+                # 最后一次尝试也失败
+                logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
+                return False, []
+
+
+# 将嵌套函数移到外部作为独立函数
+def ensure_db_connection_and_get_user(user_id):
+    """确保数据库连接并执行合并操作"""
+    # 最大重试次数
+    max_retries = 3
+    retry_delay = 1.0
+    
+    for attempt in range(max_retries):
+        try:
+            # 确保数据库连接有效
+            ensure_connection()
+            # 测试连接是否正常
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            
+            logger.info(f"数据库连接正常，开始执行获取用户信息操作")
+            # 连接正常，执行合并操作
+            return get_user_sync(user_id)
+        except Exception as e:
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                # 关闭所有连接并等待重试
+                from django.db import connections
+                connections.close_all()
+                time.sleep(retry_delay * (attempt + 1))
+            else:
+                # 最后一次尝试也失败
+                logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
+                return None
 
 
 def is_valiad_phone_number_sync(phone):
