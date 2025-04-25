@@ -478,8 +478,8 @@ async def process_tos_play_link(request):
     parameters=[
         OpenApiParameter(name="Authorization", description="认证令牌，格式为：Bearer <token>", required=True, type=OpenApiTypes.STR, location=OpenApiParameter.HEADER)
     ],
-    description="根据传入的tos路径获取点播链接，处理成功返回200，处理异常返回500。",
-    summary="分片上传数据",
+    description="处理分片上传数据，对数据进行合并和其他操作，处理成功返回200，处理异常返回500。",
+    summary="分片上传数据处理",
     tags=['数据']
 )
 @api_view(['POST'])
