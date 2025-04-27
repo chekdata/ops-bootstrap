@@ -100,7 +100,7 @@ async def custom_token_obtain_pair_view(request):
             username=username,
             unionid=unionid
         )
-        user.pic ='chek/temp/app_project/default/default_avatar_final.jpg'
+        user.pic ='http://62.234.57.136:9000/vehicle-control/app_project/default/default_avatar.jpg'
         await sync_to_async(user.save, thread_sensitive=True)()
 
         # 如果有额外的字段需要在创建时设置，可以在这里添加
