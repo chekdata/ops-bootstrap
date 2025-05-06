@@ -305,7 +305,8 @@ async def check_timeout_trips():
                             handle_merge_task(
                                 user_id, 
                                 trip_to_merge['trip_id'], 
-                                is_last_chunk=True  # 模拟最后一个分片
+                                is_last_chunk=True,  # 模拟最后一个分片
+                                is_timeout=True,    # 标记为超时
                             )
                         )
                         tasks.append(task)
@@ -425,6 +426,20 @@ async def check_timeout_trip(user_id,trip_id):
     except Exception as e:
         logger.error(f"检查行程超时失败: {e}")
 
+# 使用对应的时区
+from django.conf import settings
+from django.utils import timezone
+
+def get_current_timezone_time():
+    """获取当前时区的时间"""
+    try:
+        # 使用系统设置的时区
+        return timezone.localtime(timezone.now())
+    except Exception as e:
+        logger.error(f"获取时区时间失败: {e}")
+        # 如果失败则返回 UTC 时间
+        return timezone.now()
+
 async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, metadata=None):
     """
     上传分片文件（异步版本）
@@ -445,7 +460,7 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
         # 获取或创建Trip
         defaults = {
             'is_completed': False,
-            'last_update': timezone.now()
+            'last_update': get_current_timezone_time()  # 使用时区时间
         }
         
         # 添加元数据
@@ -469,7 +484,7 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
         # 当第一次写入时，写入first_update
         trip_exists = await sync_to_async(Trip.objects.filter(trip_id=trip_id).exists, thread_sensitive=True)()
         if not trip_exists:
-            defaults['first_update'] = timezone.now()
+            defaults['first_update'] = get_current_timezone_time()  # 使用时区时间
             logger.info(f"创建新行程记录: {trip_id}, 设置首次更新时间: {defaults['first_update']}")
         else:
             # 如果记录已存在，确保不更新first_update字段
@@ -811,7 +826,7 @@ async def cleanup_resources():
 
 
 # NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
-def merge_files_sync(user_id, trip_id):
+def merge_files_sync(user_id, trip_id, is_timeout=False):
     """同步版本的合并文件函数，用于进程池执行"""
     
     time_interval_thre = 300
@@ -840,15 +855,29 @@ def merge_files_sync(user_id, trip_id):
             logger.info(f"用户ID: {user_id}, 行程ID: {main_trip.trip_id} 未完成合并，开始进行合并处理！")
             # 找到所有和trip相同的carname hardware_version software_version device_id相同的trip,确保数据不会在进程间产生竞争
             try:
-                # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
-                all_similar_trips = Trip.objects.filter(
-                    is_completed=False,
-                    user_id=user_id,
-                    device_id=main_trip.device_id,
-                    car_name=main_trip.car_name,
-                    hardware_version=main_trip.hardware_version,
-                    software_version=main_trip.software_version,
-                ).order_by('-last_update')  # 降序排列，从最新到最旧
+                # 正常退出
+                if not is_timeout:
+                    # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
+                    all_similar_trips = Trip.objects.filter(
+                        is_completed=False,
+                        user_id=user_id,
+                        device_id=main_trip.device_id,
+                        car_name=main_trip.car_name,
+                        hardware_version=main_trip.hardware_version,
+                        software_version=main_trip.software_version,
+                        merge_into_current=True,
+                    ).order_by('-last_update')  # 降序排列，从最新到最旧
+                else:
+                    # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
+                    # 超时行程不处理merge_into_current
+                    all_similar_trips = Trip.objects.filter(
+                        is_completed=False,
+                        user_id=user_id,
+                        device_id=main_trip.device_id,
+                        car_name=main_trip.car_name,
+                        hardware_version=main_trip.hardware_version,
+                        software_version=main_trip.software_version,
+                    ).order_by('-last_update')  # 降序排列，从最新到最旧     
 
                 # 筛选出需要合并的行程
                 trips_to_merge = []
@@ -863,20 +892,25 @@ def merge_files_sync(user_id, trip_id):
                     # 计算当前行程与前一个行程的时间间隔（秒）
                     # 注意：由于是降序排列，所以是prev_trip.first_update - trip.last_update
                     time_diff = (prev_trip.first_update - trip.last_update).total_seconds()
-                    
-                    if time_diff <= time_interval_thre:  # 5分钟 = 300秒
-                        # 如果间隔小于等于5分钟，则添加到合并行程列表
-                        trips_to_merge.append(trip)
-                        prev_trip = trip
+
+                    # 正常退出
+                    if not is_timeout:                    
+                        if time_diff <= time_interval_thre:  # 5分钟 = 300秒
+                            # 如果间隔小于等于5分钟，则添加到合并行程列表
+                            trips_to_merge.append(trip)
+                            prev_trip = trip
+                        else:
+                            # 找到了间隔超过5分钟的行程，停止查找
+                            logger.info(f"找到间隔超过5分钟的行程，停止查找。行程ID: {trip.trip_id}, 时间间隔: {time_diff}秒")
+                            break
                     else:
-                        # 找到了间隔超过5分钟的行程，停止查找
-                        logger.info(f"找到间隔超过5分钟的行程，停止查找。行程ID: {trip.trip_id}, 时间间隔: {time_diff}秒")
-                        break
+                            # 如果正常退出，选择所有之前没处理的数据进行合并，不区分间隔小于等于5分钟，则添加到合并行程列表
+                            trips_to_merge.append(trip)
 
                 # 按照时间升序排序（从旧到新），便于处理
                 trips_to_merge.sort(key=lambda x: x.last_update)
 
-                logger.info(f"找到 {len(trips_to_merge)} 个需要合并的行程，时间范围: {trips_to_merge[0].last_update} 到 {trips_to_merge[-1].last_update}")
+                logger.info(f"找到 {len(trips_to_merge)} 个需要合并的行程，时间范围: {trips_to_merge[0].last_update} 到 {trips_to_merge[-1].first_update}")
                 trips = trips_to_merge
 
 
@@ -1101,7 +1135,7 @@ def process_and_upload_files_sync(user_id, csv_path_list, det_path_list):
 
 
 # 
-async def handle_merge_task(_id, trip_id, is_last_chunk=False):
+async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False):
     """处理合并任务"""
     try:
         if is_last_chunk:
@@ -1119,7 +1153,8 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False):
                 process_executor,
                 ensure_db_connection_and_merge,
                 _id,
-                trip_id
+                trip_id,
+                is_timeout
             )
             
             is_valid_interval = False
@@ -1198,7 +1233,7 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False):
 
 
 # 将嵌套函数移到外部作为独立函数
-def ensure_db_connection_and_merge(user_id, trip_id):
+def ensure_db_connection_and_merge(user_id, trip_id, is_timeout=False):
     """确保数据库连接并执行合并操作"""
     # 最大重试次数
     max_retries = 3
@@ -1216,7 +1251,7 @@ def ensure_db_connection_and_merge(user_id, trip_id):
             
             logger.info(f"数据库连接正常，开始执行合并操作")
             # 连接正常，执行合并操作
-            return merge_files_sync(user_id, trip_id)
+            return merge_files_sync(user_id, trip_id, is_timeout)
         except Exception as e:
             logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
@@ -1454,3 +1489,104 @@ def start_db_connection_checker():
                 pass
         finally:
             time.sleep(60)  # 每60秒检查一次
+
+
+
+
+
+# 将嵌套函数移到外部作为独立函数
+async def ensure_db_connection_and_get_abnormal_journey(user_id,
+                                                        device_id,
+                                                        car_name,
+                                                        hardware_version, 
+                                                        software_version, 
+                                                        time):
+    """确保数据库连接并执行合并操作"""
+    # 最大重试次数
+    max_retries = 3
+    retry_delay = 1.0
+    
+    for attempt in range(max_retries):
+        try:
+            # 确保数据库连接有效
+            ensure_connection()
+            # 测试连接是否正常
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            
+            logger.info(f"数据库连接正常，开始执行数据上传操作")
+            
+            trips = await sync_to_async(
+            list,
+            thread_sensitive=True)(
+                Trip.objects.filter(user_id=user_id, 
+                                    is_completed=False,
+                                    device_id=device_id,
+                                    car_name=car_name,
+                                    hardware_version=hardware_version,
+                                    software_version=software_version,
+                                    # last_update__lt=time
+                                    ).values_list('trip_id','first_update', flat=True)
+            )
+            return trips
+        except Exception as e:
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                # 关闭所有连接并等待重试
+                from django.db import connections
+                connections.close_all()
+                time.sleep(retry_delay * (attempt + 1))
+            else:
+                # 最后一次尝试也失败
+                logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
+                return []
+            
+
+
+# 将嵌套函数移到外部作为独立函数
+async def ensure_db_connection_and_set_merge_abnormal_journey(trips):
+    """确保数据库连接并执行合并操作"""
+    # 最大重试次数
+    max_retries = 3
+    retry_delay = 1.0
+    
+    for attempt in range(max_retries):
+        try:
+            # 确保数据库连接有效
+            ensure_connection()
+            # 测试连接是否正常
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            
+            logger.info(f"数据库连接正常，开始执行数据上传操作")
+            @sync_to_async(thread_sensitive=True)
+            def update_trips():
+                with transaction.atomic():
+                    for trip_id in trips:
+                        try:
+                            trip = Trip.objects.select_for_update().get(trip_id=trip_id)
+                            trip.merge_into_current = False
+                            trip.save()
+                            logger.info(f"已将行程 {trip_id} 的 Merge_into_current 字段设置为 0")
+                        except Trip.DoesNotExist:
+                            logger.error(f"行程 {trip_id} 不存在")
+                        except Exception as e:
+                            logger.error(f"更新行程 {trip_id} 失败: {e}")
+            # 执行更新操作
+            await update_trips()
+            return True
+        except Exception as e:
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                # 关闭所有连接并等待重试
+                from django.db import connections
+                connections.close_all()
+                time.sleep(retry_delay * (attempt + 1))
+            else:
+                # 最后一次尝试也失败
+                logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
+                return False

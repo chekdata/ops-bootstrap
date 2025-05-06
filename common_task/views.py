@@ -10,6 +10,7 @@ from django.core.files.base import ContentFile
 from rest_framework.decorators import  permission_classes
 from adrf.decorators import api_view
 from rest_framework.response import Response
+from django.utils import timezone
 import io
 import csv
 import logging
@@ -44,8 +45,9 @@ from .tasks import (
     force_merge_trip, 
     handle_merge_task,
     cleanup_background_tasks,
-    background_tasks)
-
+    background_tasks,
+    ensure_db_connection_and_get_abnormal_journey,
+    ensure_db_connection_and_set_merge_abnormal_journey)
 
 logger = logging.getLogger('common_task')
 
@@ -641,3 +643,101 @@ async def setStartMerge(request):
         })
     except Exception as e:
         return JsonResponse({'code':500,'success': False, 'message': '设置开始合并分片状态失败', 'data':{}})
+    
+
+
+
+
+@extend_schema(
+    # 指定请求体的参数和类型
+    # request=InferenceDetialDetDataSerializer,
+    # 指定响应的信息
+    responses={
+        200: OpenApiResponse(response=SuccessResponseSerializer, description="处理成功"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务错误")
+    },
+    parameters=[
+        OpenApiParameter(name="Authorization", description="认证令牌，格式为：Bearer <token>", required=True, type=OpenApiTypes.STR, location=OpenApiParameter.HEADER)
+    ],
+    description="获取异常行程数据id, 不需要具体的请求参数",
+    summary="获取异常行程数据",
+    tags=['行程数据']
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+async def get_abnormal_journey(request):
+    """获取异常退出行程数据"""
+    user = request.user  # 获取当前登录用户
+    _id = user.id
+    try:
+        
+        device_id = request.data.get('device_id')
+        car_name = request.data.get('car_name')
+        hardware_version = request.data.get('hardware_version')
+        software_version = request.data.get('software_version')
+
+        # 计算2分钟前时间点,查询2分钟前最后一次更新分片的行程
+        num_minutes_ago = timezone.now() - timezone.timedelta(minutes=2)
+
+        trips = await ensure_db_connection_and_get_abnormal_journey(_id, device_id,
+                                                                    car_name,
+                                                                    hardware_version, 
+                                                                    software_version, 
+                                                                    num_minutes_ago)
+        
+        return JsonResponse({
+            'code':200,
+            'success': True, 
+            'message': f"查询trip成功, user_id: {_id}",
+            'data': {
+                'trips': trips,
+            }
+        })
+    
+    except Exception as e:
+        logger.error(f"查询trip失败: {str(e)}")
+        return JsonResponse({'code':500,'success': False, 'message': f'请求处理失败: {str(e)}', 'data':{}})
+    
+
+
+
+@extend_schema(
+    # 指定请求体的参数和类型
+    # request=InferenceDetialDetDataSerializer,
+    # 指定响应的信息
+    responses={
+        200: OpenApiResponse(response=SuccessResponseSerializer, description="处理成功"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务错误")
+    },
+    parameters=[
+        OpenApiParameter(name="Authorization", description="认证令牌，格式为：Bearer <token>", required=True, type=OpenApiTypes.STR, location=OpenApiParameter.HEADER)
+    ],
+    description="设置合并异常行程数据, trips列表中存在id,这些id将不参与到当前数据合并中",
+    summary="设置合并异常行程数据",
+    tags=['行程数据']
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+async def set_merge_abnormal_journey(request):
+    """设置合并异常行程数据"""
+    user = request.user  # 获取当前登录用户
+    _id = user.id
+    try:
+        
+        trips = request.data.get('trips')
+
+        await ensure_db_connection_and_set_merge_abnormal_journey(trips)
+        
+        logger.info(f"设置trip不参与当前行程数据合并: {trips}")
+
+        return JsonResponse({
+            'code':200,
+            'success': True, 
+            'message': f"设置trip成功, trips: {trips}",
+            'data': {
+            }
+        })
+    
+    except Exception as e:
+        logger.error(f"设置trip失败: {str(e)}")
+        return JsonResponse({'code':500,'success': False, 'message': f'请求处理失败: {str(e)}', 'data':{}})

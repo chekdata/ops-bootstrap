@@ -55,6 +55,7 @@ class Trip(models.Model):
     hardware_version = models.CharField(max_length=64, null=True, blank=True)
     software_version = models.CharField(max_length=64, null=True, blank=True)
     device_id = models.CharField(max_length=255, null=True, blank=True)
+    merge_into_current = models.BooleanField(default=True)
     
     def __str__(self):
         return f"Trip {self.car_name}"
