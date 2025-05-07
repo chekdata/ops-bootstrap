@@ -219,8 +219,8 @@ async def start_merge_async(user_id,trip_id):
         return False
 
 # NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
-# 定期检查超时任务
-async def check_timeout_trips():
+# 定期检查超时任务 并触发分组合并
+async def check_timeout_trips_merge():
     """检查超时的上传任务并触发合并（异步版本）"""
     from django.utils import timezone
     from datetime import timedelta
@@ -329,6 +329,59 @@ async def check_timeout_trips():
                 break
             await asyncio.sleep(10)
 
+
+
+# 定期检查超时任务 并触发trip_id落库
+async def check_timeout_trips():
+    """检查超时的上传任务并触发合并（异步版本）"""
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    global timeout_checker_running
+
+
+    while timeout_checker_running:
+        try:
+            # 查找所有未完成且超过2分钟未更新的Trip
+            # 设置2min时间阈值，对于没有新分片更新行程，判定为异常结束
+            timeout = timezone.now() - timedelta(minutes=2)
+            
+            # 使用正确的异步查询方法组合
+            # 查找所有还未进行合并的行程
+            trips = await sync_to_async(list, thread_sensitive=True)(
+                Trip.objects.filter(
+                    is_completed=False, 
+                    last_update__lt=timeout,
+                ).values('trip_id', 'user_id', 
+                         'car_name', 'device_id', 
+                         'hardware_version', 
+                         'software_version', 
+                         'first_update',
+                         'last_update')  # 只获取trip_id字段
+            )
+
+            if not trips:
+                logger.info("没有找到异常结束超时的行程")
+            else:
+                logger.info(f"找到 {len(trips)} 个超时行程")
+                # 按照相同特征分组
+                trip_groups = {}
+                for trip in trips:
+                    # NOTE: 直接对数据进行落行程库
+                    k = 0
+            
+        except Exception as e:
+            logger.error(f"超时检查失败: {str(e)}")
+            await asyncio.sleep(60)  # 发生错误时等待1分钟再重试
+            continue
+        
+        # 每5分钟检查一次
+        for _ in range(18):  # 分成18次等待，便于及时响应停止信号
+            if not timeout_checker_running:
+                break
+            await asyncio.sleep(10)
+
+
 def start_timeout_checker():
     """启动超时检查器"""
     try:
@@ -433,8 +486,13 @@ from django.utils import timezone
 def get_current_timezone_time():
     """获取当前时区的时间"""
     try:
-        # 使用系统设置的时区
-        return timezone.localtime(timezone.now())
+        # 使用系统设置的时区，并确保应用上海时区
+        from django.utils.timezone import localtime, now
+        from pytz import timezone as pytz_timezone
+        
+        # 直接使用上海时区
+        shanghai_tz = pytz_timezone('Asia/Shanghai')
+        return now().astimezone(shanghai_tz)
     except Exception as e:
         logger.error(f"获取时区时间失败: {e}")
         # 如果失败则返回 UTC 时间
@@ -1528,7 +1586,7 @@ async def ensure_db_connection_and_get_abnormal_journey(user_id,
                                     hardware_version=hardware_version,
                                     software_version=software_version,
                                     # last_update__lt=time
-                                    ).values_list('trip_id','first_update', flat=True)
+                                    ).values_list('trip_id',flat=True)
             )
             return trips
         except Exception as e:

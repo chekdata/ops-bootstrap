@@ -726,9 +726,15 @@ async def set_merge_abnormal_journey(request):
         
         trips = request.data.get('trips')
 
-        await ensure_db_connection_and_set_merge_abnormal_journey(trips)
+        # await ensure_db_connection_and_set_merge_abnormal_journey(trips)
         
-        logger.info(f"设置trip不参与当前行程数据合并: {trips}")
+        #创建后台任务
+        for trip_id in trips:
+            merge_task = asyncio.create_task(
+                handle_merge_task(_id, trip_id, is_last_chunk=True)
+            )
+            background_tasks.append(merge_task)
+            logger.info(f"设置trip不参与当前行程数据合并: {trip_id}")
 
         return JsonResponse({
             'code':200,
