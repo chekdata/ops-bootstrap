@@ -12,6 +12,12 @@ def handle_user_info(profile):
     if profile.desc:
         item['desc'] = profile.desc
 
+    if profile.gender:
+        item['gender'] = profile.gender
+
+    if profile.signature:
+        item['signature'] = profile.signature
+
     if profile.app_software_config_version:
         item['app_software_config_version'] = profile.app_software_config_version
 

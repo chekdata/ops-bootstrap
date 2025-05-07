@@ -77,7 +77,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     password = None  # 注意，这可能不会直接工作，但意在表明我们不使用这个字段
     code = serializers.CharField()
 
-    def __init__(self,unionid, *args, **kwargs):
+    def __init__(self,unionid=None, phone=None, *args, **kwargs):
         super(TokenObtainSerializer, self).__init__(*args, **kwargs)
         # super().__init__(*args, **kwargs)
         # 移除 username 和 password 字段
@@ -87,6 +87,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         # 添加 code 字段
         self.fields['code'] = serializers.CharField()
         self.unionid = unionid
+        self.phone = phone
 
 
     @classmethod
@@ -135,6 +136,23 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         # except Exception as e:
         #     raise serializers.ValidationError(str(e))
 
+    def validate_phone(self ):
+        #登陆验证 phone
+        phone = self.phone
+
+        try:
+            user = User.objects.get(phone=phone)
+        except User.DoesNotExist:
+            raise serializers.ValidationError({'code': 500, 'message': '无效user id'})
+
+        item = handle_user_info(user)
+        refresh = self.get_token(user)
+
+        item['RefreshToken'] = str(refresh)
+        item['AccessToken'] = str(refresh.access_token)
+
+        return {'code': 200, 'message': '成功','data':item}
+    
     class Meta:
         model = User
         # fields = ['id']

@@ -55,6 +55,10 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     # 个人签名
     desc = models.TextField(blank=True, null=True, verbose_name='个人签名')
+    signature = models.TextField(blank=True, null=True, verbose_name='个人签名')
+
+    #性别
+    gender = models.CharField(max_length=5,blank=True, null=True, verbose_name='性别')
 
     # 用户App版本号
     app_software_config_version = models.CharField(max_length=100, blank=True, null=True, verbose_name='App版本号')
@@ -80,6 +84,20 @@ class User(AbstractBaseUser, PermissionsMixin):
         verbose_name = '用户'
         verbose_name_plural = '用户'
 
+class User_SMS_Verification(models.Model):
+    id = models.AutoField(primary_key=True)
+    phone = models.CharField(max_length=15,blank=True, null=True)
+    code = models.IntegerField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now=True)
+    def __str__(self):
+        return f'{self.id} {self.phone}'
+
+    def is_valid(self):
+        # 验证码有效期为 10 分钟
+        return (datetime.datetime.now(datetime.timezone.utc) - self.created_at) <= datetime.timedelta(minutes=10)
+
+    class Meta:
+        db_table = 'SMS_verify_login'
 
 class SMSVerification(models.Model):
     id = models.AutoField(primary_key=True)
@@ -124,3 +142,25 @@ class UserHistoryHardware(models.Model):
 
     class Meta:
         db_table = 'user_historical_hardware'
+
+
+
+class CoreUser(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4,editable=False, verbose_name='唯一标识ID')
+
+    app_id = models.CharField(max_length=50,blank=True, null=True)
+
+    mini_id = models.CharField(max_length=50,blank=True, null=True)
+
+    saas_id = models.CharField(max_length=50,blank=True, null=True)
+
+    app_phone = models.CharField(max_length=15, null=True, verbose_name='app手机号')
+    
+    saas_phone = models.CharField(max_length=15, null=True, verbose_name='saas手机号')
+    
+    mini_phone = models.CharField(max_length=15, null=True, verbose_name='小程序手机号')
+
+    class Meta:
+        managed = False
+        db_table = 'accounts_core_user'  # 替换为实际的表名
+        app_label = 'core_user'
