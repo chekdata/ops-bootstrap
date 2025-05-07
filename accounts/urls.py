@@ -20,4 +20,10 @@ urlpatterns = [
     path('update_pic',views.update_pic),
     path('update_model_config',views.update_model_config),
     path('update_project_version',views.update_project_version),
+    path('update_user_info',views.update_user_info),
+    path('send_sms_process_login',views.send_sms_process_login),
+    path('check_sms_process_login',views.check_sms_process_login),
+    path('bound_wechat_id',views.bound_wechat_id),
+    path('unbound_wechat_id',views.unbound_wechat_id),
+    
 ]

@@ -6,7 +6,7 @@ from rest_framework import generics
 from accounts.serializers import UserSerializer
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from accounts.models import User,SMSVerification,UserHistoryHardware,ProjectVersion
+from accounts.models import User,SMSVerification,UserHistoryHardware,ProjectVersion,User_SMS_Verification,CoreUser
 from django.views.decorators.http import require_POST
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import  permission_classes,authentication_classes
@@ -27,8 +27,8 @@ from accounts.handle_function import *
 from asgiref.sync import sync_to_async
 import os
 from common_task.handle_tos import *
-
-
+from django.db.models import Q
+from accounts.update_mino  import *
 # from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 # from drf_spectacular.types import OpenApiTypes
 # from rest_framework import serializers
@@ -82,7 +82,6 @@ class UserCreateView(generics.CreateAPIView):
 async def custom_token_obtain_pair_view(request):
     code = request.data.get('code')
     unionid = get_access_token(SOCIAL_AUTH_WEIXIN_appid, SOCIAL_AUTH_WEIXIN_secret, code)
-    print(unionid)
     if not unionid or 'unionid' not in unionid.keys():
         return Response({'code': 500, 'message': '请输入正确的code','data':{}})
     access_token = unionid.get('access_token')
@@ -163,6 +162,87 @@ async def check_user_info(request):
         return Response({'code':500, 'message': '用户不存在','data':{}})
 
 
+
+@extend_schema(
+    # 方法说明
+    summary="更新用户信息",
+    description="更新当前登录用户的详细信息。",
+    # 请求体说明（如果有）
+    request=None,  # 如果有需要接收的请求体，可以设置对应的序列化器
+    parameters=[
+        OpenApiParameter(name="Authorization", description="认证令牌，格式为：Bearer <token>", required=True, type=OpenApiTypes.STR, location=OpenApiParameter.HEADER)
+    ],
+    # 响应体说明
+    responses={
+        200: OpenApiResponse(response=UserInfoResponseSerializer, description="用户信息存在"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="用户不存在")
+    },
+    # 标签，用于分类
+    tags=['用户'],
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+async def update_user_info(request):
+    user = request.user  # 获取当前登录用户
+    user_token = request.auth
+
+    image_file = request.FILES.get('file')
+    url_link = ''
+    # if not image_file:
+    #     return Response({'code':500,'message': '没有接收到文件','data':{}})
+    name =request.data.get('name')
+    signature =request.data.get('signature')
+    gender =request.data.get('gender')
+
+    if image_file:
+        # 定义允许的图片扩展名
+        ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+
+        # 获取文件扩展名
+        file_ext = os.path.splitext(image_file.name)[1][1:].lower()
+
+        if file_ext not in ALLOWED_EXTENSIONS:
+            return Response({'code': 500, 'message': '传输的不是图片', 'data': {}})
+        
+        # 使用 tempfile 创建一个临时文件夹
+        temp_dir = tempfile.gettempdir()
+
+        # 创建一个 FileSystemStorage 实例，指向临时目录
+        fs = FileSystemStorage(location=temp_dir)
+
+        # 保存文件
+        upload_file_path = await prepare_upload_file_path_mino(user.id, image_file)
+
+        filename = await sync_to_async(fs.save, thread_sensitive=True)(image_file.name, image_file)
+        # 获取保存后的文件的完整路径
+        file_url = fs.path(filename)
+
+
+        # 保存文件
+        url_link = get_mino_link( file_url,upload_file_path)
+        os.remove(file_url)
+
+    try:
+        user_profile = await sync_to_async(User.objects.get, thread_sensitive=True)(id=user.id)
+        if   name :
+            user_profile.name = name
+
+        if signature:
+            user_profile.signature = signature
+
+        if gender:
+            user_profile.gender = gender
+
+        if url_link:
+            user_profile.pic = url_link
+        await sync_to_async(user_profile.save, thread_sensitive=True)()
+   
+        return Response({'code': 200, 'message': '用户信息更新成功','data':{}})
+
+    except User.DoesNotExist:
+        return Response({'code':500, 'message': '内部服务报错','data':{}})
+    
+
 @extend_schema(
     # 方法说明
     summary="查看账号是否绑定手机号",
@@ -242,6 +322,25 @@ async def send_sms_process(request):
         user_profile.phone = phone
         # user_profile.save()
         await sync_to_async(user_profile.save, thread_sensitive=True)()
+
+
+        if not await sync_to_async(CoreUser.objects.using('core_user').filter(app_phone=phone).exists, thread_sensitive=True)():
+            if await sync_to_async(CoreUser.objects.using('core_user').filter(Q(saas_phone=phone) | Q(mini_phone=phone)).exists, thread_sensitive=True)():
+                # core_user = await sync_to_async(CoreUser.objects.using('core_user').filter(Q(saas_phone=phone) | Q(mini_phone=phone)).exists, thread_sensitive=True)()
+                #主数据库三端手机号必须一致 不然这个逻辑会出问题
+                core_user = await sync_to_async(CoreUser.objects.using('core_user').get, thread_sensitive=True)(
+                    Q(saas_phone=phone) | Q(mini_phone=phone)
+                )
+                if not core_user.app_id:
+                    core_user.app_phone = phone
+                    core_user.app_id = user_profile.id
+                    await sync_to_async(core_user.save, thread_sensitive=True)()
+            else:
+                core_user =await sync_to_async(CoreUser.objects.using('core_user').get_or_create, thread_sensitive=True)(
+                    app_phone=phone,
+                    app_id = user_profile.id
+                )
+
 
         vericode=str(generate_verification_code())
         # smsverification= SMSVerification.objects.get_or_create(user_id=user.id)
@@ -675,3 +774,218 @@ async def update_project_version(request):
     except Exception as e:
         print(e)
         return Response({'code': 500, 'message': '内部服务报错','data':{}})
+
+
+@extend_schema(
+    # 指定请求体的参数和类型
+    request=WechatCodeRequestSerializer,
+    # 指定响应的信息
+    responses={
+        200: OpenApiResponse(response=UserInfoResponseSerializer, description="处理成功"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务错误")
+    },
+    description="根据手机号获取用户token信息，如果用户不存在，则先创建用户。处理成功返回200，处理异常返回500。",
+    summary="获取或创建用户并返回token",
+    tags=['用户']
+)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+async def send_sms_process_login(request):
+    phone = request.data.get('phone')
+
+    # code = request.data.get('code')
+    # unionid = get_access_token(SOCIAL_AUTH_WEIXIN_appid, SOCIAL_AUTH_WEIXIN_secret, code)
+    # if not unionid or 'unionid' not in unionid.keys():
+    #     return Response({'code': 500, 'message': '请输入正确的code','data':{}})
+    # access_token = unionid.get('access_token')
+    # openid = unionid.get('openid')
+    # unionid = unionid.get('unionid')
+
+    if not await sync_to_async(User.objects.filter(phone=phone).exists, thread_sensitive=True)():
+        vericode=str(generate_verification_code())
+        # username = '这是一个名字'
+        
+        # user = await sync_to_async(User.objects.create_user, thread_sensitive=True)(
+        #     username=username,
+        #     phone=phone
+        # )
+        # user.pic ='http://62.234.57.136:9000/vehicle-control/app_project/default/default_avatar.jpg'
+        # await sync_to_async(user.save, thread_sensitive=True)()
+  
+        user_SMS_verification,creat =await sync_to_async(User_SMS_Verification.objects.get_or_create, thread_sensitive=True)(  
+            phone=phone)
+        user_SMS_verification.code = vericode
+        await sync_to_async(user_SMS_verification.save, thread_sensitive=True)()
+        send_sms(phone, vericode)
+        return Response({'code': 200, 'message': 'sms 发送成功','data':{}})
+    
+
+    else:
+    
+        user_profile = await sync_to_async(User.objects.get, thread_sensitive=True)(phone=phone)
+    
+        vericode=str(generate_verification_code())
+        # smsverification= SMSVerification.objects.get_or_create(user_id=user.id)
+        smsverification,creat =await sync_to_async(SMSVerification.objects.get_or_create, thread_sensitive=True)(user_id=user_profile.id)
+        smsverification.phone = phone
+        smsverification.code = vericode
+        smsverification.user_id = user_profile.id
+        # smsverification.save()
+        await sync_to_async(smsverification.save, thread_sensitive=True)()
+
+        send_sms(phone, vericode)
+        return Response({'code': 200, 'message': 'sms 发送成功','data':{}})
+
+
+@extend_schema(
+    # 方法说明
+    summary="验证码验证",
+    description="手机短信验证码验证",
+    # 请求体说明（如果有）
+    request=CheckSmsProcessResponseSerializer,  # 如果有需要接收的请求体，可以设置对应的序列化器
+    parameters=[
+        OpenApiParameter(name="Authorization", description="认证令牌，格式为：Bearer <token>", required=True, type=OpenApiTypes.STR, location=OpenApiParameter.HEADER)
+    ],
+    # 响应体说明
+    responses={
+        200: OpenApiResponse(response=CheckSmsProcessResponseSerializer, description="成功"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务报错")
+    },
+    # 标签，用于分类
+    tags=['用户'],
+)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+async def check_sms_process_login(request):
+ 
+    phone = request.data.get('phone')
+    code = request.data.get('code')
+
+    try:
+        if  await sync_to_async(User.objects.filter(phone=phone).exists, thread_sensitive=True)():
+            user_profile = await sync_to_async(User.objects.get, thread_sensitive=True)(phone=phone)
+
+            item = handle_user_info(user_profile)
+            smsverification = await sync_to_async(SMSVerification.objects.get, thread_sensitive=True)(user_id=user_profile.id)
+            if int(code) == smsverification.code and check_time_difference(smsverification.created_at):
+                refresh = RefreshToken.for_user(user_profile)
+                item['RefreshToken'] = str(refresh)
+                item['AccessToken'] = str(refresh.access_token)
+
+                return Response( {'code': 200, 'message': '成功','data':item})
+            else:
+                return Response( {'code': 200, 'message': '验证码错误或验证码已超时','data':{}})
+
+        # item = handle_user_info(user_profile)
+        user_SMS_verification = await sync_to_async(User_SMS_Verification.objects.get, thread_sensitive=True)(phone=phone)
+        if int(code) == user_SMS_verification.code and check_time_difference(user_SMS_verification.created_at):
+            if not await sync_to_async(User.objects.filter(phone=phone).exists, thread_sensitive=True)():
+                username = '这是一个名字'
+            
+                user = await sync_to_async(User.objects.create_user, thread_sensitive=True)(
+                    username=username,
+                    phone=phone
+                )
+                user.pic ='http://62.234.57.136:9000/vehicle-control/app_project/default/default_avatar.jpg'
+                await sync_to_async(user.save, thread_sensitive=True)()
+
+            if not await sync_to_async(CoreUser.objects.using('core_user').filter(app_phone=phone).exists, thread_sensitive=True)():
+                if await sync_to_async(CoreUser.objects.using('core_user').filter(Q(saas_phone=phone) | Q(mini_phone=phone)).exists, thread_sensitive=True)():
+                    # core_user = await sync_to_async(CoreUser.objects.using('core_user').filter(Q(saas_phone=phone) | Q(mini_phone=phone)).exists, thread_sensitive=True)()
+                    #主数据库三端手机号必须一致 不然这个逻辑会出问题
+                    core_user = await sync_to_async(CoreUser.objects.using('core_user').get, thread_sensitive=True)(
+                        Q(saas_phone=phone) | Q(mini_phone=phone)
+                    )
+                    if not core_user.app_id:
+                        core_user.app_phone = phone
+                        core_user.app_id = user.id
+                        await sync_to_async(core_user.save, thread_sensitive=True)()
+                else:
+                    core_user =await sync_to_async(CoreUser.objects.using('core_user').get_or_create, thread_sensitive=True)(
+                        app_phone=phone,
+                        app_id = user.id
+                    )
+
+            serializer = CustomTokenObtainPairSerializer(phone=phone)
+            validated_data = serializer.validate_phone()
+            return Response(validated_data)
+        else:
+            return Response({'code': 500, 'message': '验证码错误或验证码已超时','data':{}})
+    except:
+        return Response({'code': 500, 'message': '内部服务报错','data':{}})
+    
+
+@extend_schema(
+    # 方法说明
+    summary="用户微信解绑",
+    description="用户微信解绑",
+    # 请求体说明（如果有）
+    request=UpdatePicResponseSerializer,  # 如果有需要接收的请求体，可以设置对应的序列化器
+    parameters=[
+        OpenApiParameter(name="Authorization", description="认证令牌，格式为：Bearer <token>", required=True, type=OpenApiTypes.STR, location=OpenApiParameter.HEADER)
+    ],
+    # 响应体说明
+    responses={
+        200: OpenApiResponse(response=SuccessResponseSerializer, description="成功"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务报错")
+    },
+    # 标签，用于分类
+    tags=['用户'],
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+async def unbound_wechat_id(request):
+    user = request.user
+    _id = user.id
+    user_profile = await sync_to_async(User.objects.get, thread_sensitive=True)(id=user.id)
+    try:
+        user_profile.unionid = ''
+        await sync_to_async(user_profile.save, thread_sensitive=True)()
+        return Response({'code': 200, 'success': '微信解绑成功','data':{}})
+       
+    except Exception as e:
+        print(e)
+        return Response({'code': 500, 'message': '内部服务报错','data':{}})
+     
+
+@extend_schema(
+    # 方法说明
+    summary="用户微信绑定",
+    description="用户微信绑定",
+    # 请求体说明（如果有）
+    request=UpdatePicResponseSerializer,  # 如果有需要接收的请求体，可以设置对应的序列化器
+    parameters=[
+        OpenApiParameter(name="Authorization", description="认证令牌，格式为：Bearer <token>", required=True, type=OpenApiTypes.STR, location=OpenApiParameter.HEADER)
+    ],
+    # 响应体说明
+    responses={
+        200: OpenApiResponse(response=SuccessResponseSerializer, description="成功"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务报错")
+    },
+    # 标签，用于分类
+    tags=['用户'],
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+async def bound_wechat_id(request):
+    user = request.user
+    _id = user.id
+    code = request.data.get('code')
+    unionid = get_access_token(SOCIAL_AUTH_WEIXIN_appid, SOCIAL_AUTH_WEIXIN_secret, code)
+    if not unionid or 'unionid' not in unionid.keys():
+        return Response({'code': 500, 'message': '请输入正确的code','data':{}})
+    access_token = unionid.get('access_token')
+    openid = unionid.get('openid')
+    unionid = unionid.get('unionid')
+    user_profile = await sync_to_async(User.objects.get, thread_sensitive=True)(id=user.id)
+    try:
+        user_profile.unionid = unionid
+        await sync_to_async(user_profile.save, thread_sensitive=True)()
+        return Response({'code': 200, 'success': '微信绑定成功','data':{}})
+       
+    except Exception as e:
+        print(e)
+        return Response({'code': 500, 'message': '内部服务报错','data':{}})
+    
