@@ -1253,6 +1253,7 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False)
                     success, message = await loop.run_in_executor(
                         process_executor,
                         process_wechat_data_sync,
+                        trip_id,
                         user,
                         csv_path_list
                     )
@@ -1401,7 +1402,7 @@ def is_valiad_phone_number_sync(phone):
 # NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
 # 小程序proto1.0版本
 # 没有上传中间结果
-def process_wechat_data_sync(user, file_path_list):
+def process_wechat_data_sync(trip_id,user, file_path_list):
     try:
         if not (file_path_list and isinstance(file_path_list, list) and len(file_path_list) > 0):
             logger.error(f"process_wechat_data_sync 文件不存在,文件列表为空! ")
@@ -1429,6 +1430,8 @@ def process_wechat_data_sync(user, file_path_list):
                                 car_hardware_version=hardware_version,
                                 car_software_version=software_version
                 )
+                # NOTE: gps处理
+                # NOTE: trip_id 关联id 落库结果数据
 
                 # # 小程序协议
                 # process_csv(file_path_list, 
