@@ -34,7 +34,7 @@ from drf_spectacular.types import OpenApiTypes
 from rest_framework import status,serializers
 from common_task.serializers import *
 from data.models import model_config
-from .models import Trip, ChunkFile
+from .models import Trip, ChunkFile, Journey
 #from .chek_dataprocess.cloud_process_csv.wechat_csv_process import process_csv
 # from .chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
 from .tasks import (
@@ -47,7 +47,8 @@ from .tasks import (
     cleanup_background_tasks,
     background_tasks,
     ensure_db_connection_and_get_abnormal_journey,
-    ensure_db_connection_and_set_merge_abnormal_journey)
+    ensure_db_connection_and_set_merge_abnormal_journey,
+    ensure_db_connection_and_set_journey_status)
 
 logger = logging.getLogger('common_task')
 
@@ -534,6 +535,10 @@ async def upload_chunk(request):
         #     # 检查是否需要触发自动合并
         #     asyncio.create_task(check_timeout_trip(_id, trip_id))
         
+        if metadata.get('is_last_chunk'):
+            # 如果最后一个分片，对journey进行
+            await ensure_db_connection_and_set_journey_status(trip_id)
+
         #创建后台任务
         merge_task = asyncio.create_task(
             handle_merge_task(_id,trip_id, is_last_chunk=metadata.get('is_last_chunk'))

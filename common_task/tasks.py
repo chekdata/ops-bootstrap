@@ -12,9 +12,10 @@ from concurrent.futures import ThreadPoolExecutor
 from django.conf import settings
 from django.db import transaction
 from asgiref.sync import sync_to_async
-from .models import Trip, ChunkFile
+from .models import Trip, ChunkFile, Journey
 from django.utils import timezone
 from data.models import model_config
+from accounts.models import CoreUser
 from common_task.models import analysis_data_app,tos_csv_app
 from common_task.handle_tos import TinderOS
 
@@ -351,6 +352,7 @@ async def check_timeout_trips():
             trips = await sync_to_async(list, thread_sensitive=True)(
                 Trip.objects.filter(
                     is_completed=False, 
+                    set_journey_status=False,
                     last_update__lt=timeout,
                 ).values('trip_id', 'user_id', 
                          'car_name', 'device_id', 
@@ -359,6 +361,9 @@ async def check_timeout_trips():
                          'first_update',
                          'last_update')  # 只获取trip_id字段
             )
+
+            for trip in trips:
+                await ensure_db_connection_and_set_journey_status(trip_id=trip['trip_id'], status="异常退出待确认")
 
             if not trips:
                 logger.info("没有找到异常结束超时的行程")
@@ -1637,6 +1642,70 @@ async def ensure_db_connection_and_set_merge_abnormal_journey(trips):
                             logger.error(f"行程 {trip_id} 不存在")
                         except Exception as e:
                             logger.error(f"更新行程 {trip_id} 失败: {e}")
+            # 执行更新操作
+            await update_trips()
+            return True
+        except Exception as e:
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                # 关闭所有连接并等待重试
+                from django.db import connections
+                connections.close_all()
+                time.sleep(retry_delay * (attempt + 1))
+            else:
+                # 最后一次尝试也失败
+                logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
+                return False
+
+
+
+# 将嵌套函数移到外部作为独立函数
+async def ensure_db_connection_and_set_journey_status(trip_id, status="行程上传中"):
+    """确保数据库连接并执行合并操作"""
+    # 最大重试次数
+    max_retries = 3
+    retry_delay = 1.0
+    
+    for attempt in range(max_retries):
+        try:
+            # 确保数据库连接有效
+            ensure_connection()
+            # 测试连接是否正常
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            
+            logger.info(f"数据库连接正常，开始执行数据上传操作")
+            @sync_to_async(thread_sensitive=True)
+            def update_trips():
+                with transaction.atomic():
+                    try:
+                        trip = Trip.objects.get(trip_id=trip_id)
+                        trip.set_journey_status = True
+                        # 处理用户ID
+                        if hasattr(trip.user_id, 'hex'):
+                            user_id = trip.user_id.hex
+                        elif isinstance(trip.user_id, str):
+                            # 如果是字符串,去掉横线
+                            user_id = trip.user_id.replace('-', '')
+                        core_user_profile = CoreUser.objects.using("core_user").get(app_id=user_id)
+                        journey, created = Journey.objects.using("core_user").get_or_create(
+                            brand = trip.car_name,
+                            model = trip.car_name,
+                            hardware_config = trip.hardware_version,
+                            software_config = trip.software_version,
+                            journey_id = trip.trip_id,
+                            user_uuid = core_user_profile.id,
+                            journey_status = status,
+                        )  
+                        trip.save()                      
+                        journey.save(using="core_user")
+                        logger.info(f"已将行程 {trip_id} 的 jouney_status 字段设置为: {status}")
+                    except Trip.DoesNotExist:
+                        logger.error(f"行程 {trip_id} 不存在")
+                    except Exception as e:
+                        logger.error(f"更新行程 {trip_id} 失败: {e}")
             # 执行更新操作
             await update_trips()
             return True
