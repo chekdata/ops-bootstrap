@@ -58,6 +58,7 @@ class Trip(models.Model):
     device_id = models.CharField(max_length=255, null=True, blank=True, verbose_name='行程生成设备id')
     merge_into_current = models.BooleanField(default=True, verbose_name='异常行程合并到当前行程')
     set_journey_status = models.BooleanField(default=False, verbose_name='异常行程是否已设置行程状态')
+    trip_status = models.CharField(max_length=50, blank=True, verbose_name='行程状态')
     
     def __str__(self):
         return f"Trip {self.car_name}"
@@ -76,6 +77,7 @@ class ChunkFile(models.Model):
     hardware_version = models.CharField(max_length=64, null=True, blank=True)
     software_version = models.CharField(max_length=64, null=True, blank=True)
     device_id = models.CharField(max_length=255, null=True, blank=True)
+    # chunk_status = models.CharField(max_length=50, blank=True, verbose_name='行程分片状态')
 
     class Meta:
         unique_together = ('trip', 'chunk_index', 'file_type')
@@ -187,6 +189,38 @@ class Journey(models.Model):
     class Meta:
         managed = False
         db_table = 'total_journey'
+        app_label = 'core_user'     # 指定应用标签为 core_user
+        verbose_name = '行程评测数据'
+        verbose_name_plural = '行程评测数据'
+    
+    def __str__(self):
+        return f"Journey {self.journey_id}"
+    
+
+
+class Reported_Journey(models.Model):
+    """
+    车辆行程评测数据模型
+    """
+    id = models.AutoField(primary_key=True)
+    brand = models.CharField(max_length=64, null=True, blank=True, verbose_name='车型')
+    model = models.CharField(max_length=64, null=True, blank=True, verbose_name='车型名')
+    hardware_config = models.CharField(max_length=64, null=False, verbose_name='车机硬件版本编码')
+    software_config = models.CharField(max_length=64, null=False, verbose_name='车机软件版本编码')
+    journey_id = models.CharField(max_length=64, null=False, verbose_name='评测数据编码')
+    user_uuid = models.CharField(max_length=64, null=False, verbose_name='用户在车控产品中ID')
+    journey_status = models.CharField(max_length=64, null=True, blank=True, verbose_name='行程状态')
+    
+    # 文件相关
+    csv_tos_path = models.CharField(max_length=500, null=True, blank=True, verbose_name='csv文件tos路径')
+    det_tos_path = models.CharField(max_length=500, null=True, blank=True, verbose_name='det文件tos路径')
+    # 创建信息
+    # created_by = models.CharField(max_length=50, null=True, blank=True)
+    created_date = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        managed = False
+        db_table = 'reported_journey'
         app_label = 'core_user'     # 指定应用标签为 core_user
         verbose_name = '行程评测数据'
         verbose_name_plural = '行程评测数据'
