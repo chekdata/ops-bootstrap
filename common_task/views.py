@@ -736,7 +736,7 @@ async def set_merge_abnormal_journey(request):
         #创建后台任务
         for trip_id in trips:
             merge_task = asyncio.create_task(
-                handle_merge_task(_id, trip_id, is_last_chunk=True)
+                handle_merge_task(_id, trip_id, is_last_chunk=True, is_timeout=True)
             )
             background_tasks.append(merge_task)
             logger.info(f"设置trip不参与当前行程数据合并: {trip_id}")

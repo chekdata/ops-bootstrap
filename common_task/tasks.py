@@ -935,7 +935,9 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
                 else:
                     # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
                     # 超时行程不处理merge_into_current
+                    # 超时行程(异常行程)只合并自己的行程
                     all_similar_trips = Trip.objects.filter(
+                        trip_id=trip_id,
                         is_completed=False,
                         user_id=user_id,
                         device_id=main_trip.device_id,
@@ -959,18 +961,23 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
                     time_diff = (prev_trip.first_update - trip.last_update).total_seconds()
 
                     # 正常退出
-                    if not is_timeout:                    
-                        if time_diff <= time_interval_thre:  # 5分钟 = 300秒
-                            # 如果间隔小于等于5分钟，则添加到合并行程列表
-                            trips_to_merge.append(trip)
-                            prev_trip = trip
-                        else:
-                            # 找到了间隔超过5分钟的行程，停止查找
-                            logger.info(f"找到间隔超过5分钟的行程，停止查找。行程ID: {trip.trip_id}, 时间间隔: {time_diff}秒")
-                            break
-                    else:
-                            # 如果正常退出，选择所有之前没处理的数据进行合并，不区分间隔小于等于5分钟，则添加到合并行程列表
-                            trips_to_merge.append(trip)
+                    # if not is_timeout:                    
+                    #     if time_diff <= time_interval_thre:  # 5分钟 = 300秒
+                    #         # 如果间隔小于等于5分钟，则添加到合并行程列表
+                    #         trips_to_merge.append(trip)
+                    #         prev_trip = trip
+                    #     else:
+                    #         # 找到了间隔超过5分钟的行程，停止查找
+                    #         logger.info(f"找到间隔超过5分钟的行程，停止查找。行程ID: {trip.trip_id}, 时间间隔: {time_diff}秒")
+                    #         break
+                    # else:
+                    #         # 如果正常退出，选择所有之前没处理的数据进行合并，不区分间隔小于等于5分钟，则添加到合并行程列表
+                    #         trips_to_merge.append(trip)
+
+                    # NOTE: 无论是异常行程单独合并还是正常行程合并上一次异常行程
+                    # 最多只有两个行程合并，因为app在每一次跑分前必须让行程上一次异常行程合并
+                    # 所以这里当前行程合并上一次行程不用考虑时间间隔
+                    trips_to_merge.append(trip)
 
                 # 按照时间升序排序（从旧到新），便于处理
                 trips_to_merge.sort(key=lambda x: x.last_update)
@@ -1117,6 +1124,14 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
                             logger.error(f"更新行程状态失败: {e}")
                             # 发生错误时回滚事务
                             transaction.set_rollback(True)
+                        
+                        # 更新行程的状态，对于已合并行程
+                        try:
+                            if str(trip.trip_id) != trip_id:
+                                # 设置非主行程为子行程
+                                ensure_db_connection_and_set_sub_journey_sync(trip.trip_id)
+                        except Exception as e:
+                            logger.error(f"设置行程为子行程失败: {e}")
 
                     except Exception as e:
                         # 发生错误时重置合并状态
@@ -1700,15 +1715,19 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程上
                             # 如果是字符串,去掉横线
                             user_id = trip.user_id.replace('-', '')
                         core_user_profile = CoreUser.objects.using("core_user").get(app_id=user_id)
-                        journey, created = Journey.objects.using("core_user").get_or_create(
-                            brand = trip.car_name,
-                            model = trip.car_name,
-                            hardware_config = trip.hardware_version,
-                            software_config = trip.software_version,
-                            journey_id = trip.trip_id,
-                            user_uuid = core_user_profile.id,
-                            journey_status = status,
-                        )  
+                        journey, created = Journey.objects.using("core_user").update_or_create(
+                            # 查询条件（用于定位对象）
+                            journey_id=trip.trip_id,
+                            # 默认值或更新值
+                            defaults={
+                                'brand': trip.car_name,
+                                'model': trip.car_name,
+                                'hardware_config': trip.hardware_version,
+                                'software_config': trip.software_version,
+                                'user_uuid': core_user_profile.id,
+                                'journey_status': status,
+                            }
+                        ) 
                         trip.save()                      
                         journey.save(using="core_user")
                         logger.info(f"已将行程 {trip_id} 的 jouney_status 字段设置为: {status}")
@@ -1776,6 +1795,57 @@ def ensure_db_connection_and_set_tos_path_sync(trip_id, results):
                 trip.save()                      
                 reported_Journey.save(using="core_user")
                 logger.info(f"已将行程 {trip_id} 的 csv det在tos路径落库. csv: {csv_path}, det: {det_path}, status: {trip.trip_status}")
+            except Trip.DoesNotExist:
+                logger.error(f"行程 {trip_id} 不存在")
+            except Exception as e:
+                logger.error(f"更新行程 {trip_id} 失败: {e}")
+            return True
+        except Exception as e:
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                # 关闭所有连接并等待重试
+                from django.db import connections
+                connections.close_all()
+                time.sleep(retry_delay * (attempt + 1))
+            else:
+                # 最后一次尝试也失败
+                logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
+                return False
+
+
+# 将trip_id行程设置为子行程，不在行程返回列表
+def ensure_db_connection_and_set_sub_journey_sync(trip_id):
+    """确保数据库连接并执行合并操作"""
+    # 最大重试次数
+    max_retries = 3
+    retry_delay = 1.0
+    
+    for attempt in range(max_retries):
+        try:
+            # 确保数据库连接有效
+            ensure_connection()
+            # 测试连接是否正常
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            
+            logger.info(f"数据库连接正常，开始执行设置当前行程{trip_id}:为子行程操作")
+            try:
+                trip = Trip.objects.get(trip_id=trip_id)
+                try:
+                    journey = Journey.objects.using("core_user").get(journey_id=trip_id)
+                    journey.is_sub_journey = True
+                    # 更新其他字段
+                    journey.save()
+                except Journey.DoesNotExist:
+                    # 处理对象不存在的情况
+                    journey = Journey.objects.using("core_user").create(
+                        journey_id=trip_id,
+                        is_sub_journey=True,
+                        # 其他字段
+                    )
+                logger.info(f"已将行程 {trip_id} 设置为子行程")
             except Trip.DoesNotExist:
                 logger.error(f"行程 {trip_id} 不存在")
             except Exception as e:

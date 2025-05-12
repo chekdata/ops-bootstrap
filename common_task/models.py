@@ -181,7 +181,7 @@ class Journey(models.Model):
     pdf_path = models.CharField(max_length=255, null=True, blank=True, verbose_name='文件路径')
     auto_MBTI = models.CharField(max_length=255, null=True, blank=True, verbose_name='智驾MBTI')
     standby_MBTI = models.CharField(max_length=255, null=True, blank=True, verbose_name='人驾MBTI')
-    
+    is_sub_journey = models.BooleanField(default=False, verbose_name='是否是子行程')
     # 创建信息
     # created_by = models.CharField(max_length=50, null=True, blank=True)
     created_date = models.DateTimeField(null=True, blank=True)
