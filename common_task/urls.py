@@ -17,5 +17,8 @@ urlpatterns = [
     path('check_chunks/<uuid:trip_id>/', views.check_chunks),  # 检查分片状态
     path('setStartMerge', views.setStartMerge),  # 检查分片状态
     path('get_abnormal_journey', views.get_abnormal_journey),  # 获取异常退出行程
-    path('set_merge_abnormal_journey', views.set_merge_abnormal_journey) # 设置异常退出行程是否会被合并到接下来的行程中
+    path('set_merge_abnormal_journey', views.set_merge_abnormal_journey), # 设置异常退出行程是否会被合并到接下来的行程中
+    path('get_journey_data_entrance', views.get_journey_data_entrance),
+    path('get_journey_gps_data_entrance', views.get_journey_gps_data_entrance),
 ]
+
