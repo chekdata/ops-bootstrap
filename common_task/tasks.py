@@ -4,6 +4,7 @@ import pandas as pd
 import logging
 import asyncio
 import time
+import shutil
 from pathlib import Path
 from django.db import transaction, DatabaseError
 from functools import partial
@@ -1789,6 +1790,15 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
                     if Path(file_path).exists():
                         os.remove(str(file_path))
                         print(f'remove file: {file_path}')
+
+                        # 获取父文件夹路径
+                        parent_dir = os.path.dirname(file_path)
+                        
+                        # 删除父文件夹及其所有内容
+                        if os.path.exists(parent_dir):
+                            shutil.rmtree(parent_dir)
+                            print(f'已删除文件夹: {parent_dir}')
+
                 return True, f"数据处理成功. 用户名: {user.name}, 行程数据: {file_name}"
             else:
                 logger.warning(f"用户手机号 {user.phone} 格式不正确, 行程未处理！")
