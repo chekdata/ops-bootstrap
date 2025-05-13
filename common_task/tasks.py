@@ -546,6 +546,16 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
                 defaults['device_id'] = metadata['device_id']
             if 'trip_status' in metadata:
                 defaults['trip_status'] = metadata['trip_status']
+
+            if 'reported_car_name' in metadata:
+                defaults['reported_car_name'] = metadata['reported_car_name']       
+
+            if 'reported_hardware_version' in metadata:
+                defaults['reported_hardware_version'] = metadata['reported_hardware_version']  
+
+            if 'reported_software_version' in metadata:
+                defaults['reported_software_version'] = metadata['reported_software_version']  
+
         # 当第一次写入时，写入first_update
         trip_exists = await sync_to_async(Trip.objects.filter(trip_id=trip_id).exists, thread_sensitive=True)()
         if not trip_exists:
@@ -1791,10 +1801,14 @@ def ensure_db_connection_and_set_tos_path_sync(trip_id, results):
                     csv_tos_path = csv_path,
                     det_tos_path = det_path,
                     journey_status = trip.trip_status,
+                    reported_car_name = trip.reported_car_name,
+                    reported_hardware_version = trip.reported_hardware_version,
+                    reported_software_version = trip.reported_software_version,
+                    created_date = get_current_timezone_time(),
                 )  
                 trip.save()                      
                 reported_Journey.save(using="core_user")
-                logger.info(f"已将行程 {trip_id} 的 csv det在tos路径落库. csv: {csv_path}, det: {det_path}, status: {trip.trip_status}")
+                logger.info(f"已将行程 {trip_id} 的 csv det在tos路径落库. csv: {csv_path}, det: {det_path}, status: {trip.trip_status}, reported_car_name: {trip.reported_car_name}, reported_hardware_version: {trip.reported_hardware_version}, reported_software_version: {trip.reported_software_version}")
             except Trip.DoesNotExist:
                 logger.error(f"行程 {trip_id} 不存在")
             except Exception as e:
