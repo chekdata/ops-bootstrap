@@ -151,7 +151,7 @@ def process_journey(file_path_list, user_id, user_name, phone,
                  car_brand = car_brand, car_model = car_model, car_hardware_version = car_hardware_version, car_software_version = car_software_version) 
 
 
-        frame_intervention_file, frame_intervention_risk_file, json_file_list = csvProcess.process_list_csv_save_journey(upload_journey=True)
+        frame_intervention_file, frame_intervention_risk_file, json_file_list,total_message = csvProcess.process_list_csv_save_journey(upload_journey=True)
         # frame_intervention_file, frame_intervention_risk_file, json_file_list = csvProcess.process_save_journey(upload_journey=True)
         # statistics_xlsx_file_list, truck_avoid_xlsx_file_list = process_json_file_list(json_file_list)
         # special_point_json_list = special_point2_json(frame_intervention_file, frame_intervention_risk_file)
@@ -160,16 +160,17 @@ def process_journey(file_path_list, user_id, user_name, phone,
         # upload_files_tos(args.bucket,  statistics_xlsx_file_list)
         # upload_files_tos(args.bucket,  truck_avoid_xlsx_file_list)
         # upload_files_tos(args.bucket,  special_point_json_list)
-        for file_path in file_path_list:
-            if Path(file_path).exists():
-                os.remove(str(file_path))
-                print(f'remove file: {file_path}')
-        
+
+        # for file_path in file_path_list:
+        #     if Path(file_path).exists():
+        #         os.remove(str(file_path))
+        #         print(f'remove file: {file_path}')
+
         for json_file in json_file_list:
             if Path(json_file).exists():
                 os.remove(str(json_file))
                 print(f'remove file: {json_file}')
-
+        return total_message
 
 async def async_process_journey(file_path, user_id, user_name, phone, 
                  car_brand, car_model, car_hardware_version, car_software_version):

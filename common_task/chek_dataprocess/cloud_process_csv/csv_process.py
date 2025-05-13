@@ -73,6 +73,7 @@ class CSVProcess:
         self.description_pdf_file_path        = '' 
         self.odometer_thresh = 0 
 
+        self.total_message = None
 
     def get_data_list(self):
         # 文件路径构成： **/data/xx/xx.csv
@@ -992,6 +993,7 @@ class CSVProcess:
         save_to_json(total_message, _save_root_path + total_message_name)
         json_file_list.append(_save_root_path + total_message_name)
         print("all pro csv have been successfully completed!")
+
         # if (upload_journey and total_message.journey.odometer_total > self.odometer_thresh):
         # 没有里程限制
         if (upload_journey):
@@ -1000,7 +1002,7 @@ class CSVProcess:
             print(f"The odometer is {total_message.journey.odometer_total} not satisfy bigger than {self.odometer_thresh}")
 
 
-        return frame_intervention_file, frame_intervention_risk_file, json_file_list
+        return frame_intervention_file, frame_intervention_risk_file, json_file_list,total_message
 
 
 
