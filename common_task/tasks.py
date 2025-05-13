@@ -16,15 +16,16 @@ from .models import Trip, ChunkFile, Journey, Reported_Journey
 from django.utils import timezone
 from data.models import model_config
 from accounts.models import CoreUser
-from common_task.models import analysis_data_app,tos_csv_app
+from common_task.models import analysis_data_app,tos_csv_app,Journey,JourneyGPS
 from common_task.handle_tos import TinderOS
-
+from common_task.handle_journey_message import *
 from multiprocessing import Pool, cpu_count
 from functools import partial
-
+import pandas as pd
+from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor
 import multiprocessing
-from accounts.models import User
+from accounts.models import User,CoreUser
 from .db_utils import db_retry, ensure_connection
 from .chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
 # from .chek_dataprocess.cloud_process_csv.wechat_csv_process import process_csv
@@ -1238,7 +1239,7 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False)
             loop = asyncio.get_event_loop()
 
 
-             # 使用外部定义的函数，传递参数
+                # 使用外部定义的函数，传递参数
             csv_path_list, det_path_list = await loop.run_in_executor(
                 process_executor,
                 ensure_db_connection_and_merge,
@@ -1322,7 +1323,7 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False)
         else:
             # 检查是否需要触发自动合并
             await check_timeout_trip(_id, trip_id)
-            
+                
     except Exception as e:
         logger.error(f"合并任务处理失败: {e}")
 
@@ -1437,6 +1438,301 @@ def is_valiad_phone_number_sync(phone):
         return False
 
 
+def journey_update(total_message,trip_id,model,hardware_version,software_version,core_Journey_profile):
+    if model:
+        core_Journey_profile.model = model
+    
+    if hardware_version:
+        core_Journey_profile.hardware_version = hardware_version
+
+    if software_version:
+        core_Journey_profile.software_version = software_version
+    
+    if total_message:
+        for key,value in total_message.items():
+            # print(key,value)
+            # if type(value) != 'str' or value:
+            core_Journey_profile.key = value
+    core_Journey_profile.save()
+
+
+def handle_message_data(total_message,trip_id,model,hardware_version,software_version):
+    try:
+        parser = ChekMessageParser(total_message)
+        data = parser.parse()
+
+        # core_user_profile = Journey.objects.get(journey_id=trip_id) 
+        # 使用 filter 方法筛选符合条件的对象，再用 exists 方法检查是否存在
+   
+        journey_exists = Journey.objects.using('core_user').filter(journey_id=trip_id).exists()
+        if journey_exists:
+            # 如果存在，可以进一步获取对象
+            core_Journey_profile = Journey.objects.using('core_user').get(journey_id=trip_id)
+            # journey_update(parsed_data,trip_id,model,hardware_version,software_version,core_Journey_profile)
+            if model:
+                core_Journey_profile.model = model
+            
+            if hardware_version:
+                core_Journey_profile.hardware_version = hardware_version
+
+            if software_version:
+                core_Journey_profile.software_version = software_version
+            
+            # if parsed_data:
+            #     for key,value in parsed_data.items():
+            #         # print(key,value)
+            #         # if type(value) != 'str' or value:
+            #         core_Journey_profile.key = value
+            #         print(key,core_Journey_profile.key)
+
+            if data.get('auto_mileages') or type(data.get('auto_mileages')) != 'str':
+                core_Journey_profile.auto_mileages = data.get('auto_mileages')
+
+            if data.get('total_mileages') or type(data.get('total_mileages')) != 'str':
+                core_Journey_profile.total_mileages = data.get('total_mileages')
+
+            if data.get('frames') or type(data.get('frames')) != 'str':
+                core_Journey_profile.frames = data.get('frames')
+
+            if data.get('auto_frames') or type(data.get('auto_frames')) != 'str':
+                core_Journey_profile.auto_frames = data.get('auto_frames')
+
+            if data.get('noa_frames') or type(data.get('noa_frames')) != 'str':
+                core_Journey_profile.noa_frames = data.get('noa_frames')
+
+            if data.get('lcc_frames') or type(data.get('lcc_frames')) != 'str':
+                core_Journey_profile.lcc_frames = data.get('lcc_frames')
+
+            if data.get('driver_frames') or type(data.get('driver_frames')) != 'str':
+                core_Journey_profile.driver_frames = data.get('driver_frames')
+
+            if data.get('auto_speed_average') or type(data.get('auto_speed_average')) != 'str':
+                core_Journey_profile.auto_speed_average = data.get('auto_speed_average')
+
+            if data.get('auto_max_speed') or type(data.get('auto_max_speed')) != 'str':
+                core_Journey_profile.auto_max_speed = data.get('auto_max_speed')
+
+            if data.get('invervention_risk_proportion') or type(data.get('invervention_risk_proportion')) != 'str':
+                core_Journey_profile.invervention_risk_proportion = data.get('invervention_risk_proportion')
+
+            if data.get('invervention_mpi') or type(data.get('invervention_mpi')) != 'str':
+                core_Journey_profile.invervention_mpi = data.get('invervention_mpi')
+
+            if data.get('invervention_risk_mpi') or type(data.get('invervention_risk_mpi')) != 'str':
+                core_Journey_profile.invervention_risk_mpi = data.get('invervention_risk_mpi')
+
+            if data.get('invervention_cnt') or type(data.get('invervention_cnt')) != 'str':
+                core_Journey_profile.invervention_cnt = data.get('invervention_cnt')
+
+            if data.get('invervention_risk_cnt') or type(data.get('invervention_risk_cnt')) != 'str':
+                core_Journey_profile.invervention_risk_cnt = data.get('invervention_risk_cnt')
+
+            if data.get('noa_invervention_risk_mpi') or type(data.get('noa_invervention_risk_mpi')) != 'str':
+                core_Journey_profile.noa_invervention_risk_mpi = data.get('noa_invervention_risk_mpi')
+
+            if data.get('noa_invervention_mpi') or type(data.get('noa_invervention_mpi')) != 'str':
+                core_Journey_profile.noa_invervention_mpi = data.get('noa_invervention_mpi')
+
+            if data.get('noa_invervention_risk_cnt') or type(data.get('noa_invervention_risk_cnt')) != 'str':
+                core_Journey_profile.noa_invervention_risk_cnt = data.get('noa_invervention_risk_cnt')
+
+            if data.get('noa_auto_mileages') or type(data.get('noa_auto_mileages')) != 'str':
+                core_Journey_profile.noa_auto_mileages = data.get('noa_auto_mileages')
+
+            if data.get('noa_auto_mileages_proportion') or type(data.get('noa_auto_mileages_proportion')) != 'str':
+                core_Journey_profile.noa_auto_mileages_proportion = data.get('noa_auto_mileages_proportion')
+
+            if data.get('noa_invervention_cnt') or type(data.get('noa_invervention_cnt')) != 'str':
+                core_Journey_profile.noa_invervention_cnt = data.get('noa_invervention_cnt')
+
+            if data.get('lcc_invervention_risk_mpi') or type(data.get('lcc_invervention_risk_mpi')) != 'str':
+                core_Journey_profile.lcc_invervention_risk_mpi = data.get('lcc_invervention_risk_mpi')
+
+            if data.get('lcc_invervention_mpi') or type(data.get('lcc_invervention_mpi')) != 'str':
+                core_Journey_profile.lcc_invervention_mpi = data.get('lcc_invervention_mpi')
+
+            if data.get('lcc_invervention_risk_cnt') or type(data.get('lcc_invervention_risk_cnt')) != 'str':
+                core_Journey_profile.lcc_invervention_risk_cnt = data.get('lcc_invervention_risk_cnt')
+
+            if data.get('lcc_auto_mileages') or type(data.get('lcc_auto_mileages')) != 'str':
+                core_Journey_profile.lcc_auto_mileages = data.get('lcc_auto_mileages')
+
+            if data.get('lcc_auto_mileages_proportion') or type(data.get('lcc_auto_mileages_proportion')) != 'str':
+                core_Journey_profile.lcc_auto_mileages_proportion = data.get('lcc_auto_mileages_proportion')
+
+            if data.get('lcc_invervention_cnt') or type(data.get('lcc_invervention_cnt')) != 'str':
+                core_Journey_profile.lcc_invervention_cnt = data.get('lcc_invervention_cnt')
+
+            if data.get('auto_dcc_max') or type(data.get('auto_dcc_max')) != 'str':
+                core_Journey_profile.auto_dcc_max = data.get('auto_dcc_max')
+
+            if data.get('auto_dcc_frequency') or type(data.get('auto_dcc_frequency')) != 'str':
+                core_Journey_profile.auto_dcc_frequency = data.get('auto_dcc_frequency')
+
+            if data.get('auto_dcc_cnt') or type(data.get('auto_dcc_cnt')) != 'str':
+                core_Journey_profile.auto_dcc_cnt = data.get('auto_dcc_cnt')
+
+            if data.get('auto_dcc_duration') or type(data.get('auto_dcc_duration')) != 'str':
+                core_Journey_profile.auto_dcc_duration = data.get('auto_dcc_duration')
+
+            if data.get('auto_dcc_average_duration') or type(data.get('auto_dcc_average_duration')) != 'str':
+                core_Journey_profile.auto_dcc_average_duration = data.get('auto_dcc_average_duration')
+
+            if data.get('auto_dcc_average') or type(data.get('auto_dcc_average')) != 'str':
+                core_Journey_profile.auto_dcc_average = data.get('auto_dcc_average')
+
+            if data.get('auto_acc_max') or type(data.get('auto_acc_max')) != 'str':
+                core_Journey_profile.auto_acc_max = data.get('auto_acc_max')
+
+            if data.get('auto_acc_frequency') or type(data.get('auto_acc_frequency')) != 'str':
+                core_Journey_profile.auto_acc_frequency = data.get('auto_acc_frequency')
+
+            if data.get('auto_acc_cnt') or type(data.get('auto_acc_cnt')) != 'str':
+                core_Journey_profile.auto_acc_cnt = data.get('auto_acc_cnt')
+
+            if data.get('auto_acc_duration') or type(data.get('auto_acc_duration')) != 'str':
+                core_Journey_profile.auto_acc_duration = data.get('auto_acc_duration')
+
+            if data.get('auto_acc_average_duration') or type(data.get('auto_acc_average_duration')) != 'str':
+                core_Journey_profile.auto_acc_average_duration = data.get('auto_acc_average_duration')
+
+            if data.get('auto_acc_average') or type(data.get('auto_acc_average')) != 'str':
+                core_Journey_profile.auto_acc_average = data.get('auto_acc_average')
+
+            if data.get('driver_mileages') or type(data.get('driver_mileages')) != 'str':
+                core_Journey_profile.driver_mileages = data.get('driver_mileages')
+
+            if data.get('driver_dcc_max') or type(data.get('driver_dcc_max')) != 'str':
+                core_Journey_profile.driver_dcc_max = data.get('driver_dcc_max')
+
+            if data.get('driver_dcc_frequency') or type(data.get('driver_dcc_frequency')) != 'str':
+                core_Journey_profile.driver_dcc_frequency = data.get('driver_dcc_frequency')
+
+            if data.get('driver_acc_max') or type(data.get('driver_acc_max')) != 'str':
+                core_Journey_profile.driver_acc_max = data.get('driver_acc_max')
+
+            if data.get('driver_acc_frequency') or type(data.get('driver_acc_frequency')) != 'str':
+                core_Journey_profile.driver_acc_frequency = data.get('driver_acc_frequency')
+
+            if data.get('driver_speed_average') or type(data.get('driver_speed_average')) != 'str':
+                core_Journey_profile.driver_speed_average = data.get('driver_speed_average')
+
+            if data.get('driver_speed_max') or type(data.get('driver_speed_max')) != 'str':
+                core_Journey_profile.driver_speed_max = data.get('driver_speed_max')
+
+            if data.get('driver_dcc_cnt') or type(data.get('driver_dcc_cnt')) != 'str':
+                core_Journey_profile.driver_dcc_cnt = data.get('driver_dcc_cnt')
+
+            if data.get('driver_acc_cnt') or type(data.get('driver_acc_cnt')) != 'str':
+                core_Journey_profile.driver_acc_cnt = data.get('driver_acc_cnt')
+            core_Journey_profile.save()
+        else:
+            # print(f"未找到 journey_id 为 {trip_id} 的行程记录。")
+            logger.info(f"未找到 journey_id 为 {trip_id} 的行程记录。")
+    except Exception as e:
+        # print(e)
+        logger.info(f"报错 {e} ")
+
+def convert_gps_time(csv_file_path,trip_id):
+    """
+    读取 CSV 文件，并将 gps_time 转换为现实时间
+    假设 gps_time 是形如 '%Y%m%d%H%M%S' 格式的字符串
+    """
+    df = pd.read_csv(csv_file_path)
+    list_process = []
+    initial_time = ''
+    end_time = ''
+    pre_driver = ''
+    index = 1
+    road_scene = ''
+    last_index = df.index[-1]
+    for _ in df.index: 
+    # 假设这个数字是毫秒级时间戳
+        timestamp_ms =  df.loc[_,'gps_timestamp']
+        # 转换为秒级时间戳
+        timestamp_s = timestamp_ms / 1000
+
+        # 将时间戳转换为 datetime 对象
+        dt = datetime.fromtimestamp(timestamp_s)
+        lon = df.loc[_,'lon']
+        lat = df.loc[_,'lat']
+        if df.loc[_,'road_scene']:
+            road_scene = df.loc[_,'road_scene']
+
+        if df.loc[_,'auto_icon'] == 'noa' or df.loc[_,'auto_car'] == 'noa':
+            driver_status = 'noa'
+        elif df.loc[_,'auto_icon'] =='lcc' or  df.loc[_,'auto_car'] == 'lcc':
+            driver_status = 'lcc'
+        else:
+            driver_status = 'standby'
+
+        if not initial_time:
+            initial_time = dt
+            pre_driver = driver_status
+
+        if len(list_process)>=1000:
+            #update
+            # pass
+            
+            # JourneyGPS_profile = JourneyGPS.objects.using('core_user').get()
+            journey_gps = JourneyGPS.objects.using('core_user').create(
+            journey_id=trip_id,
+            gps=str(list_process),
+            segment_id=index,
+            road_scene=road_scene,
+            driver_status = driver_status
+            )
+
+            list_process = [(lon,lat)]
+            index+=1
+            journey_gps.save()
+        elif driver_status!= pre_driver:
+            #update
+            # pass
+            journey_gps = JourneyGPS.objects.using('core_user').create(
+            journey_id=trip_id,
+            gps=str(list_process),
+            segment_id=index,
+            road_scene=road_scene,
+            driver_status = driver_status
+            )
+            list_process = [(lon,lat)]
+            index +=1
+            journey_gps.save()
+        elif _ == last_index:
+            journey_gps = JourneyGPS.objects.using('core_user').create(
+            journey_id=trip_id,
+            gps=str(list_process),
+            segment_id=index,
+            road_scene=road_scene,
+            driver_status = driver_status
+            )
+            list_process = [(lon,lat)]
+            index +=1
+            journey_gps.save()
+        else:
+            list_process.append((lon,lat))
+        end_time = dt
+        # 输出结果
+        # print("转换后的时间为:", dt)
+        pre_driver = driver_status
+    return initial_time,end_time
+
+
+def handle_message_gps_data(file_path_list,trip_id):
+    journey_exists = Journey.objects.using('core_user').filter(journey_id=trip_id).exists()
+    if journey_exists:
+        # 如果存在，可以进一步获取对象
+        core_Journey_profile = Journey.objects.using('core_user').get(journey_id=trip_id)
+        _id = core_Journey_profile.id
+        initial_time,end_time = convert_gps_time(file_path_list[0],trip_id)
+        core_Journey_profile.journey_start_time = initial_time
+        core_Journey_profile.journey_end_time = end_time
+        core_Journey_profile.save()
+    else:
+        # print(f"未找到 journey_id 为 {trip_id} 的行程记录。")
+        logger.info(f"未找到 journey_id 为 {trip_id} 的行程记录。")
+
 # NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
 # 小程序proto1.0版本
 # 没有上传中间结果
@@ -1446,6 +1742,7 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
             logger.error(f"process_wechat_data_sync 文件不存在,文件列表为空! ")
             return False, "文件不存在"
         
+
         file_path = file_path_list[0]
         file_name = file_path.split('/')[-1]
         infos = file_name.split('_')
@@ -1459,7 +1756,7 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
                 # # NOTE: 确保phone和小程序phone对应一致
                 
                 # saas 协议
-                process_journey(file_path_list, 
+                total_meaage = process_journey(file_path_list, 
                                 user_id=100000, 
                                 user_name=user.name, 
                                 phone=user.phone, 
@@ -1468,9 +1765,14 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
                                 car_hardware_version=hardware_version,
                                 car_software_version=software_version
                 )
+              
+                # trip_id = 'ee1a65b673504d13b9c4d5c7e39d8737'
                 # NOTE: gps处理
-                # NOTE: trip_id 关联id 落库结果数据
 
+                handle_message_gps_data(file_path_list,trip_id)
+                # NOTE: trip_id 关联id 落库结果数据
+             
+                handle_message_data(total_meaage,trip_id,model,hardware_version,software_version)
                 # # 小程序协议
                 # process_csv(file_path_list, 
                 #                 user_id=100000, 
@@ -1482,7 +1784,11 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
                 # )
                 # 行程状态更新
                 trip = Trip.objects.get(trip_id=trip_id)
-                async_to_sync(ensure_db_connection_and_set_journey_status)(trip_id, status=trip.trip_status)
+                async_to_sync(ensure_db_connection_and_set_journey_status)(trip_id, status=trip.trip_status)                
+                for file_path in file_path_list:
+                    if Path(file_path).exists():
+                        os.remove(str(file_path))
+                        print(f'remove file: {file_path}')
                 return True, f"数据处理成功. 用户名: {user.name}, 行程数据: {file_name}"
             else:
                 logger.warning(f"用户手机号 {user.phone} 格式不正确, 行程未处理！")
