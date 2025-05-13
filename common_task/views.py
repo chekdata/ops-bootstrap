@@ -668,7 +668,7 @@ async def setStartMerge(request):
     summary="获取异常行程数据",
     tags=['行程数据']
 )
-@api_view(['GET'])
+@api_view(['POST'])
 @permission_classes([IsAuthenticated])
 async def get_abnormal_journey(request):
     """获取异常退出行程数据"""
