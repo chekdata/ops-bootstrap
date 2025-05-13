@@ -166,6 +166,11 @@ def process_journey(file_path_list, user_id, user_name, phone,
         #         os.remove(str(file_path))
         #         print(f'remove file: {file_path}')
 
+        for pro_csv_file in pro_csv_list:
+            if Path(pro_csv_file).exists():
+                os.remove(str(pro_csv_file))
+                print(f'remove file: {pro_csv_file}')
+
         for json_file in json_file_list:
             if Path(json_file).exists():
                 os.remove(str(json_file))
