@@ -224,7 +224,7 @@ class Reported_Journey(models.Model):
 
     # 创建信息
     # created_by = models.CharField(max_length=50, null=True, blank=True)
-    created_date = models.DateTimeField(null=True, blank=True)
+    created_date = models.DateTimeField(auto_now_add=True,null=True, blank=True)
     
     class Meta:
         managed = False
