@@ -3,7 +3,7 @@ from django.shortcuts import render
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import  permission_classes
 from adrf.decorators import api_view
-from common_task.models import analysis_data_app,tos_csv_app,CoreUser,Journey,JourneyGPS
+from common_task.models import analysis_data_app,tos_csv_app,Journey,JourneyGPS
 from rest_framework.response import Response
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
@@ -18,7 +18,7 @@ import asyncio
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.http import JsonResponse
-from accounts.models import User
+from accounts.models import User,CoreUser
 from common_task.handle_tos_play_link import *
 
 import re

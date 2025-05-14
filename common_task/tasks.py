@@ -1470,14 +1470,14 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
             # 如果存在，可以进一步获取对象
             core_Journey_profile = Journey.objects.using('core_user').get(journey_id=trip_id)
             # journey_update(parsed_data,trip_id,model,hardware_version,software_version,core_Journey_profile)
-            if model:
-                core_Journey_profile.model = model
+            # if model:
+            #     core_Journey_profile.model = model
             
-            if hardware_version:
-                core_Journey_profile.hardware_version = hardware_version
+            # if hardware_version:
+            #     core_Journey_profile.hardware_version = hardware_version
 
-            if software_version:
-                core_Journey_profile.software_version = software_version
+            # if software_version:
+            #     core_Journey_profile.software_version = software_version
             
             # if parsed_data:
             #     for key,value in parsed_data.items():
@@ -2040,6 +2040,7 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程上
                         elif isinstance(trip.user_id, str):
                             # 如果是字符串,去掉横线
                             user_id = trip.user_id.replace('-', '')
+      
                         core_user_profile = CoreUser.objects.using("core_user").get(app_id=user_id)
                         journey, created = Journey.objects.using("core_user").update_or_create(
                             # 查询条件（用于定位对象）

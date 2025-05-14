@@ -239,27 +239,6 @@ class Reported_Journey(models.Model):
 
 
 
-# class CoreUser(models.Model):
-#     id = models.UUIDField(primary_key=True, default=uuid.uuid4,editable=False, verbose_name='唯一标识ID')
-
-#     app_id = models.CharField(max_length=50,blank=True, null=True)
-
-#     mini_id = models.CharField(max_length=50,blank=True, null=True)
-
-#     saas_id = models.CharField(max_length=50,blank=True, null=True)
-
-#     app_phone = models.CharField(max_length=15, null=True, verbose_name='app手机号')
-    
-#     saas_phone = models.CharField(max_length=15, null=True, verbose_name='saas手机号')
-    
-#     mini_phone = models.CharField(max_length=15, null=True, verbose_name='小程序手机号')
-
-#     class Meta:
-#         managed = False
-#         db_table = 'accounts_core_user'  # 替换为实际的表名
-#         app_label = 'core_user'
-
-
 class JourneyGPS(models.Model):
     # id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, verbose_name='唯一标识 ID')
     id = models.AutoField(primary_key=True, verbose_name='自增ID')
@@ -268,7 +247,7 @@ class JourneyGPS(models.Model):
     gps = models.TextField(blank=True, null=True, verbose_name='GPS 信息')
     segment_id = models.IntegerField(null=True, verbose_name='GPS 分段 ID')
     driver_status = models.CharField(max_length=50, blank=True, null=True, verbose_name='驾驶员状态')
-    road_scene = models.CharField(max_length=50, blank=True, null=True, verbose_name='驾驶员状态')
+    road_scene = models.CharField(max_length=50, blank=True, null=True, verbose_name='道路')
     city = models.CharField(max_length=255, blank=True, null=True, verbose_name='城市')
     created_date = models.DateTimeField(auto_now=True)
 
@@ -277,6 +256,19 @@ class JourneyGPS(models.Model):
         db_table = 'journey_gps'
         app_label = 'core_user'
 
+
+class JourneyGPSTracking(models.Model):
+    id = models.AutoField(primary_key=True, verbose_name='自增ID')
+    journey_id = models.CharField(max_length=50, blank=True, null=True, verbose_name='关联的行程 ID', db_index=True)
+
+    gps_tracking = models.JSONField(blank=True, null=True,verbose_name='手动打点数据')
+    auto_gps_tracking = models.JSONField(blank=True, null=True,verbose_name='自动打点数据')
+    created_date = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = 'journey_gps_tracking'
+        app_label = 'core_user'
 
 # class Journey(models.Model):
 #     # id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, verbose_name='唯一标识ID')
