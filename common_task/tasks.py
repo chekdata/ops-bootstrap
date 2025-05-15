@@ -493,13 +493,16 @@ from django.utils import timezone
 def get_current_timezone_time():
     """获取当前时区的时间"""
     try:
-        # 使用系统设置的时区，并确保应用上海时区
-        from django.utils.timezone import localtime, now
-        from pytz import timezone as pytz_timezone
+        # # 使用系统设置的时区，并确保应用上海时区
+        # from django.utils.timezone import localtime, now
+        # from pytz import timezone as pytz_timezone
         
-        # 直接使用上海时区
-        shanghai_tz = pytz_timezone('Asia/Shanghai')
-        return now().astimezone(shanghai_tz)
+        # # 直接使用上海时区
+        # shanghai_tz = pytz_timezone('Asia/Shanghai')
+        # return now().astimezone(shanghai_tz)
+
+        return datetime.now() 
+
     except Exception as e:
         logger.error(f"获取时区时间失败: {e}")
         # 如果失败则返回 UTC 时间
@@ -994,7 +997,7 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
                 # 按照时间升序排序（从旧到新），便于处理
                 trips_to_merge.sort(key=lambda x: x.last_update)
 
-                logger.info(f"找到 {len(trips_to_merge)} 个需要合并的行程，时间范围: {trips_to_merge[0].last_update} 到 {trips_to_merge[-1].first_update}")
+                logger.info(f"找到 {len(trips_to_merge)} 个需要合并的行程，时间范围: {trips_to_merge[0].first_update} 到 {trips_to_merge[-1].last_update}")
                 trips = trips_to_merge
 
 
