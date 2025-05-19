@@ -150,6 +150,7 @@ def process_journey(file_path_list, user_id, user_name, phone,
         csvProcess = CSVProcess(pro_csv_list, user_id = user_id, user_name = user_name, user_phone = phone, 
                  car_brand = car_brand, car_model = car_model, car_hardware_version = car_hardware_version, car_software_version = car_software_version) 
 
+        print(f"user_id: {user_id}, user_name: {user_name}, phone: {phone}, car_brand: {car_brand}, car_model: {car_model}, car_version: {car_hardware_version}")
 
         frame_intervention_file, frame_intervention_risk_file, json_file_list,total_message = csvProcess.process_list_csv_save_journey(upload_journey=True)
         # frame_intervention_file, frame_intervention_risk_file, json_file_list = csvProcess.process_save_journey(upload_journey=True)

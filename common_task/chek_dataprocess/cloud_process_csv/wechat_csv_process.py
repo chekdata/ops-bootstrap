@@ -110,6 +110,8 @@ def process_csv(csv_files, user_id, user_name, phone, car_brand, car_model, car_
         print(f"process data process!")
         csvProcess = WeChatCSVProcess(pro_csv_list, user_id = user_id, user_name = user_name, user_phone = phone, 
                  car_brand = car_brand, car_model = car_model, car_version = car_version) 
+        
+        print(f"user_id: {user_id}, user_name: {user_name}, phone: {phone}, car_brand: {car_brand}, car_model: {car_model}, car_version: {car_version}")
         csvProcess.process()       
 
         for csv in pro_csv_list:
