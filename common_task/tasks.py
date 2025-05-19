@@ -1046,7 +1046,7 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
                             if not merged_csv.empty:
                                 # 处理文件名
                                 merged_csv_filename = None
-                                for chunk in chunks:
+                                for chunk in csv_chunks:
                                     if hasattr(chunk, 'file_name') and chunk.file_name and 'spcialPoint' in chunk.file_name:
                                         merged_csv_filename = chunk.file_name.split('/')[-1]
                                         break
@@ -1758,7 +1758,7 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
 
             if is_valiad_phone_number_sync(user.phone):
                 # # NOTE: 确保phone和小程序phone对应一致
-                
+                logger.info(f"开始处理用户 {user.name} , 手机号 {user.name} 的行程数据: {file_name}, file_path_list: {file_path_list}")
                 # saas 协议
                 total_meaage = process_journey(file_path_list, 
                                 user_id=100000, 
