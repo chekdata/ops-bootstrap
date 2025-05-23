@@ -908,7 +908,7 @@ async def cleanup_resources():
 # NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
 def merge_files_sync(user_id, trip_id, is_timeout=False):
     """同步版本的合并文件函数，用于进程池执行"""
-    
+    normal_trip_status = "正常"
     time_interval_thre = 300
     try:
         logger.info(f"开始合并文件, 用户ID: {user_id}, 行程ID: {trip_id}")
@@ -946,6 +946,7 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
                         hardware_version=main_trip.hardware_version,
                         software_version=main_trip.software_version,
                         merge_into_current=True,
+                        trip_status = normal_trip_status,
                     ).order_by('-last_update')  # 降序排列，从最新到最旧
                 else:
                     # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
