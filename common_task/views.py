@@ -690,7 +690,7 @@ async def get_abnormal_journey(request):
                                                                     hardware_version, 
                                                                     software_version, 
                                                                     num_minutes_ago)
-        
+        logger.info(f"查询trip成功。 user_id: {_id}, 'trips': {trips}")
         return JsonResponse({
             'code':200,
             'success': True, 
