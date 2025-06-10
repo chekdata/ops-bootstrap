@@ -235,10 +235,10 @@ async def update_user_info(request):
     try:
         user_profile = await sync_to_async(User.objects.get, thread_sensitive=True)(id=user.id)
         if   name :
-            user_profile.name = name
+            user_profile.name = name[:10]
 
         if signature:
-            user_profile.signature = signature[:10]
+            user_profile.signature = signature[:50]
 
         if gender:
             user_profile.gender = gender
