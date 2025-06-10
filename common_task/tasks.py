@@ -17,7 +17,7 @@ from .models import Trip, ChunkFile, Journey, Reported_Journey
 from django.utils import timezone
 from data.models import model_config
 from accounts.models import CoreUser
-from common_task.models import analysis_data_app,tos_csv_app,Journey,JourneyGPS
+from common_task.models import analysis_data_app,tos_csv_app,Journey,JourneyGPS,JourneyInterventionGps
 from common_task.handle_tos import TinderOS
 from common_task.handle_journey_message import *
 from multiprocessing import Pool, cpu_count
@@ -29,7 +29,7 @@ import multiprocessing
 from accounts.models import User,CoreUser
 from .db_utils import db_retry, ensure_connection
 from .chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
-# from .chek_dataprocess.cloud_process_csv.wechat_csv_process import process_csv
+
 
 # 创建进程池，数量为CPU核心数
 process_pool = Pool(processes=cpu_count())
@@ -1626,7 +1626,24 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
 
             if data.get('driver_acc_cnt') or type(data.get('driver_acc_cnt')) != 'str':
                 core_Journey_profile.driver_acc_cnt = data.get('driver_acc_cnt')
+
             core_Journey_profile.save()
+            print(data.get('intervention_gps'))
+            if data.get('intervention_gps'):
+                # core_Journey_intervention_gps = Journey.objects.using('core_user').get(journey_id=trip_id)
+                for _ in data.get('intervention_gps'):
+                    # core_Journey_intervention_gps = JourneyInterventionGps.objects.using('core_user').get(journey_id=trip_id)
+                    # 直接创建并保存对象
+                    core_Journey_intervention_gps = JourneyInterventionGps.objects.using('core_user').create(
+                        journey_id=trip_id,
+                        frame_id = _.get('frame_id'),
+                        gps_lon = _.get('gps_lon'),
+                        gps_lat = _.get('gps_lat'),
+                        gps_datetime = _.get('gps_datetime'),
+                        is_risk = _.get('is_risk'),
+                        identification_type = '自动识别',
+                        type = '识别接管'
+                    )
         else:
             # print(f"未找到 journey_id 为 {trip_id} 的行程记录。")
             logger.info(f"未找到 journey_id 为 {trip_id} 的行程记录。")
@@ -1757,7 +1774,7 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
                 # # NOTE: 确保phone和小程序phone对应一致
                 
                 # saas 协议
-                total_meaage = process_journey(file_path_list, 
+                total_message = process_journey(file_path_list, 
                                 user_id=100000, 
                                 user_name=user.name, 
                                 phone=user.phone, 
@@ -1773,7 +1790,7 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
                 handle_message_gps_data(file_path_list,trip_id)
                 # NOTE: trip_id 关联id 落库结果数据
              
-                handle_message_data(total_meaage,trip_id,model,hardware_version,software_version)
+                handle_message_data(total_message,trip_id,model,hardware_version,software_version)
                 # # 小程序协议
                 # process_csv(file_path_list, 
                 #                 user_id=100000, 
@@ -2033,14 +2050,15 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程上
                 with transaction.atomic():
                     try:
                         trip = Trip.objects.get(trip_id=trip_id)
+                        user_id = trip.user_id
                         trip.set_journey_status = True
                         # 处理用户ID
-                        if hasattr(trip.user_id, 'hex'):
-                            user_id = trip.user_id.hex
-                        elif isinstance(trip.user_id, str):
-                            # 如果是字符串,去掉横线
-                            user_id = trip.user_id.replace('-', '')
-      
+                        # if hasattr(trip.user_id, 'hex'):
+                        #     user_id = trip.user_id.hex
+                        # elif isinstance(trip.user_id, str):
+                        #     # 如果是字符串,去掉横线
+                        #     user_id = trip.user_id.replace('-', '')
+                        logger.info(f" set_journey_status: 的 user_id: {user_id}")
                         core_user_profile = CoreUser.objects.using("core_user").get(app_id=user_id)
                         journey, created = Journey.objects.using("core_user").update_or_create(
                             # 查询条件（用于定位对象）
@@ -2098,12 +2116,13 @@ def ensure_db_connection_and_set_tos_path_sync(trip_id, results):
             logger.info(f"数据库连接正常，开始执行csv,det在tos数据路径落库操作")
             try:
                 trip = Trip.objects.get(trip_id=trip_id)
-                # 处理用户ID
-                if hasattr(trip.user_id, 'hex'):
-                    user_id = trip.user_id.hex
-                elif isinstance(trip.user_id, str):
-                    # 如果是字符串,去掉横线
-                    user_id = trip.user_id.replace('-', '')
+                # # 处理用户ID
+                # if hasattr(trip.user_id, 'hex'):
+                #     user_id = trip.user_id.hex
+                # elif isinstance(trip.user_id, str):
+                #     # 如果是字符串,去掉横线
+                #     user_id = trip.user_id.replace('-', '')
+                user_id = trip.user_id
                 file_paths = {file_type: file_path for file_type, file_path in results}
                 csv_path = file_paths.get('csv')
                 det_path = file_paths.get('det')
@@ -2193,3 +2212,24 @@ def ensure_db_connection_and_set_sub_journey_sync(trip_id):
                 # 最后一次尝试也失败
                 logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
                 return False
+
+if __name__ == '__main__':
+    file_path_list = ['tos://chek/temp/for 汽车之家/25.5.15-成都重庆测试/阿维塔06/det_csv/2025-05-16/2025-05-16 10-11-23/阿维塔12_2023款 700 三激光后驱奢享版_AVATR.OS 4.0.0_spcialPoint_2025-05-16 10-11-23.csv','tos://chek/temp/for 汽车之家/25.5.15-成都重庆测试/阿维塔06/det_csv/2025-05-16/2025-05-16 10-11-23/阿维塔12_2023款 700 三激光后驱奢享版_AVATR.OS 4.0.0_spcialPoint_2025-05-16 10-11-23.det']
+    trip_id = '82ef3322-8aa9-4cd2-81aa-3ef1499eca3d'
+    total_message = process_journey(file_path_list, 
+                                    user_id=100000, 
+                                    user_name='念书人', 
+                                    phone='18847801997', 
+                                    car_brand ='理想', 
+                                    car_model='', 
+                                    car_hardware_version='2024款 Pro',
+                                    car_software_version='OTA7.0'
+                    )
+              
+    # trip_id = 'ee1a65b673504d13b9c4d5c7e39d8737'
+    # NOTE: gps处理
+
+    handle_message_gps_data(file_path_list,trip_id)
+    # NOTE: trip_id 关联id 落库结果数据
+    
+    handle_message_data(total_message,trip_id,'model','hardware_version','software_version')

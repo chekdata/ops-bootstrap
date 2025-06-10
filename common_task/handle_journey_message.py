@@ -90,7 +90,26 @@ class ChekMessageParser:
         #     # "pdf_path": self.chek_message.description.pdf_file_path if self.chek_message.description else "",
         #     # "auto_MBTI": self.chek_message.car.MBTI if self.chek_message.car else "",
         #     # "standby_MBTI": "",  # 未在原始数据中找到对应字段，设为空
+
+        
         # }
+        #             intervention.frame_id = frames_id
+        # intervention.gps_position.datetime = str(gps_time)
+        # intervention.gps_position.lon = lon
+        # intervention.gps_position.lat = lat
+
+        list_intervention_gps = []
+        if self.chek_message.journeyStatistics and self.chek_message.journeyStatistics.auto and self.chek_message.journeyStatistics.auto.intervention_statistics:
+            print('test', self.chek_message.journeyStatistics.auto.intervention_statistics.interventions)
+            for _ in self.chek_message.journeyStatistics.auto.intervention_statistics.interventions:
+                item = {}
+                item['frame_id'] = _.frame_id
+                item['gps_lon'] = _.gps_position.lon
+                item['gps_lat'] = _.gps_position.lat
+                item['gps_datetime'] = _.gps_position.datetime
+                item['is_risk'] = _.is_risk
+                list_intervention_gps.append(item)
+
         data = {
                 "auto_mileages": float(self.chek_message.journeyStatistics.odometer_auto) if self.chek_message.journeyStatistics else 0.0,
                 "total_mileages": float(self.chek_message.journeyStatistics.odometer_total) if self.chek_message.journeyStatistics else 0.0,
@@ -139,6 +158,8 @@ class ChekMessageParser:
                 "driver_speed_max": float(self.chek_message.journeyStatistics.driver.speed_max) if self.chek_message.journeyStatistics and self.chek_message.journeyStatistics.driver else 0.0,
                 "driver_dcc_cnt": int(self.chek_message.journeyStatistics.driver.dcc_cnt) if self.chek_message.journeyStatistics and self.chek_message.journeyStatistics.driver else 0,
                 "driver_acc_cnt": int(self.chek_message.journeyStatistics.driver.acc_cnt) if self.chek_message.journeyStatistics and self.chek_message.journeyStatistics.driver else 0,
+                'intervention_gps':list_intervention_gps
+
         }
         return data
     

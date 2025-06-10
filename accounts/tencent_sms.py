@@ -3,6 +3,27 @@ from tencentcloud.common.exception.tencent_cloud_sdk_exception import TencentClo
 from tencentcloud.sms.v20210111 import sms_client, models
 import json
 
+def is_valid_phone_number(phone: str) -> bool:
+    import re
+    """
+    验证输入的字符串是否为有效的中国手机号
+
+    参数:
+        phone (str): 需要验证的字符串
+
+    返回:
+        bool: 如果是有效手机号返回True，否则返回False
+    """
+    # 去除空格和+号
+    phone = phone.strip().replace(' ', '').replace('+', '')
+
+    # 正则表达式模式：
+    # 1. 以86开头（可选）
+    # 2. 第二位为3-9的11位数字
+    pattern = r'^(86)?(1[3-9])\d{9}$'
+
+    return bool(re.match(pattern, phone))
+
 def send_sms(phone_number, code):
 
     try:

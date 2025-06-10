@@ -74,6 +74,7 @@ class CSVProcess:
         self.odometer_thresh = 0 
 
         self.total_message = None
+        self.pre_intervention_time = None
 
     def get_data_list(self):
         # 文件路径构成： **/data/xx/xx.csv
@@ -322,7 +323,7 @@ class CSVProcess:
         return single_truck_avoid_noa_num,single_truck_avoid_lcc_num,single_truck_avoid_category
 
 
-    def cal_truck_avoidance_statistics(self):
+    def  cal_truck_avoidance_statistics(self):
 
         data_avoid = {}
         data_avoid['single'] = []
@@ -630,11 +631,15 @@ class CSVProcess:
             sub_intervention_statistics.risk_cnt += 1
             # if lon < 1 or lat < 1:
             #     return
+            if (lon < 1 or lat < 1) or (math.isnan(lon) or math.isnan(lat)):
+                return
             intervention = sub_intervention_statistics.interventions.add()
             intervention.is_risk = True
         else:
             # if lon < 1 or lat < 1:
             #     return
+            if (lon < 1 or lat < 1) or (math.isnan(lon) or math.isnan(lat)):
+                return
             intervention = sub_intervention_statistics.interventions.add()
             intervention.is_risk = False
         intervention.frame_id = frames_id
@@ -647,6 +652,21 @@ class CSVProcess:
         if not intervention.is_risk and frames_id not in self.gps_status_lcc_noa['intervention']:
             self.gps_status_lcc_noa['intervention'].append(frames_id)
 
+    #小程序参考代码calculate_intervention
+    # def calculate_intervention(self, sub_journey, near_max_dcc, gps_time, lon, lat):
+    #     sub_journey.intervention += 1
+    #     if near_max_dcc <= self.max_dcc:
+    #         sub_journey.intervention_risk += 1
+    #         if (lon < 1 or lat < 1) or (math.isnan(lon) or math.isnan(lat)):
+    #             return
+    #         gps_point = sub_journey.intervention_risk_gps_points.add()
+    #     else:
+    #         if (lon < 1 or lat < 1) or (math.isnan(lon) or math.isnan(lat)):
+    #             return
+    #         gps_point = sub_journey.intervention_gps_points.add()
+    #     # gps_point.datetime = str(gps_time)
+    #     gps_point.lon = lon
+    #     gps_point.lat = lat
 
     def post_caculate(self, sub_journey, frames, auto_odometer,is_auto=True):
         sub_journey.speed_average /= frames if frames > 0 else 1e-5
@@ -661,6 +681,18 @@ class CSVProcess:
 
             sub_journey.intervention_statistics.risk_proportion = sub_journey.intervention_statistics.mpi / \
                 sub_journey.intervention_statistics.risk_mpi if sub_journey.intervention_statistics.risk_mpi > 0 else 1e-5 #1
+
+            #2025.05.14 
+            #调整接管返回结果 key
+            # if sub_journey.intervention_statistics.cnt!=0:
+            #     sub_journey.intervention_statistics.mpi = auto_odometer / \
+            #         (sub_journey.intervention_statistics.cnt + 1) 
+            
+            #     sub_journey.intervention_statistics.risk_mpi = auto_odometer / \
+            #         (sub_journey.intervention_statistics.risk_cnt + 1) 
+            # else:
+            #     sub_journey.intervention_statistics.mpi = '-'
+            #     sub_journey.intervention_statistics.risk_mpi = '-'
 
 
     def set_journeyStatistics_global_data(self, journeyStatistics):
@@ -803,6 +835,33 @@ class CSVProcess:
                     elif pre_state == 'lcc':
                         self.calculate_intervention(
                             sub_journeyStatistics.lcc.intervention_statistics, near_max_dcc, gps_time, lon, lat, frams_id)
+
+                    #2025.05.14 
+                    #调整接管返回结果 key
+                    #当“接管”或“危险接管”在3秒内连续出现时，记为1次
+                    # if not self.pre_intervention_time :
+                    #     self.calculate_intervention(
+                    #     sub_journeyStatistics.auto.intervention_statistics, near_max_dcc, gps_time, lon, lat, frams_id)
+                    
+                    #     if pre_state == 'noa':
+                    #         self.calculate_intervention(
+                    #             sub_journeyStatistics.noa.intervention_statistics, near_max_dcc, gps_time, lon, lat, frams_id)
+                    #     elif pre_state == 'lcc':
+                    #         self.calculate_intervention(
+                    #             sub_journeyStatistics.lcc.intervention_statistics, near_max_dcc, gps_time, lon, lat, frams_id)
+                    #     self.pre_intervention_time = frames_time
+
+                    # elif frames_time - self.pre_intervention_time>3:
+                    #     self.calculate_intervention(
+                    #     sub_journeyStatistics.auto.intervention_statistics, near_max_dcc, gps_time, lon, lat, frams_id)
+                    
+                    #     if pre_state == 'noa':
+                    #         self.calculate_intervention(
+                    #             sub_journeyStatistics.noa.intervention_statistics, near_max_dcc, gps_time, lon, lat, frams_id)
+                    #     elif pre_state == 'lcc':
+                    #         self.calculate_intervention(
+                    #             sub_journeyStatistics.lcc.intervention_statistics, near_max_dcc, gps_time, lon, lat, frams_id)
+                    #     self.pre_intervention_time = frames_time
 
 
             self.add_to(sub_journeyStatistics.driver, d_odo, in_acc, in_dcc, pre_a, dt, speed, acc,
@@ -1415,7 +1474,12 @@ def merge_messages(messages: list):
                 sub_journey1.intervention_statistics.risk_cnt / sub_journey1.intervention_statistics.cnt) * 100 \
                     if sub_journey1.intervention_statistics.cnt > 0 else 0
 
-
+            #2025.05.14 
+            #调整接管返回结果 key
+            # if sub_journey.intervention  !=0:
+            #     sub_journey.mpi = sub_journey.auto_odometer / sub_journey.intervention  
+            # else:
+            #     sub_journey.mpi = '-'
 
             sub_journey1.intervention_statistics.interventions.extend(sub_journey2.intervention_statistics.interventions)
 

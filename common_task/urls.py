@@ -20,5 +20,8 @@ urlpatterns = [
     path('set_merge_abnormal_journey', views.set_merge_abnormal_journey), # 设置异常退出行程是否会被合并到接下来的行程中
     path('get_journey_data_entrance', views.get_journey_data_entrance),
     path('get_journey_gps_data_entrance', views.get_journey_gps_data_entrance),
+    path('get_user_journey_data_entrance', views.get_user_journey_data_entrance),
+    path('get_single_journey_data_entrance', views.get_single_journey_data_entrance),
+    path('get_journey_intervention_gps_data_entrance', views.get_journey_intervention_gps_data_entrance),
 ]
 

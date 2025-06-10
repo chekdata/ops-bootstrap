@@ -8,8 +8,8 @@ class TinderOS:
         self.access_key = 'AKLTNjI1MjlkMzNkNTRlNDczZDlhNWVkMzZlNmU2NDFiMmU'
         self.secret_key = 'TldSaVltTmpPRGN3T0RJd05EWXdPVGs0TTJJelpHVTBPV1UzWmprd01ETQ=='
         # 走内网
-        self.endpoint = "tos-cn-shanghai.ivolces.com"
-        #self.endpoint = ""
+        # self.endpoint = "tos-cn-shanghai.ivolces.com"
+        self.endpoint = ""
         self.region = "cn-shanghai"
         self.client = tos.TosClientV2(self.access_key, self.secret_key, self.endpoint, self.region)
         self.pbar = None

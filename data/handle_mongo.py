@@ -15,6 +15,61 @@ def connect_mongo(database, collection,mongo_link):
 
 def mongo_update(collection,query,item):
     collection.update_one(query,{'$set': item, '$currentDate': {'update_date': True}},upsert=True)
+
+
+def mongo_update_image(conn):
+        
+    # client, db, conn = connect_mongo('vehicle', 'model_version_repository',mongo_source_link)
+    conn.update_many( {'model': { '$regex': '极越' } }, { '$set': { 'model_guide': "chek/model/app_project_image/JiYue.png" } } )
+    conn.update_many( {'model': { '$regex': '小米' } }, { '$set': { 'model_guide': "chek/model/app_project_image/XiaoMi.jpg" } } )
+    conn.update_many( {'model': { '$regex': '腾势' } }, { '$set': { 'model_guide': "chek/model/app_project_image/DenZaZ9.png" } } )
+    conn.update_many( {'model': { '$regex': '理想' } }, { '$set': { 'model_guide': "chek/model/app_project_image/LiXiang.jpg" } } )
+    conn.update_many( {'model': { '$regex': '领克' } }, { '$set': { 'model_guide': "chek/model/app_project_image/Linke.png" } } )
+    conn.update_many( {'model': { '$regex': '蔚来' } }, { '$set': { 'model_guide': "chek/model/app_project_image/NioEs8.png" } } )
+    conn.update_many( {'model': { '$regex': '阿维塔' } }, { '$set': { 'model_guide': "chek/model/app_project_image/avatar11.png" } } )
+    conn.update_many( {'model': { '$regex': '秦新能源' } }, { '$set': { 'model_guide': "chek/model/app_project_image/BYDqin.png" } } )
+    conn.update_many( {'model': { '$regex': '比亚迪' } }, { '$set': { 'model_guide': "chek/model/app_project_image/BYDqin.png" } } )
+    conn.update_many( {'model': { '$regex': '问界' } }, { '$set': { 'model_guide': "chek/model/app_project_image/wenjie.png" } } )
+    conn.update_many( {'model': { '$regex': '智界' } }, { '$set': { 'model_guide': "chek/model/app_project_image/wenjie.png" } } )
+    conn.update_many( {'model': { '$regex': '享界' } }, { '$set': { 'model_guide': "chek/model/app_project_image/wenjie.png" } } )
+    conn.update_many( {'model': { '$regex': '极氪' } }, { '$set': { 'model_guide': "chek/model/app_project_image/zeeker.png" } } )
+    conn.update_many( {'model': { '$regex': '极氪' } }, { '$set': { 'model_guide': "chek/model/app_project_image/zeeker.png" } } )
+    conn.update_many( {'model': { '$regex': '蓝山' } }, { '$set': { 'model_guide': "chek/model/app_project_image/weipai_lanshan.png" } } )
+    conn.update_many( {'model': { '$regex': '智己' } }, { '$set': { 'model_guide': "chek/model/app_project_image/IM.jpg" } } )
+    conn.update_many( {'model': { '$regex': '智界' } }, { '$set': { 'model_guide': "chek/model/app_project_image/zhijie.jpg" } } )
+    conn.update_many( {'model': { '$regex': 'Model' } }, { '$set': { 'model_guide': "chek/model/app_project_image/Tesla_model3.png" } } )
+    conn.update_many( {'model': { '$regex': 'Model X' } }, { '$set': { 'model_guide': "chek/model/app_project_image/Tesla_modelxp.png" } } )
+    conn.update_many( {'model': { '$regex': '小鹏' } }, { '$set': { 'model_guide': "chek/model/app_project_image/Xiaopeng.png" } } )
+    conn.update_many( {'model': { '$regex': '岚图' } }, { '$set': { 'model_guide': "chek/model/app_project_image/LanTu_Zhuiguang.png" } } )
+    conn.update_many( {'model': { '$regex': '昊铂' } }, { '$set': { 'model_guide': "chek/model/app_project_image/HYPer.png" } } )
+    conn.update_many( {'model': { '$regex': '通用模型' } }, { '$set': { 'model_guide': "chek/model/app_project_image/XiaoMi.jpg" } } )
+    # model_config_version
+
+    conn.update_many( {'model': { '$regex': '极越' } }, { '$set': { 'screen_type': "中控屏" } } )
+    conn.update_many( {'model': { '$regex': '小米' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '腾势' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '理想' } }, { '$set': { 'screen_type': "中控屏" } } )
+    conn.update_many( {'model': { '$regex': '领克' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '蔚来' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '阿维塔' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '问界' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '智界' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '享界' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '极氪' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '秦新能源' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '比亚迪' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '蓝山' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '智己' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '智界' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': 'Model' } }, { '$set': { 'screen_type': "中控屏" } } )
+    conn.update_many( {'model': { '$regex': 'Model X' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '小鹏' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '岚图' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '昊铂' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '通用模型' } }, { '$set': { 'screen_type': "通用模型" } } )
+    #
+
+
 from bson import ObjectId
 
 if __name__ == '__main__':

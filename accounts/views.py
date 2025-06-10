@@ -1,5 +1,5 @@
 from django.shortcuts import render
-
+import re
 # Create your views here.
 from rest_framework import generics
 # from django.contrib.auth.models import User
@@ -37,6 +37,15 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExampl
 from drf_spectacular.types import OpenApiTypes
 from rest_framework import status,serializers
 from .serializers import *
+
+def generate_random_code(length=4):
+    import random
+    import string
+    """生成指定长度的随机字符串，包含大写字母和数字"""
+    # 定义可用字符：大写字母和数字
+    characters = string.ascii_uppercase + string.digits
+    # 随机选择字符并拼接成字符串
+    return ''.join(random.choice(characters) for _ in range(length))
 
 
 def check_time_difference(code_create_time):
@@ -99,7 +108,7 @@ async def custom_token_obtain_pair_view(request):
             username=username,
             unionid=unionid
         )
-        user.pic ='http://62.234.57.136:9000/vehicle-control/app_project/default/default_avatar.jpg'
+        user.pic ='https://app.chekkk.com/assets/imgs/app_project/default/default_car.png'
         await sync_to_async(user.save, thread_sensitive=True)()
 
         # 如果有额外的字段需要在创建时设置，可以在这里添加
@@ -127,6 +136,7 @@ async def custom_token_obtain_pair_view(request):
     # if not is_valid:
     #     return Response(serializer.errors, status=400)
     # validated_data = await sync_to_async(serializer.validate)(request.data)
+    print(validated_data)
     return Response(validated_data)
 
 @extend_schema(
@@ -185,7 +195,7 @@ async def check_user_info(request):
 async def update_user_info(request):
     user = request.user  # 获取当前登录用户
     user_token = request.auth
-
+    _id = user.id
     image_file = request.FILES.get('file')
     url_link = ''
     # if not image_file:
@@ -200,7 +210,7 @@ async def update_user_info(request):
 
         # 获取文件扩展名
         file_ext = os.path.splitext(image_file.name)[1][1:].lower()
-
+        
         if file_ext not in ALLOWED_EXTENSIONS:
             return Response({'code': 500, 'message': '传输的不是图片', 'data': {}})
         
@@ -219,7 +229,7 @@ async def update_user_info(request):
 
 
         # 保存文件
-        url_link = get_mino_link( file_url,upload_file_path)
+        url_link = get_mino_link( file_url,upload_file_path,_id)
         os.remove(file_url)
 
     try:
@@ -228,7 +238,7 @@ async def update_user_info(request):
             user_profile.name = name
 
         if signature:
-            user_profile.signature = signature
+            user_profile.signature = signature[:10]
 
         if gender:
             user_profile.gender = gender
@@ -303,6 +313,8 @@ async def send_sms_process(request):
     if not phone:
         return Response({'code': 500, 'message': '没有提供字段 phone' ,'data':{}})
 
+    if not is_valid_phone_number(phone):
+        return Response({'code': 500, 'message': '手机号格式不准确' ,'data':{}})
     # phone_profile = await sync_to_async(User.objects.get, thread_sensitive=True)(phone=phone)
     # if phone_profile:
     #     return Response({'code': 500, 'message': 'phone 已存在' ,'data':{}})
@@ -391,7 +403,7 @@ async def check_sms_process(request):
             refresh = RefreshToken.for_user(user)
             item['RefreshToken'] = str(refresh)
             item['AccessToken'] = str(refresh.access_token)
-
+            
             return Response( {'code': 200, 'message': '成功','data':item})
         else:
             return Response({'code': 500, 'message': '验证码错误或验证码已超时','data':{}})
@@ -802,6 +814,9 @@ async def send_sms_process_login(request):
     # openid = unionid.get('openid')
     # unionid = unionid.get('unionid')
 
+    if not is_valid_phone_number(phone):
+        return Response({'code': 500, 'message': '手机号格式不准确' ,'data':{}})
+
     if not await sync_to_async(User.objects.filter(phone=phone).exists, thread_sensitive=True)():
         vericode=str(generate_verification_code())
         # username = '这是一个名字'
@@ -882,13 +897,15 @@ async def check_sms_process_login(request):
         user_SMS_verification = await sync_to_async(User_SMS_Verification.objects.get, thread_sensitive=True)(phone=phone)
         if int(code) == user_SMS_verification.code and check_time_difference(user_SMS_verification.created_at):
             if not await sync_to_async(User.objects.filter(phone=phone).exists, thread_sensitive=True)():
-                username = '这是一个名字'
-            
+                # username = '这是一个名字'
+                random_code = generate_random_code()
+                username =  f"车控星人#{random_code}"
                 user = await sync_to_async(User.objects.create_user, thread_sensitive=True)(
                     username=username,
                     phone=phone
                 )
-                user.pic ='http://62.234.57.136:9000/vehicle-control/app_project/default/default_avatar.jpg'
+                user.pic ='https://app.chekkk.com/assets/imgs/app_project/default/default_car.png'
+                user.signature ='热爱汽车，从这里开始'
                 await sync_to_async(user.save, thread_sensitive=True)()
 
             if not await sync_to_async(CoreUser.objects.using('core_user').filter(app_phone=phone).exists, thread_sensitive=True)():
