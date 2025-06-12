@@ -59,7 +59,7 @@ class Trip(models.Model):
     merge_into_current = models.BooleanField(default=True, verbose_name='异常行程合并到当前行程')
     set_journey_status = models.BooleanField(default=False, verbose_name='异常行程是否已设置行程状态')
     trip_status = models.CharField(max_length=50, blank=True, verbose_name='行程状态')
-    reported_car_name = models.CharField(max_length=100, verbose_name='上报模式车型名')
+    reported_car_name = models.CharField(max_length=100,default=False, verbose_name='上报模式车型名')
     reported_hardware_version = models.CharField(max_length=64, null=True, blank=True, verbose_name='上报模式行程硬件版本')
     reported_software_version = models.CharField(max_length=64, null=True, blank=True, verbose_name='上报模式行程软件版本')
     
@@ -109,8 +109,8 @@ class Journey(models.Model):
     polar_star = models.JSONField(null=True, blank=True, verbose_name='车控北极星指标')
     
     # 里程相关
-    auto_mileages = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='智驾总里程')
-    total_mileages = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='测试总里程')
+    auto_mileages = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='智驾总里程')
+    total_mileages = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='测试总里程')
     
     # 帧数相关
     frames = models.IntegerField(null=True, blank=True, verbose_name='测试总帧数')
@@ -120,56 +120,56 @@ class Journey(models.Model):
     driver_frames = models.IntegerField(null=True, blank=True, verbose_name='driver驾驶帧数')
     
     # 速度相关
-    auto_speed_average = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='智驾平均车速')
-    auto_max_speed = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='智驾最大车速')
+    auto_speed_average = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='智驾平均车速')
+    auto_max_speed = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='智驾最大车速')
     
     # 接管相关
-    invervention_risk_proportion = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='危险接管占比')
-    invervention_mpi = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='接管里程')
-    invervention_risk_mpi = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='危险接管里程')
+    invervention_risk_proportion = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='危险接管占比')
+    invervention_mpi = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='接管里程')
+    invervention_risk_mpi = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='危险接管里程')
     invervention_cnt = models.IntegerField(null=True, blank=True, verbose_name='接管次数')
     invervention_risk_cnt = models.IntegerField(null=True, blank=True, verbose_name='危险接管次数')
     
     # NOA相关
-    noa_invervention_risk_mpi = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='noa危险接管里程')
-    noa_invervention_mpi = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='noa接管里程')
+    noa_invervention_risk_mpi = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='noa危险接管里程')
+    noa_invervention_mpi = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='noa接管里程')
     noa_invervention_risk_cnt = models.IntegerField(null=True, blank=True, verbose_name='noa危险接管次数')
-    noa_auto_mileages = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='noa智驾里程')
-    noa_auto_mileages_proportion = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='noa智驾里程占比')
+    noa_auto_mileages = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='noa智驾里程')
+    noa_auto_mileages_proportion = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='noa智驾里程占比')
     noa_invervention_cnt = models.IntegerField(null=True, blank=True, verbose_name='noa接管次数')
     
     # LCC相关
-    lcc_invervention_risk_mpi = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='lcc危险接管里程')
-    lcc_invervention_mpi = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='lcc接管里程')
+    lcc_invervention_risk_mpi = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='lcc危险接管里程')
+    lcc_invervention_mpi = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='lcc接管里程')
     lcc_invervention_risk_cnt = models.IntegerField(null=True, blank=True, verbose_name='lcc危险接管次数')
-    lcc_auto_mileages = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='lcc智驾里程')
-    lcc_auto_mileages_proportion = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='lcc智驾里程占比')
+    lcc_auto_mileages = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='lcc智驾里程')
+    lcc_auto_mileages_proportion = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='lcc智驾里程占比')
     lcc_invervention_cnt = models.IntegerField(null=True, blank=True, verbose_name='lcc接管次数')
     
     # 智驾急刹相关
-    auto_dcc_max = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='智驾急刹最大加速度')
-    auto_dcc_frequency = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='智驾急刹里程')
+    auto_dcc_max = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='智驾急刹最大加速度')
+    auto_dcc_frequency = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='智驾急刹里程')
     auto_dcc_cnt = models.IntegerField(null=True, blank=True, verbose_name='智驾急刹次数')
-    auto_dcc_duration = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='智驾急刹总时长')
-    auto_dcc_average_duration = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='智驾急刹平均时长')
-    auto_dcc_average = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='智驾急刹平均加速度')
+    auto_dcc_duration = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='智驾急刹总时长')
+    auto_dcc_average_duration = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='智驾急刹平均时长')
+    auto_dcc_average = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='智驾急刹平均加速度')
     
     # 智驾急加速相关
-    auto_acc_max = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='智驾急加速最大加速度')
-    auto_acc_frequency = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='智驾急加速里程')
+    auto_acc_max = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='智驾急加速最大加速度')
+    auto_acc_frequency = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='智驾急加速里程')
     auto_acc_cnt = models.IntegerField(null=True, blank=True, verbose_name='智驾急加速次数')
-    auto_acc_duration = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='智驾急加速总时长')
-    auto_acc_average_duration = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='智驾急加速平均时长')
-    auto_acc_average = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='智驾急加速平均加速度')
+    auto_acc_duration = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='智驾急加速总时长')
+    auto_acc_average_duration = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='智驾急加速平均时长')
+    auto_acc_average = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='智驾急加速平均加速度')
     
     # 人类驾驶相关
-    driver_mileages = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='人类驾驶里程')
-    driver_dcc_max = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='车主急刹最大加速度')
-    driver_dcc_frequency = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='车主急刹频次')
-    driver_acc_max = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='车主急加速最大加速度')
-    driver_acc_frequency = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='车主急加速频次')
-    driver_speed_average = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='车主平均车速')
-    driver_speed_max = models.DecimalField(max_length=10, decimal_places=2, null=True, blank=True, verbose_name='车主最高车速')
+    driver_mileages = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='人类驾驶里程')
+    driver_dcc_max = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='车主急刹最大加速度')
+    driver_dcc_frequency = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='车主急刹频次')
+    driver_acc_max = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='车主急加速最大加速度')
+    driver_acc_frequency = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='车主急加速频次')
+    driver_speed_average = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='车主平均车速')
+    driver_speed_max = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='车主最高车速')
     driver_dcc_cnt = models.IntegerField(null=True, blank=True, verbose_name='车主急刹次数')
     driver_acc_cnt = models.IntegerField(null=True, blank=True, verbose_name='车主急加速次数')
     
@@ -199,6 +199,30 @@ class Journey(models.Model):
     def __str__(self):
         return f"Journey {self.journey_id}"
     
+
+
+class JourneyInterventionGps(models.Model):
+    id = models.AutoField(primary_key=True, verbose_name='自增ID')
+    journey_id = models.CharField(max_length=50, blank=True, null=True, verbose_name='关联的行程 ID', db_index=True)
+    created_date = models.DateTimeField(auto_now_add=True,null=True, blank=True)
+    frame_id =   models.IntegerField(null=False, verbose_name='帧数id')
+    gps_lon = models.DecimalField(max_length=20, decimal_places=15, null=True, blank=True, verbose_name='gps_lon')
+    gps_lat = models.DecimalField(max_length=20, decimal_places=15, null=True, blank=True, verbose_name='gps_lat')
+    gps_datetime = models.DateTimeField(null=True, blank=True, verbose_name='gps时间')
+    type =  models.CharField(max_length=50, null=True, blank=True, verbose_name='gps点位类型')
+    is_risk = models.BooleanField(default=False, verbose_name='是否危险接管')
+    identification_type =  models.CharField(max_length=50, null=True, blank=True, verbose_name='gps识别类型')
+    created_date = models.DateTimeField(auto_now_add=True,null=True, blank=True)
+    class Meta:
+        managed = False
+        db_table = 'journey_gps_intervention'
+        app_label = 'core_user'     # 指定应用标签为 core_user
+        verbose_name = '行程评测数据接管点位'
+        verbose_name_plural = '行程评测数据接管点位'
+    
+    def __str__(self):
+        return f"Journey {self.journey_id}"
+
 
 
 class Reported_Journey(models.Model):

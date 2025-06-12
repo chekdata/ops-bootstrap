@@ -42,6 +42,9 @@ class version_vault(models.Model):
     md5_value = models.CharField(max_length=255, blank=True, null=True, verbose_name='md5_value')
     version_code = models.IntegerField(blank=True, null=True)
     created_date = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+   
+    forced_update = models.BooleanField(default=False, verbose_name='强制更新')
+    update_info = models.CharField(max_length=255, blank=True, null=True, verbose_name='更新信息')
 
 
     class Meta:

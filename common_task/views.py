@@ -3,11 +3,12 @@ from django.shortcuts import render
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import  permission_classes
 from adrf.decorators import api_view
-from common_task.models import analysis_data_app,tos_csv_app,Journey,JourneyGPS
+from common_task.models import analysis_data_app,tos_csv_app,Journey,JourneyGPS,JourneyInterventionGps
 from rest_framework.response import Response
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
-from rest_framework.decorators import  permission_classes
+from rest_framework.decorators import  permission_classes,authentication_classes
+from rest_framework.permissions import AllowAny
 from adrf.decorators import api_view
 from rest_framework.response import Response
 from django.utils import timezone
@@ -20,7 +21,6 @@ from django.views.decorators.http import require_POST
 from django.http import JsonResponse
 from accounts.models import User,CoreUser
 from common_task.handle_tos_play_link import *
-
 import re
 import os
 import json
@@ -755,7 +755,7 @@ async def set_merge_abnormal_journey(request):
         return JsonResponse({'code':500,'success': False, 'message': f'请求处理失败: {str(e)}', 'data':{}})
     
 
-def get_journey_data(user_uuid=None, start_date=None, end_date=None, city=None, brand=None, model=None):
+def get_journey_data(user_uuid=None, start_date=None, end_date=None, city=None, brand=None, model=None,created_date=None,journey_id = None,page_size = 4):
     """
     异步查询行程数据的函数
     参数:
@@ -793,9 +793,23 @@ def get_journey_data(user_uuid=None, start_date=None, end_date=None, city=None, 
     # 添加型号条件（如果提供）
     if model:
         query_conditions &= Q(model=model)
-    # 执行异步查询
-    print(query_conditions)
-    journeys = Journey.objects.using('core_user').filter(query_conditions).order_by('-created_date').all()
+    if journey_id:
+        query_conditions &= Q(journey_id=journey_id)
+    # # 执行异步查询
+    # journeys = Journey.objects.using('core_user').filter(query_conditions).order_by('-created_date').all()
+
+     # 添加created_date分页条件
+    if created_date:
+        query_conditions &= Q(created_date__lt=created_date)
+    query_conditions &= Q(is_sub_journey=False) 
+    # 执行查询并按created_date倒序排列，取前page_size条
+    if page_size:
+        journeys = Journey.objects.using('core_user') \
+            .filter(query_conditions) \
+            .order_by('-created_date')[:page_size]
+    else:
+        journeys = Journey.objects.using('core_user').filter(query_conditions).order_by('-created_date').all()
+    
     return journeys
 
 
@@ -825,9 +839,11 @@ async def get_journey_data_entrance(request):
     city = request.data.get('city')
     brand= request.data.get('brand')
     model= request.data.get('model')
+    created_date= request.data.get('created_date')    
+    
     try:
-        if  CoreUser.objects.using('core_user').filter(app_id=str(_id)).exists():
-            core_user_profile = await sync_to_async(CoreUser.objects.using('core_user').get, thread_sensitive=True)(app_id=str(_id))
+        if  CoreUser.objects.using('core_user').filter(app_id=_id).exists():
+            core_user_profile = await sync_to_async(CoreUser.objects.using('core_user').get, thread_sensitive=True)(app_id=_id)
 
             journeys =get_journey_data(
                 user_uuid=core_user_profile.id,
@@ -836,9 +852,267 @@ async def get_journey_data_entrance(request):
                 end_date=end_date,
                 city=city,
                 brand=brand, 
-                model=model
+                model=model,
+                created_date = created_date
             )
+            if journeys:
+                result_data = [
+                {
+                    'journey_id': j.journey_id,
+                    'city': j.city,
+                    'created_date': j.created_date.isoformat(),
+                    'auto_mileages': j.auto_mileages,
+                    'total_mileages': j.total_mileages,
+                    'frames': j.frames,
+                    'auto_frames': j.auto_frames,
+                    'noa_frames': j.noa_frames,
+                    'lcc_frames': j.lcc_frames,
+                    'driver_frames': j.driver_frames,
+                    'auto_speed_average': j.auto_speed_average,
+                    'auto_max_speed': j.auto_max_speed,
+                    'invervention_risk_proportion': j.invervention_risk_proportion,
+                    'invervention_mpi': j.invervention_mpi,
+                    'invervention_risk_mpi': j.invervention_risk_mpi,
+                    'invervention_cnt': j.invervention_cnt,
+                    'invervention_risk_cnt': j.invervention_risk_cnt,
+                    'noa_invervention_risk_mpi': j.noa_invervention_risk_mpi,
+                    'noa_invervention_mpi': j.noa_invervention_mpi,
+                    'noa_invervention_risk_cnt': j.noa_invervention_risk_cnt,
+                    'noa_auto_mileages': j.noa_auto_mileages,
+                    'noa_auto_mileages_proportion': j.noa_auto_mileages_proportion,
+                    'noa_invervention_cnt': j.noa_invervention_cnt,
+                    'lcc_invervention_risk_mpi': j.lcc_invervention_risk_mpi,
+                    'lcc_invervention_mpi': j.lcc_invervention_mpi,
+                    'lcc_invervention_risk_cnt': j.lcc_invervention_risk_cnt,
+                    'lcc_auto_mileages': j.lcc_auto_mileages,
+                    'lcc_auto_mileages_proportion': j.lcc_auto_mileages_proportion,
+                    'lcc_invervention_cnt': j.lcc_invervention_cnt,
+                    'auto_dcc_max': j.auto_dcc_max,
+                    'auto_dcc_frequency': j.auto_dcc_frequency,
+                    'auto_dcc_cnt': j.auto_dcc_cnt,
+                    'auto_dcc_duration': j.auto_dcc_duration,
+                    'auto_dcc_average_duration': j.auto_dcc_average_duration,
+                    'auto_dcc_average': j.auto_dcc_average,
+                    'auto_acc_max': j.auto_acc_max,
+                    'auto_acc_frequency': j.auto_acc_frequency,
+                    'auto_acc_cnt': j.auto_acc_cnt,
+                    'auto_acc_duration': j.auto_acc_duration,
+                    'auto_acc_average_duration': j.auto_acc_average_duration,
+                    'auto_acc_average': j.auto_acc_average,
+                    'driver_mileages': j.driver_mileages,
+                    'driver_dcc_max': j.driver_dcc_max,
+                    'driver_dcc_frequency': j.driver_dcc_frequency,
+                    'driver_acc_max': j.driver_acc_max,
+                    'driver_acc_frequency': j.driver_acc_frequency,
+                    'driver_speed_average': j.driver_speed_average,
+                    'driver_speed_max': j.driver_speed_max,
+                    'driver_dcc_cnt': j.driver_dcc_cnt,
+                    'driver_acc_cnt': j.driver_acc_cnt,
+                    'brand': j.brand,
+                    'model': j.model,
+                    'software_config': j.software_config,
+                    'hardware_config': j.hardware_config,
+                    'journey_start_time': j.journey_start_time.isoformat() if j.journey_start_time else None,
+                    'journey_end_time': j.journey_end_time.isoformat() if j.journey_end_time else None,
+                    'created_date':j.created_date.isoformat() if j.created_date else None,
+                    'journey_status': j.journey_status,
+                    }
+                    for j in journeys
+                ]
 
+                return JsonResponse({'code':200,'success': True, 'message': f'查询成功', 'data':{'journeys':result_data}})
+            else:
+                return JsonResponse({'code':200,'success': True, 'message': f'查询成功', 'data':{'journeys':{}}})
+        
+        else:
+            return JsonResponse({'code':400,'success': False, 'message': f'查询失败', 'data':{}})
+
+    
+    except Exception as e:
+    # #     # logger.error(f"行程数据获取失败: {str(e)}")
+        return JsonResponse({'code':500,'success': False, 'message': f'请求处理失败: {str(e)}', 'data':{}})
+    
+
+def query_journey_gps_data(journey_id_list):
+    result_dict = {}
+    for journey_id in journey_id_list:
+        # 判断 journey_id 是否在 JourneyGPS 表中
+        if JourneyGPS.objects.using('core_user').filter(Q(journey_id=journey_id)).exists():
+            # 查询对应 journey_id 的数据
+            journey_data = JourneyGPS.objects.using('core_user').filter(journey_id=journey_id).values(
+                'gps',
+               'segment_id',
+                'driver_status',
+                'road_scene'
+            )
+            result_dict[journey_id] = list(journey_data)
+        else:
+            result_dict[journey_id] = []
+    return result_dict
+
+def query_journey_intervention_gps_data(journey_id_list):
+    result_dict = {}
+    for journey_id in journey_id_list:
+        # 判断 journey_id 是否在 JourneyGPS 表中
+        if JourneyInterventionGps.objects.using('core_user').filter(Q(journey_id=journey_id)).exists():
+            # 查询对应 journey_id 的数据
+            journey_data = JourneyInterventionGps.objects.using('core_user').filter(journey_id=journey_id).values(
+                'frame_id',
+               'gps_lon',
+                'gps_lat',
+                'gps_datetime',
+                'type',
+                'is_risk',
+                'identification_type'
+            )
+            result_dict[journey_id] = list(journey_data)
+        else:
+            result_dict[journey_id] = []
+    return result_dict
+
+
+@extend_schema(
+    # 指定请求体的参数和类型
+    # request=InferenceDetialDetDataSerializer,
+    # 指定响应的信息
+    responses={
+        200: OpenApiResponse(response=SuccessResponseSerializer, description="处理成功"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务错误")
+    },
+    parameters=[
+        OpenApiParameter(name="Authorization", description="认证令牌，格式为：Bearer <token>", required=True, type=OpenApiTypes.STR, location=OpenApiParameter.HEADER)
+    ],
+    description="根据jouney——id查询gps数据",
+    summary="根据jouney——id查询gps数据",
+    tags=['行程数据']
+)
+# @api_view(['POST'])
+# @permission_classes([IsAuthenticated])
+@api_view(['POST'])
+@authentication_classes([])  # 清空认证类
+@permission_classes([AllowAny])  # 允许任何人访问
+async def get_journey_gps_data_entrance(request):
+    try:
+        user = request.user  # 获取当前登录用户
+        _id = user.id
+        journey_id_list = request.data.get('journey_id_list')
+
+        result_gps_data = query_journey_gps_data(
+           journey_id_list=journey_id_list,
+        )
+
+        return JsonResponse({
+            'code':200,
+            'success': True, 
+            'message': f"查询成功",
+            'data': {'journey_gps_data':result_gps_data
+            }
+        })
+    
+    except Exception as e:
+        # logger.error(f"设置trip失败: {str(e)}")
+        return JsonResponse({'code':500,'success': False, 'message': f'请求处理失败: {str(e)}', 'data':{}})
+    
+
+
+@extend_schema(
+    # 指定请求体的参数和类型
+    # request=InferenceDetialDetDataSerializer,
+    # 指定响应的信息
+    responses={
+        200: OpenApiResponse(response=SuccessResponseSerializer, description="查询成功"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务错误")
+    },
+    parameters=[
+        OpenApiParameter(name="Authorization", description="认证令牌，格式为：Bearer <token>", required=True, type=OpenApiTypes.STR, location=OpenApiParameter.HEADER)
+    ],
+    description="查询用户总里程与车型数",
+    summary="查询行程数据",
+    tags=['行程数据']
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+async def get_user_journey_data_entrance(request):
+    user = request.user  # 获取当前登录用户
+    _id = user.id
+    try:
+        if  CoreUser.objects.using('core_user').filter(app_id=_id).exists():
+            core_user_profile = await sync_to_async(CoreUser.objects.using('core_user').get, thread_sensitive=True)(app_id=_id)
+
+            journeys =get_journey_data(
+                user_uuid=core_user_profile.id,
+                # user_uuid='8cbb7009-7df7-44fe-b86f-2933c44eb266',
+                page_size = None
+            )
+            if journeys:
+                total_mileages = 0
+                models_dict = {}
+                time_count = {}
+           
+                for j in journeys:
+                    if j.total_mileages:
+                        total_mileages += j.total_mileages
+                    if j.model not in models_dict.keys():
+                        models_dict[j.model ] =1
+                    else:
+                        models_dict[j.model ] +=1
+                    
+                    created_date = j.created_date.isoformat() if j.created_date else None
+          
+               
+                    if created_date:
+                        year_month = created_date[:7] 
+                        time_count[year_month] = time_count.get(year_month, 0) + 1
+                result_data = {'total_mileages':total_mileages,'total_models':models_dict,'time_split':time_count}
+                return JsonResponse({'code':200,'success': True, 'message': f'查询成功', 'data':{'journeys':result_data}})
+            else:
+                return JsonResponse({'code':200,'success': True, 'message': f'查询成功', 'data':{'journeys':{}}})
+        
+        else:
+            return JsonResponse({'code':500,'success': False, 'message': f'内部服务报错', 'data':{}})
+
+    
+    except Exception as e:
+    # #     # logger.error(f"行程数据获取失败: {str(e)}")
+        return JsonResponse({'code':500,'success': False, 'message': f'请求处理失败: {str(e)}', 'data':{}})
+    
+
+@extend_schema(
+    # 指定请求体的参数和类型
+    # request=InferenceDetialDetDataSerializer,
+    # 指定响应的信息
+    responses={
+        200: OpenApiResponse(response=SuccessResponseSerializer, description="查询成功"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务错误")
+    },
+    parameters=[
+        OpenApiParameter(name="Authorization", description="认证令牌，格式为：Bearer <token>", required=True, type=OpenApiTypes.STR, location=OpenApiParameter.HEADER)
+    ],
+    description="查询单条行程数据",
+    summary="查询单条行程数据",
+    tags=['行程数据']
+)
+# @api_view(['POST'])
+# @permission_classes([IsAuthenticated])
+@api_view(['POST'])
+@authentication_classes([])  # 清空认证类
+@permission_classes([AllowAny])  # 允许任何人访问
+async def get_single_journey_data_entrance(request):
+    """设置合并异常行程数据"""
+    user = request.user  # 获取当前登录用户
+    _id = user.id
+    journey_id =  request.data.get('journey_id')
+  
+    
+    try:
+    # if  CoreUser.objects.using('core_user').filter(app_id=str(_id).replace('-','')).exists():
+        # core_user_profile = await sync_to_async(CoreUser.objects.using('core_user').get, thread_sensitive=True)(app_id=str(_id).replace('-',''))
+
+        journeys =get_journey_data(
+            # user_uuid='8cbb7009-7df7-44fe-b86f-2933c44eb266',
+            journey_id = journey_id
+        )
+        if journeys:
             result_data = [
             {
                 'journey_id': j.journey_id,
@@ -896,37 +1170,24 @@ async def get_journey_data_entrance(request):
                 'software_config': j.software_config,
                 'hardware_config': j.hardware_config,
                 'journey_start_time': j.journey_start_time.isoformat() if j.journey_start_time else None,
-                'journey_end_time': j.journey_end_time.isoformat() if j.journey_end_time else None
+                'journey_end_time': j.journey_end_time.isoformat() if j.journey_end_time else None,
+                'created_date':j.created_date.isoformat() if j.created_date else None,
+                'journey_status': j.journey_status,
                 }
                 for j in journeys
             ]
 
             return JsonResponse({'code':200,'success': True, 'message': f'查询成功', 'data':{'journeys':result_data}})
         else:
-            return JsonResponse({'code':500,'success': False, 'message': f'core数据库缺少app_id', 'data':{}})
+            return JsonResponse({'code':200,'success': True, 'message': f'查询成功', 'data':{'journeys':{}}})
+    
+    # else:
+        # return JsonResponse({'code':500,'success': False, 'message': f'内部服务报错', 'data':{}})
 
     
     except Exception as e:
-    #     # logger.error(f"行程数据获取失败: {str(e)}")
+    # # #     # logger.error(f"行程数据获取失败: {str(e)}")
         return JsonResponse({'code':500,'success': False, 'message': f'请求处理失败: {str(e)}', 'data':{}})
-    
-
-def query_journey_gps_data(journey_id_list):
-    result_dict = {}
-    for journey_id in journey_id_list:
-        # 判断 journey_id 是否在 JourneyGPS 表中
-        if JourneyGPS.objects.using('core_user').filter(Q(journey_id=journey_id)).exists():
-            # 查询对应 journey_id 的数据
-            journey_data = JourneyGPS.objects.using('core_user').filter(journey_id=journey_id).values(
-                'gps',
-               'segment_id',
-                'driver_status',
-                'road_scene'
-            )
-            result_dict[journey_id] = list(journey_data)
-        else:
-            result_dict[journey_id] = []
-    return result_dict
 
 
 @extend_schema(
@@ -944,15 +1205,18 @@ def query_journey_gps_data(journey_id_list):
     summary="根据jouney——id查询gps数据",
     tags=['行程数据']
 )
+# @api_view(['POST'])
+# @permission_classes([IsAuthenticated])
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
-async def get_journey_gps_data_entrance(request):
+@authentication_classes([])  # 清空认证类
+@permission_classes([AllowAny])  # 允许任何人访问
+async def get_journey_intervention_gps_data_entrance(request):
     try:
-        user = request.user  # 获取当前登录用户
-        _id = user.id
+        # user = request.user  # 获取当前登录用户
+        # _id = user.id
         journey_id_list = request.data.get('journey_id_list')
 
-        result_gps_data = query_journey_gps_data(
+        result_gps_data = query_journey_intervention_gps_data(
            journey_id_list=journey_id_list,
         )
 
@@ -960,7 +1224,7 @@ async def get_journey_gps_data_entrance(request):
             'code':200,
             'success': True, 
             'message': f"查询成功",
-            'data': {'journey_gps_data':result_gps_data
+            'data': {'journey_intevention_gps_data':result_gps_data
             }
         })
     

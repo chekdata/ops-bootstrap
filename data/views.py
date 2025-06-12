@@ -2,6 +2,7 @@ from django.shortcuts import render
 
 # Create your views here.
 from data.handle_mongo import  *
+from data.handle_mongo import  mongo_update_image
 from rest_framework import generics
 from data.models import Data
 from data.serializers import DataSerializer
@@ -522,8 +523,10 @@ async def update_model_tos(request):
                 item['created_date'] = datetime.datetime.now()
                 if item.get('model') and item.get('hardware_config_version') and item.get('software_config_version'):
                     mongo_update(coll, item, item)
+                  
                 else:
                     return Response({'code': 400, 'message': '缺少必要参数 model，hardware_config_version，software_config_version', 'data': {}})
+            mongo_update_image(coll)
             update_model_info_by_match_model(brand, model_config_data)
             client.close()
             return Response({'code': 200, 'message': '模型上传成功', 'data': {}})
@@ -847,7 +850,9 @@ async def judge_version_vault(request):
             version_code = version_profile.version_code 
             md5_value = version_profile.md5_value 
             link = version_profile.link 
-            return Response({'code': 200, 'message': '成功', 'data': {'package_name':package_name,'version_name':version_name,'chanel':chanel,'version_code':version_code,                           'md5_value':md5_value,'link':link}})
+            forced_update = version_profile.forced_update 
+            update_info = version_profile.update_info if version_profile.update_info else None
+            return Response({'code': 200, 'message': '成功', 'data': {'package_name':package_name,'version_name':version_name,'chanel':chanel,'version_code':version_code,  'md5_value':md5_value,'link':link,'forced_update':forced_update,'update_info':update_info}})
 
         
     except Exception as e:
