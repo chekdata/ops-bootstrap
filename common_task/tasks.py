@@ -2038,13 +2038,14 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程上
                 with transaction.atomic():
                     try:
                         trip = Trip.objects.get(trip_id=trip_id)
+                        user_id = trip.user_id
                         trip.set_journey_status = True
                         # 处理用户ID
-                        if hasattr(trip.user_id, 'hex'):
-                            user_id = trip.user_id.hex
-                        elif isinstance(trip.user_id, str):
-                            # 如果是字符串,去掉横线
-                            user_id = trip.user_id.replace('-', '')
+                        # if hasattr(trip.user_id, 'hex'):
+                        #     user_id = trip.user_id.hex
+                        # elif isinstance(trip.user_id, str):
+                        #     # 如果是字符串,去掉横线
+                        #     user_id = trip.user_id.replace('-', '')
       
                         core_user_profile = CoreUser.objects.using("core_user").get(app_id=user_id)
                         journey, created = Journey.objects.using("core_user").update_or_create(
