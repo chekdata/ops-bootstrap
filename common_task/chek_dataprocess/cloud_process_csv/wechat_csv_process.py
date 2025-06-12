@@ -3,10 +3,13 @@ import sys
 import shutil
 from pathlib import Path
 import argparse
-from .wechat_csv_process_detail import WeChatCSVProcess
-from .csv_clean import DataProcessor
-from .tinder_os import TinderOS
+# from .wechat_csv_process_detail import WeChatCSVProcess
+# from .csv_clean import DataProcessor
+# from .tinder_os import TinderOS
 
+from wechat_csv_process_detail import WeChatCSVProcess
+from csv_clean import DataProcessor
+from tinder_os import TinderOS
 car_model_map = {
     'AITO' : '问界',
     'Aion' : '埃安',
@@ -122,8 +125,7 @@ def process_csv(csv_files, user_id, user_name, phone, car_brand, car_model, car_
 
 if __name__ == "__main__":
 
-    sys.argv = ['wechat_csv_process.py', '-p=chek/rawData/xiaopeng/P7i/XOS5.1.1.8902/', '-ph=15117929459']
-
+    sys.argv = ['wechat_csv_process.py', '-p=chek-app/app_project/d11a1cd1-798a-4cd3-91fb-4237f60d3e3b/inference_data/问界/问界新M7/2025-05-09/', '-ph=18847801997']
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-p', '--tos_path', 

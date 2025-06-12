@@ -136,7 +136,7 @@ async def custom_token_obtain_pair_view(request):
     # if not is_valid:
     #     return Response(serializer.errors, status=400)
     # validated_data = await sync_to_async(serializer.validate)(request.data)
-    print(validated_data)
+    # print(validated_data)
     return Response(validated_data)
 
 @extend_schema(

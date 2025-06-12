@@ -31,78 +31,78 @@ mysql_app_project = {
 }
 conn = connect_mongo('vehicle', 'hot_brand_vehicle', mongo_source_link)
 
-data = list(conn.find({},{'_id':1,'model':1,'hardware_config_version':1,'software_config_version':1,'brand':1}))
-conn_update = connect_mongo('vehicle', 'model_config_app', mongo_source_link)
+# data = list(conn.find({},{'_id':1,'model':1,'hardware_config_version':1,'software_config_version':1,'brand':1}))
+# conn_update = connect_mongo('vehicle', 'model_config_app', mongo_source_link)
 
-def create_database():
+# def create_database():
 
-    conn,cur = connect_mysql(mysql_app_project)
-    cur.execute('DROP TABLE IF EXISTS model_config')
-    sql = """
-         CREATE TABLE IF NOT EXISTS  model_config(
-             id VARCHAR(255) PRIMARY KEY,
-             brand VARCHAR(255),
-             model VARCHAR(255),
-             hardware_config_version VARCHAR(255),
-             software_config_version VARCHAR(2000)
-         );
-         """
-    cur.execute(sql)
-    conn.commit()
+#     conn,cur = connect_mysql(mysql_app_project)
+#     cur.execute('DROP TABLE IF EXISTS model_config')
+#     sql = """
+#          CREATE TABLE IF NOT EXISTS  model_config(
+#              id VARCHAR(255) PRIMARY KEY,
+#              brand VARCHAR(255),
+#              model VARCHAR(255),
+#              hardware_config_version VARCHAR(255),
+#              software_config_version VARCHAR(2000)
+#          );
+#          """
+#     cur.execute(sql)
+#     conn.commit()
 
-def update_data(query,item,conn):
+# def update_data(query,item,conn):
 
-    conn.update_one(query,
-                                 {'$set': item
-                                  },
-                                 upsert=True)
-create_database()
-conn_mysql,cur_mysql = connect_mysql(mysql_app_project)
-# delete_mysql = "DELETE FROM model_config;"
-# delete_mysql = 'TRUNCATE TABLE model_config;'
-# drop_mysql = 'DROP TABLE model_config;'
-# cur_mysql.execute(drop_mysql)
-# conn_mysql.commit()
-model_dict = {}
-for _ in data:
-    item = {}
-    # update_data(_, _, conn_update)
+#     conn.update_one(query,
+#                                  {'$set': item
+#                                   },
+#                                  upsert=True)
+# create_database()
+# conn_mysql,cur_mysql = connect_mysql(mysql_app_project)
+# # delete_mysql = "DELETE FROM model_config;"
+# # delete_mysql = 'TRUNCATE TABLE model_config;'
+# # drop_mysql = 'DROP TABLE model_config;'
+# # cur_mysql.execute(drop_mysql)
+# # conn_mysql.commit()
+# model_dict = {}
+# for _ in data:
+#     item = {}
+#     # update_data(_, _, conn_update)
 
-    brand = _.get('brand')
-    model = _.get('model')
-    hardware_config_version = _.get('hardware_config_version')
-    software_config_version = _.get('software_config_version')
-    list_software_config_version = []
-    if software_config_version:
-        for i in software_config_version:
-            if '年' not in i.get('publish_code') and '月' not in i.get('publish_code')  and '版本' not in i.get('publish_code') :
-                list_software_config_version.append(i.get('publish_code'))
-    if model:
-        item['model'] = model
-    if hardware_config_version:
-        item['hardware_config_version'] = hardware_config_version
-    if list_software_config_version:
-        item['software_config_version'] = '|'.join(list_software_config_version)
+#     brand = _.get('brand')
+#     model = _.get('model')
+#     hardware_config_version = _.get('hardware_config_version')
+#     software_config_version = _.get('software_config_version')
+#     list_software_config_version = []
+#     if software_config_version:
+#         for i in software_config_version:
+#             if '年' not in i.get('publish_code') and '月' not in i.get('publish_code')  and '版本' not in i.get('publish_code') :
+#                 list_software_config_version.append(i.get('publish_code'))
+#     if model:
+#         item['model'] = model
+#     if hardware_config_version:
+#         item['hardware_config_version'] = hardware_config_version
+#     if list_software_config_version:
+#         item['software_config_version'] = '|'.join(list_software_config_version)
 
-    if  item.get('software_config_version') and hardware_config_version:
-        sql = f"""
-        INSERT INTO model_config (id,model, hardware_config_version, software_config_version,brand)
-    VALUES ('{str(_.get('_id'))}','{model}', '{hardware_config_version}','{item.get('software_config_version')}','{brand}')
-        """
-    elif hardware_config_version:
-        sql = f"""
-               INSERT INTO model_config (id,model, hardware_config_version,brand)
-           VALUES ('{str(_.get('_id'))}','{model}', '{hardware_config_version}','{brand}')
-               """
-    else:
-        sql = f"""
-                INSERT INTO model_config (id,model,brand)
-            VALUES ('{str(_.get('_id'))}','{model}','{brand}')
-                """
-    print(sql)
+#     if  item.get('software_config_version') and hardware_config_version:
+#         sql = f"""
+#         INSERT INTO model_config (id,model, hardware_config_version, software_config_version,brand)
+#     VALUES ('{str(_.get('_id'))}','{model}', '{hardware_config_version}','{item.get('software_config_version')}','{brand}')
+#         """
+#     elif hardware_config_version:
+#         sql = f"""
+#                INSERT INTO model_config (id,model, hardware_config_version,brand)
+#            VALUES ('{str(_.get('_id'))}','{model}', '{hardware_config_version}','{brand}')
+#                """
+#     else:
+#         sql = f"""
+#                 INSERT INTO model_config (id,model,brand)
+#             VALUES ('{str(_.get('_id'))}','{model}','{brand}')
+#                 """
+#     print(sql)
 
-    cur_mysql.execute(sql)
-    conn_mysql.commit()
+#     cur_mysql.execute(sql)
+#     conn_mysql.commit()
 
 
     # if model:
@@ -129,3 +129,22 @@ for _ in data:
 #     model_list.append(item)
 # for _ in model_list:
 #     print(_)
+from datetime import datetime
+# 添加创建时间字段
+update_result = conn.update_many(
+    {"created_date": {"$exists": False}},
+    {"$set": {"created_date": datetime.now()}}
+)
+
+print(f"成功更新 {update_result.modified_count} 个文档的 created_date 字段")
+
+# 添加更新时间字段
+update_result = conn.update_many(
+    {"updated_date": {"$exists": False}},
+    {"$set": {"updated_date": datetime.now()}}
+)
+
+print(f"成功更新 {update_result.modified_count} 个文档的 updated_date 字段")
+
+# 关闭连接
+# client.close()
