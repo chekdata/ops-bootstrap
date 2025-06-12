@@ -530,7 +530,7 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
             'is_completed': False,
             'last_update': get_current_timezone_time()  # 使用时区时间
         }
-        
+
         # 添加元数据
         if metadata:
             # if 'device_id' in metadata:
@@ -552,15 +552,6 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
             if 'trip_status' in metadata:
                 defaults['trip_status'] = metadata['trip_status']
 
-            if 'reported_car_name' in metadata:
-                defaults['reported_car_name'] = metadata['reported_car_name']       
-
-            if 'reported_hardware_version' in metadata:
-                defaults['reported_hardware_version'] = metadata['reported_hardware_version']  
-
-            if 'reported_software_version' in metadata:
-                defaults['reported_software_version'] = metadata['reported_software_version']  
-
         # 当第一次写入时，写入first_update
         trip_exists = await sync_to_async(Trip.objects.filter(trip_id=trip_id).exists, thread_sensitive=True)()
         if not trip_exists:
@@ -577,6 +568,30 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
             trip_id=trip_id, 
             defaults=defaults
         )
+
+        if metadata:
+            update_fields = {}
+            if metadata['reported_car_name'] != '':
+                k = 0
+            # 检查 reported_car_name
+            if 'reported_car_name' in metadata:
+                update_fields['reported_car_name'] = metadata['reported_car_name']
+            
+            # 检查 reported_hardware_version
+            if 'reported_hardware_version' in metadata:
+                update_fields['reported_hardware_version'] = metadata['reported_hardware_version']
+            
+            # 检查 reported_software_version
+            if 'reported_software_version' in metadata:
+                update_fields['reported_software_version'] = metadata['reported_software_version']
+            
+            # 如果有需要更新的字段，执行更新
+            if update_fields:
+                trip.reported_car_name = update_fields['reported_car_name']
+                trip.reported_hardware_version = update_fields['reported_hardware_version']
+                trip.reported_software_version = update_fields['reported_software_version']
+                logger.info(f"条件更新 Trip {trip_id} 的字段: {[f'{key}={update_fields[key]}' for key in update_fields.keys()]}")
+
         
         # 创建目录
         upload_dir = os.path.join(settings.MEDIA_ROOT, 'chunks', str(trip_id))
@@ -1308,7 +1323,8 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False)
                 else:
                     logger.error(f"用户 {_id} 不存在, 或行程持续时间小于240s. 无法处理行程数据 {csv_path_list}.")
 
-                if not is_valid_interval:    
+                if not is_valid_interval: 
+
                     logger.warning(f"CSV文件 {csv_path_list} 时间间隔小于240秒，跳过处理")
                 else:
                     logger.info(f"CSV文件 {csv_path_list} 时间间隔大于240秒，正常处理")
@@ -2076,12 +2092,21 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程上
                                 'software_config': trip.software_version,
                                 'user_uuid': core_user_profile.id,
                                 'journey_status': status,
-                                # "异常退出待确认"行程状态更新journey_start_time，journey_end_time
-                                # 确保行程筛选时正常
-                                'journey_start_time': trip.first_update if status == "异常退出待确认" else journey.journey_start_time if not created else None,
-                                'journey_end_time': trip.last_update if status == "异常退出待确认" else journey.journey_end_time if not created else None,
                             }
                         ) 
+                        # "异常退出待确认"行程状态更新journey_start_time，journey_end_time
+                        # 确保行程筛选时正常
+                        # 然后根据状态和是否新创建来更新时间字段
+                        if status == "异常退出待确认":
+                            journey.journey_start_time = trip.first_update
+                            journey.journey_end_time = trip.last_update
+                        elif not created:
+                            # 如果是更新现有记录，保持原有的时间字段不变
+                            pass
+                        else:
+                            # 如果是新创建的记录，时间字段保持为 None（默认值）
+                            journey.journey_start_time = None
+                            journey.journey_end_time = None
                         trip.save()                      
                         journey.save(using="core_user")
                         logger.info(f"已将行程 {trip_id} 的 jouney_status 字段设置为: {status}")

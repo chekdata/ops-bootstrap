@@ -109,7 +109,7 @@ DATABASES = {
         #'HOST': '62.234.57.136',
         'PORT': '3306',
          'OPTIONS': {
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES', time_zone='+8:00'",  # 设置时区为东八区
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES', time_zone='-8:00'",  # 设置时区为东八区
         },
     },
     'core_user': {
@@ -121,7 +121,7 @@ DATABASES = {
         #'HOST': '62.234.57.136',
         'PORT': '3306',
          'OPTIONS': {
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES', time_zone='+8:00'",  # 设置时区为东八区
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES', time_zone='-8:00'",  # 设置时区为东八区
         },
     }
 }

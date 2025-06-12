@@ -59,8 +59,8 @@ class Trip(models.Model):
     merge_into_current = models.BooleanField(default=True, verbose_name='异常行程合并到当前行程')
     set_journey_status = models.BooleanField(default=False, verbose_name='异常行程是否已设置行程状态')
     trip_status = models.CharField(max_length=50, blank=True, verbose_name='行程状态')
-    reported_car_name = models.CharField(max_length=100,default=False, verbose_name='上报模式车型名')
-    reported_hardware_version = models.CharField(max_length=64, null=True, blank=True, verbose_name='上报模式行程硬件版本')
+    reported_car_name = models.CharField(max_length=100, null=True, blank=True,verbose_name='上报模式车型名')
+    reported_hardware_version = models.CharField(max_length=64, null=True, blank=True, default=None, verbose_name='上报模式行程硬件版本')
     reported_software_version = models.CharField(max_length=64, null=True, blank=True, verbose_name='上报模式行程软件版本')
     
     def __str__(self):
