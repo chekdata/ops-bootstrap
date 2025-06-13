@@ -674,26 +674,36 @@ class CSVProcess:
         sub_journey.acc_average /= sub_journey.acc_cnt if sub_journey.acc_cnt > 0 else 1e-5
         if is_auto:
 
-            sub_journey.intervention_statistics.mpi = auto_odometer / \
-                (sub_journey.intervention_statistics.cnt + 1) 
-            sub_journey.intervention_statistics.risk_mpi = auto_odometer / \
-                (sub_journey.intervention_statistics.risk_cnt + 1) 
+            # sub_journey.intervention_statistics.mpi = auto_odometer / \
+            #     (sub_journey.intervention_statistics.cnt + 1) 
+            # sub_journey.intervention_statistics.risk_mpi = auto_odometer / \
+            #     (sub_journey.intervention_statistics.risk_cnt + 1) 
 
-            sub_journey.intervention_statistics.risk_proportion = sub_journey.intervention_statistics.mpi / \
-                sub_journey.intervention_statistics.risk_mpi if sub_journey.intervention_statistics.risk_mpi > 0 else 1e-5 #1
+            # sub_journey.intervention_statistics.risk_proportion = sub_journey.intervention_statistics.mpi / \
+            #     sub_journey.intervention_statistics.risk_mpi if sub_journey.intervention_statistics.risk_mpi > 0 else 1e-5 #1
 
             #2025.05.14 
             #调整接管返回结果 key
-            # if sub_journey.intervention_statistics.cnt!=0:
-            #     sub_journey.intervention_statistics.mpi = auto_odometer / \
-            #         (sub_journey.intervention_statistics.cnt + 1) 
-            
-            #     sub_journey.intervention_statistics.risk_mpi = auto_odometer / \
-            #         (sub_journey.intervention_statistics.risk_cnt + 1) 
-            # else:
-            #     sub_journey.intervention_statistics.mpi = '-'
-            #     sub_journey.intervention_statistics.risk_mpi = '-'
+            if sub_journey.intervention_statistics.cnt!=0:
+                sub_journey.intervention_statistics.mpi = auto_odometer / \
+                    (sub_journey.intervention_statistics.cnt ) 
+        
+            else:
+                sub_journey.intervention_statistics.mpi = 0.0
+              
 
+            if sub_journey.intervention_statistics.risk_cnt!=0:
+                    
+                sub_journey.intervention_statistics.risk_mpi = auto_odometer / \
+                    (sub_journey.intervention_statistics.risk_cnt ) 
+            else:
+                sub_journey.intervention_statistics.risk_mpi = 0.0
+
+            if sub_journey.intervention_statistics.risk_mpi>0 and sub_journey.intervention_statistics.mpi>0:
+                sub_journey.intervention_statistics.risk_proportion = sub_journey.intervention_statistics.mpi / \
+                sub_journey.intervention_statistics.risk_mpi if sub_journey.intervention_statistics.risk_mpi > 0 else 1e-5 #1
+            else:
+                sub_journey.intervention_statistics.risk_proportion = 1e-5
 
     def set_journeyStatistics_global_data(self, journeyStatistics):
         # Complete journey
@@ -1462,12 +1472,12 @@ def merge_messages(messages: list):
         if not is_driver:
             sub_journey1.intervention_statistics.cnt += sub_journey2.intervention_statistics.cnt
             sub_journey1.intervention_statistics.risk_cnt += sub_journey2.intervention_statistics.risk_cnt
-
-            sub_journey1.intervention_statistics.mpi = sub_journey1.odometer / \
-                (sub_journey1.intervention_statistics.cnt  + 1) 
             
-            sub_journey1.intervention_statistics.risk_mpi = sub_journey1.odometer / \
-                (sub_journey1.intervention_statistics.risk_cnt  + 1) 
+            # sub_journey1.intervention_statistics.mpi = sub_journey1.odometer / \
+            #     (sub_journey1.intervention_statistics.cnt  + 1) 
+            
+            # sub_journey1.intervention_statistics.risk_mpi = sub_journey1.odometer / \
+            #     (sub_journey1.intervention_statistics.risk_cnt  + 1) 
 
 
             sub_journey1.intervention_statistics.risk_proportion = (
@@ -1476,11 +1486,17 @@ def merge_messages(messages: list):
 
             #2025.05.14 
             #调整接管返回结果 key
-            # if sub_journey.intervention  !=0:
-            #     sub_journey.mpi = sub_journey.auto_odometer / sub_journey.intervention  
-            # else:
-            #     sub_journey.mpi = '-'
+            if sub_journey.intervention  !=0:
+                sub_journey.mpi = sub_journey.odometer / sub_journey.intervention  
+            else:
+                sub_journey.mpi = 0.0
 
+            if sub_journey1.intervention_statistics.risk_cnt!=0:
+                sub_journey1.intervention_statistics.risk_mpi = sub_journey1.odometer / \
+                (sub_journey1.intervention_statistics.risk_cnt  ) 
+            else:
+                sub_journey1.intervention_statistics.risk_mpi = 0.0
+            
             sub_journey1.intervention_statistics.interventions.extend(sub_journey2.intervention_statistics.interventions)
 
 
