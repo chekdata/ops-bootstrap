@@ -530,7 +530,10 @@ async def update_model_tos(request):
             update_model_info_by_match_model(brand, model_config_data)
             client.close()
             return Response({'code': 200, 'message': '模型上传成功', 'data': {}})
-        os.remove(file_url)
+        else:
+            os.remove(file_url)
+            return Response({'code': 400, 'message': 'md5 value not correct', 'data': {}})
+
     except Exception as e:
     #     print(e)
         return Response({'code': 500, 'message': '内部服务报错', 'data': {}})

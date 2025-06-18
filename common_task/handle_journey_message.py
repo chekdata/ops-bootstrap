@@ -100,7 +100,6 @@ class ChekMessageParser:
 
         list_intervention_gps = []
         if self.chek_message.journeyStatistics and self.chek_message.journeyStatistics.auto and self.chek_message.journeyStatistics.auto.intervention_statistics:
-            print('test', self.chek_message.journeyStatistics.auto.intervention_statistics.interventions)
             for _ in self.chek_message.journeyStatistics.auto.intervention_statistics.interventions:
                 item = {}
                 item['frame_id'] = _.frame_id
