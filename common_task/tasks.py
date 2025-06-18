@@ -549,8 +549,8 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
                 defaults['software_version'] = metadata['software_version']
             if 'device_id' in metadata:
                 defaults['device_id'] = metadata['device_id']
-            if 'trip_status' in metadata:
-                defaults['trip_status'] = metadata['trip_status']
+            # if 'trip_status' in metadata:
+            #     defaults['trip_status'] = metadata['trip_status']
 
         # 当第一次写入时，写入first_update
         trip_exists = await sync_to_async(Trip.objects.filter(trip_id=trip_id).exists, thread_sensitive=True)()
@@ -571,8 +571,11 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
 
         if metadata:
             update_fields = {}
-            if metadata['reported_car_name'] != '':
-                k = 0
+
+             # 检查 trip_status
+            if 'trip_status' in metadata:
+                update_fields['trip_status'] = metadata['trip_status']
+
             # 检查 reported_car_name
             if 'reported_car_name' in metadata:
                 update_fields['reported_car_name'] = metadata['reported_car_name']
@@ -587,6 +590,7 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
             
             # 如果有需要更新的字段，执行更新
             if update_fields:
+                trip.trip_status = update_fields['trip_status']
                 trip.reported_car_name = update_fields['reported_car_name']
                 trip.reported_hardware_version = update_fields['reported_hardware_version']
                 trip.reported_software_version = update_fields['reported_software_version']
@@ -961,7 +965,7 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
                         hardware_version=main_trip.hardware_version,
                         software_version=main_trip.software_version,
                         merge_into_current=True,
-                        trip_status = normal_trip_status,
+                        trip_status = main_trip.trip_status,
                     ).order_by('-last_update')  # 降序排列，从最新到最旧
                 else:
                     # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
@@ -1324,7 +1328,7 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False)
                     logger.error(f"用户 {_id} 不存在, 或行程持续时间小于240s. 无法处理行程数据 {csv_path_list}.")
 
                 if not is_valid_interval: 
-
+                    ensure_db_connection_and_set_journey_less_than_timethre_sync(trip_id)
                     logger.warning(f"CSV文件 {csv_path_list} 时间间隔小于240秒，跳过处理")
                 else:
                     logger.info(f"CSV文件 {csv_path_list} 时间间隔大于240秒，正常处理")
@@ -2030,7 +2034,7 @@ async def ensure_db_connection_and_set_merge_abnormal_journey(trips):
                         except Trip.DoesNotExist:
                             logger.error(f"行程 {trip_id} 不存在")
                         except Exception as e:
-                            logger.error(f"更新行程 {trip_id} 失败: {e}")
+                            logger.error(f"更新行程 {trip_id} merge_into_current 失败: {e}")
             # 执行更新操作
             await update_trips()
             return True
@@ -2115,7 +2119,7 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程上
                     except Trip.DoesNotExist:
                         logger.error(f"行程 {trip_id} 不存在")
                     except Exception as e:
-                        logger.error(f"更新行程 {trip_id} 失败: {e}")
+                        logger.error(f"更新行程 {trip_id} jouney_status, brand, journey_start_time 失败: {e}")
             # 执行更新操作
             await update_trips()
             return True
@@ -2184,7 +2188,7 @@ def ensure_db_connection_and_set_tos_path_sync(trip_id, results):
             except Trip.DoesNotExist:
                 logger.error(f"行程 {trip_id} 不存在")
             except Exception as e:
-                logger.error(f"更新行程 {trip_id} 失败: {e}")
+                logger.error(f"更新行程 {trip_id} Reported_Journey 失败: {e}")
             return True
         except Exception as e:
             logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
@@ -2235,7 +2239,53 @@ def ensure_db_connection_and_set_sub_journey_sync(trip_id):
             except Trip.DoesNotExist:
                 logger.error(f"行程 {trip_id} 不存在")
             except Exception as e:
-                logger.error(f"更新行程 {trip_id} 失败: {e}")
+                logger.error(f"更新行程 {trip_id}  is_sub_journey 失败: {e}")
+            return True
+        except Exception as e:
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                # 关闭所有连接并等待重试
+                from django.db import connections
+                connections.close_all()
+                time.sleep(retry_delay * (attempt + 1))
+            else:
+                # 最后一次尝试也失败
+                logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
+                return False
+
+# 将trip_id行程设置为子行程，不在行程返回列表
+def ensure_db_connection_and_set_journey_less_than_timethre_sync(trip_id):
+    """确保数据库连接并执行合并操作"""
+    # 最大重试次数
+    max_retries = 3
+    retry_delay = 1.0
+    
+    for attempt in range(max_retries):
+        try:
+            # 确保数据库连接有效
+            ensure_connection()
+            # 测试连接是否正常
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            
+            logger.info(f"数据库连接正常，开始执行设置当前行程{trip_id}:行程时长低于限定阈值操作")
+            try:
+                trip = Trip.objects.get(trip_id=trip_id)
+                try:
+                    journey = Journey.objects.using("core_user").get(journey_id=trip_id)
+                    journey.is_less_than_5min = True
+                    # 更新其他字段
+                    journey.save()
+                    logger.info(f"已将行程 {trip_id} 设置为行程时长低于限定阈值")
+                except Journey.DoesNotExist:
+                    # 处理对象不存在的情况
+                    logger.info(f"行程 {trip_id} 还没有写入Journey数据库,无需新建数据并设置")
+            except Trip.DoesNotExist:
+                logger.error(f"行程 {trip_id} 不存在")
+            except Exception as e:
+                logger.error(f"更新行程 {trip_id}  less_than_timethre 失败: {e}")
             return True
         except Exception as e:
             logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
