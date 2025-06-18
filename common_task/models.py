@@ -185,6 +185,7 @@ class Journey(models.Model):
     auto_MBTI = models.CharField(max_length=255, null=True, blank=True, verbose_name='智驾MBTI')
     standby_MBTI = models.CharField(max_length=255, null=True, blank=True, verbose_name='人驾MBTI')
     is_sub_journey = models.BooleanField(default=False, verbose_name='是否是子行程')
+    is_less_than_5min = models.BooleanField(default=False, verbose_name='行程是否小于5分钟')
     # 创建信息
     # created_by = models.CharField(max_length=50, null=True, blank=True)
     created_date = models.DateTimeField(auto_now_add=True,null=True, blank=True)
@@ -242,7 +243,7 @@ class Reported_Journey(models.Model):
     csv_tos_path = models.CharField(max_length=500, null=True, blank=True, verbose_name='csv文件tos路径')
     det_tos_path = models.CharField(max_length=500, null=True, blank=True, verbose_name='det文件tos路径')
 
-    reported_car_name = models.CharField(max_length=100, verbose_name='上报模式车型名')
+    reported_car_name = models.CharField(max_length=100, null=True, blank=True, verbose_name='上报模式车型名')
     reported_hardware_version = models.CharField(max_length=64, null=True, blank=True, verbose_name='上报模式行程硬件版本')
     reported_software_version = models.CharField(max_length=64, null=True, blank=True, verbose_name='上报模式行程软件版本')
 
