@@ -805,34 +805,25 @@ async def update_project_version(request):
 @authentication_classes([])
 async def send_sms_process_login(request):
     phone = request.data.get('phone')
+    #生产环境
+    vericode=str(generate_verification_code())
 
-    # code = request.data.get('code')
-    # unionid = get_access_token(SOCIAL_AUTH_WEIXIN_appid, SOCIAL_AUTH_WEIXIN_secret, code)
-    # if not unionid or 'unionid' not in unionid.keys():
-    #     return Response({'code': 500, 'message': '请输入正确的code','data':{}})
-    # access_token = unionid.get('access_token')
-    # openid = unionid.get('openid')
-    # unionid = unionid.get('unionid')
+    #测试环境
+    vericode = '888888'
 
     if not is_valid_phone_number(phone):
         return Response({'code': 500, 'message': '手机号格式不准确' ,'data':{}})
 
     if not await sync_to_async(User.objects.filter(phone=phone).exists, thread_sensitive=True)():
-        vericode=str(generate_verification_code())
-        # username = '这是一个名字'
-        
-        # user = await sync_to_async(User.objects.create_user, thread_sensitive=True)(
-        #     username=username,
-        #     phone=phone
-        # )
-        # user.pic ='http://62.234.57.136:9000/vehicle-control/app_project/default/default_avatar.jpg'
-        # await sync_to_async(user.save, thread_sensitive=True)()
-  
+        # vericode=str(generate_verification_code())
+ 
         user_SMS_verification,creat =await sync_to_async(User_SMS_Verification.objects.get_or_create, thread_sensitive=True)(  
             phone=phone)
         user_SMS_verification.code = vericode
         await sync_to_async(user_SMS_verification.save, thread_sensitive=True)()
-        send_sms(phone, vericode)
+
+        #生产环境
+        # send_sms(phone, vericode)
         return Response({'code': 200, 'message': 'sms 发送成功','data':{}})
     
 
@@ -840,16 +831,16 @@ async def send_sms_process_login(request):
     
         user_profile = await sync_to_async(User.objects.get, thread_sensitive=True)(phone=phone)
     
-        vericode=str(generate_verification_code())
-        # smsverification= SMSVerification.objects.get_or_create(user_id=user.id)
+        # vericode=str(generate_verification_code())
         smsverification,creat =await sync_to_async(SMSVerification.objects.get_or_create, thread_sensitive=True)(user_id=user_profile.id)
         smsverification.phone = phone
         smsverification.code = vericode
         smsverification.user_id = user_profile.id
-        # smsverification.save()
+
         await sync_to_async(smsverification.save, thread_sensitive=True)()
 
-        send_sms(phone, vericode)
+        #生产环境
+        # send_sms(phone, vericode)
         return Response({'code': 200, 'message': 'sms 发送成功','data':{}})
 
 
@@ -877,7 +868,7 @@ async def check_sms_process_login(request):
  
     phone = request.data.get('phone')
     code = request.data.get('code')
-
+    user_id = ''
     try:
         if  await sync_to_async(User.objects.filter(phone=phone).exists, thread_sensitive=True)():
             user_profile = await sync_to_async(User.objects.get, thread_sensitive=True)(phone=phone)
@@ -907,6 +898,11 @@ async def check_sms_process_login(request):
                 user.pic ='https://app.chekkk.com/assets/imgs/app_project/default/default_car.png'
                 user.signature ='热爱汽车，从这里开始'
                 await sync_to_async(user.save, thread_sensitive=True)()
+                
+            
+            # if  await sync_to_async(User.objects.filter(phone=phone).exists, thread_sensitive=True)():
+            #     user_profile = await sync_to_async(User.objects.get, thread_sensitive=True)(phone=phone)
+            #     user_id = user_profile.id
 
             if not await sync_to_async(CoreUser.objects.using('core_user').filter(app_phone=phone).exists, thread_sensitive=True)():
                 if await sync_to_async(CoreUser.objects.using('core_user').filter(Q(saas_phone=phone) | Q(mini_phone=phone)).exists, thread_sensitive=True)():

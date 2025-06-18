@@ -1486,10 +1486,10 @@ def merge_messages(messages: list):
 
             #2025.05.14 
             #调整接管返回结果 key
-            if sub_journey.intervention  !=0:
-                sub_journey.mpi = sub_journey.odometer / sub_journey.intervention  
+            if sub_journey1.intervention_statistics.cnt  !=0:
+                sub_journey1.intervention_statistics.mpi = sub_journey1.odometer / sub_journey1.intervention_statistics.cnt 
             else:
-                sub_journey.mpi = 0.0
+                sub_journey1.intervention_statistics.mpi = 0.0
 
             if sub_journey1.intervention_statistics.risk_cnt!=0:
                 sub_journey1.intervention_statistics.risk_mpi = sub_journey1.odometer / \

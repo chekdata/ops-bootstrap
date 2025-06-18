@@ -1652,7 +1652,6 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
                 core_Journey_profile.driver_acc_cnt = data.get('driver_acc_cnt')
 
             core_Journey_profile.save()
-            print(data.get('intervention_gps'))
             if data.get('intervention_gps'):
                 # core_Journey_intervention_gps = Journey.objects.using('core_user').get(journey_id=trip_id)
                 for _ in data.get('intervention_gps'):
@@ -1796,7 +1795,7 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
 
             if is_valiad_phone_number_sync(user.phone):
                 # # NOTE: 确保phone和小程序phone对应一致
-                logger.info(f"开始处理用户 {user.name} , 手机号 {user.name} 的行程数据: {file_name}, file_path_list: {file_path_list}")
+                logger.info(f"开始处理用户 {user.name} , 手机号 {user.phone} 的行程数据: {file_name}, file_path_list: {file_path_list}")
                 # saas 协议
                 total_message = process_journey(file_path_list, 
                                 user_id=100000, 

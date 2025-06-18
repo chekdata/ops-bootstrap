@@ -43,6 +43,8 @@ def mongo_update_image(conn):
     conn.update_many( {'model': { '$regex': '岚图' } }, { '$set': { 'model_guide': "chek/model/app_project_image/LanTu_Zhuiguang.png" } } )
     conn.update_many( {'model': { '$regex': '昊铂' } }, { '$set': { 'model_guide': "chek/model/app_project_image/HYPer.png" } } )
     conn.update_many( {'model': { '$regex': '通用模型' } }, { '$set': { 'model_guide': "chek/model/app_project_image/XiaoMi.jpg" } } )
+    conn.update_many( {'model': { '$regex': '东风日产' } }, { '$set': { 'model_guide': "chek/model/app_project_image/NissanN7.png" } } )
+    conn.update_many( {'model': { '$regex': '路特斯' } }, { '$set': { 'model_guide': "chek/model/app_project_image/EMEYA.png" } } )
     # model_config_version
 
     conn.update_many( {'model': { '$regex': '极越' } }, { '$set': { 'screen_type': "中控屏" } } )
@@ -66,7 +68,9 @@ def mongo_update_image(conn):
     conn.update_many( {'model': { '$regex': '小鹏' } }, { '$set': { 'screen_type': "仪表屏" } } )
     conn.update_many( {'model': { '$regex': '岚图' } }, { '$set': { 'screen_type': "仪表屏" } } )
     conn.update_many( {'model': { '$regex': '昊铂' } }, { '$set': { 'screen_type': "仪表屏" } } )
-    conn.update_many( {'model': { '$regex': '通用模型' } }, { '$set': { 'screen_type': "通用模型" } } )
+    conn.update_many( {'model': { '$regex': '通用模型' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '东风日产' } }, { '$set': { 'screen_type': "通用模型" } } )
+    conn.update_many( {'model': { '$regex': '路特斯' } }, { '$set': { 'screen_type': "通用模型" } } )
     #
 
 
