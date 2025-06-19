@@ -235,6 +235,7 @@ class CSVProcess:
 
         # set all journey time
         self.journey.duration = self.df['time'].iloc[-1]/3600.0
+        print('test_duration',self.journey.duration)
         self.set_journeyStatistics_global_data(self.journey)
 
 
