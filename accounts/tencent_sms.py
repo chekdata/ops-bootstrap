@@ -39,7 +39,7 @@ def send_sms(phone_number, code):
         # 组装请求参数
         valid_minutes = 10
         req.SmsSdkAppId = "1400797619"  # SDK App ID
-        req.SignName = "车控科技"      # 签名内容 车控北京科技
+        req.SignName = "车控北京科技"      # 签名内容 车控北京科技
         req.TemplateId = "1970454"  # 模板 ID
         req.PhoneNumberSet = [f"+86{phone_number}"]  # 接收短信的手机号码，格式为国际电话号码格式
         req.TemplateParamSet = [code, str(valid_minutes)]  # 短信模板中的参数，例如验证码
