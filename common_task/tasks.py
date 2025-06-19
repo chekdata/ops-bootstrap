@@ -1509,6 +1509,8 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
             #         # if type(value) != 'str' or value:
             #         core_Journey_profile.key = value
             #         print(key,core_Journey_profile.key)
+            if data.get('duration') or type(data.get('duration')) != 'str':
+                core_Journey_profile.duration = data.get('duration')
 
             if data.get('auto_mileages') or type(data.get('auto_mileages')) != 'str':
                 core_Journey_profile.auto_mileages = data.get('auto_mileages')

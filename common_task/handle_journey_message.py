@@ -108,7 +108,7 @@ class ChekMessageParser:
                 item['gps_datetime'] = _.gps_position.datetime
                 item['is_risk'] = _.is_risk
                 list_intervention_gps.append(item)
-
+        print('test_duration',self.chek_message.journeyStatistics.duration)
         data = {
                 "auto_mileages": float(self.chek_message.journeyStatistics.odometer_auto) if self.chek_message.journeyStatistics else 0.0,
                 "total_mileages": float(self.chek_message.journeyStatistics.odometer_total) if self.chek_message.journeyStatistics else 0.0,
@@ -157,7 +157,8 @@ class ChekMessageParser:
                 "driver_speed_max": float(self.chek_message.journeyStatistics.driver.speed_max) if self.chek_message.journeyStatistics and self.chek_message.journeyStatistics.driver else 0.0,
                 "driver_dcc_cnt": int(self.chek_message.journeyStatistics.driver.dcc_cnt) if self.chek_message.journeyStatistics and self.chek_message.journeyStatistics.driver else 0,
                 "driver_acc_cnt": int(self.chek_message.journeyStatistics.driver.acc_cnt) if self.chek_message.journeyStatistics and self.chek_message.journeyStatistics.driver else 0,
-                'intervention_gps':list_intervention_gps
+                'intervention_gps':list_intervention_gps,
+                'duration':float(  self.chek_message.journeyStatistics.duration if self.chek_message.journeyStatistics  else 0)
 
         }
         return data

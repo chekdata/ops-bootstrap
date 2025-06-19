@@ -178,7 +178,8 @@ class Journey(models.Model):
     journey_end_time = models.DateTimeField(null=True, blank=True, verbose_name='行程结束时间')
     # journey_generated_time = models.DateTimeField(null=True, blank=True, verbose_name='行程落库时间')
     journey_status = models.CharField(max_length=64, null=True, blank=True, verbose_name='行程状态')
-    
+    duration = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='智驾时长')
+
     # 文件相关
     pdf_name = models.CharField(max_length=255, null=True, blank=True, verbose_name='文件名称')
     pdf_path = models.CharField(max_length=255, null=True, blank=True, verbose_name='文件路径')

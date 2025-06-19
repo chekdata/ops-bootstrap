@@ -795,6 +795,13 @@ def get_journey_data(user_uuid=None, start_date=None, end_date=None, city=None, 
         query_conditions &= Q(model=model)
     if journey_id:
         query_conditions &= Q(journey_id=journey_id)
+    query_conditions &= Q(is_less_than_5min=0)
+
+    # 假设journey_status是一个包含允许状态的列表
+    query_conditions &= Q(journey_status__in=['正常', '异常退出待确认', '行程上传中'])
+    
+    # 添加is_less_than_5min条件，要求等于0
+    query_conditions &= Q(is_less_than_5min=0)
     # # 执行异步查询
     # journeys = Journey.objects.using('core_user').filter(query_conditions).order_by('-created_date').all()
 
@@ -1227,6 +1234,139 @@ async def get_journey_intervention_gps_data_entrance(request):
             'data': {'journey_intevention_gps_data':result_gps_data
             }
         })
+    
+    except Exception as e:
+        # logger.error(f"设置trip失败: {str(e)}")
+        return JsonResponse({'code':500,'success': False, 'message': f'请求处理失败: {str(e)}', 'data':{}})
+
+    
+
+@extend_schema(
+    # 指定请求体的参数和类型
+    # request=InferenceDetialDetDataSerializer,
+    # 指定响应的信息
+    responses={
+        200: OpenApiResponse(response=SuccessResponseSerializer, description="处理成功"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务错误")
+    },
+    parameters=[
+        OpenApiParameter(name="Authorization", description="认证令牌，格式为：Bearer <token>", required=True, type=OpenApiTypes.STR, location=OpenApiParameter.HEADER)
+    ],
+    description="根据jouney——id查询mbti数据",
+    summary="根据jouney——id查询mbti数据",
+    tags=['行程数据']
+)
+# @api_view(['POST'])
+# @permission_classes([IsAuthenticated])
+@api_view(['POST'])
+@authentication_classes([])  # 清空认证类
+@permission_classes([AllowAny])  # 允许任何人访问
+async def get_journey_mbti_entrance(request):
+    journey_id =  request.data.get('journey_id')
+    try:
+        journeys =get_journey_data(
+            # user_uuid='8cbb7009-7df7-44fe-b86f-2933c44eb266',
+            journey_id = journey_id
+        )
+        if journeys:
+            MBTI_text = '内敛小i人'
+            for j in journeys:
+                if j.auto_speed_average>30 and (j.auto_dcc_average<-4 or j.auto_acc_average>4):
+                    MBTI_text = '狂飙小e人'
+                elif  j.auto_speed_average<=30 and (j.auto_dcc_average<-4 or j.auto_acc_average>4):
+                    MBTI_text = '苦苦装e小i人'
+                elif j.auto_speed_average>30 and (j.auto_dcc_average>=-4 or j.auto_acc_average<=4):
+                    MBTI_text = '快乐小e人'
+                elif j.auto_speed_average<=30 and (j.auto_dcc_average>=-4 or j.auto_acc_average<=4):
+                    MBTI_text = '内敛小i人'
+            if MBTI_text:
+                return JsonResponse({
+                    'code':200,
+                    'success': True, 
+                    'message': f"查询成功",
+                    'data': {'MBTI_test':MBTI_text
+                    }
+                })
+        else:
+            return JsonResponse({'code':200,'success': True, 'message': f'查询失败 没有该journey', 'data':{}})
+    
+    except Exception as e:
+        # logger.error(f"设置trip失败: {str(e)}")
+        return JsonResponse({'code':500,'success': False, 'message': f'请求处理失败: {str(e)}', 'data':{}})
+
+
+
+@extend_schema(
+    # 指定请求体的参数和类型
+    # request=InferenceDetialDetDataSerializer,
+    # 指定响应的信息
+    responses={
+        200: OpenApiResponse(response=SuccessResponseSerializer, description="处理成功"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务错误")
+    },
+    parameters=[
+        OpenApiParameter(name="Authorization", description="认证令牌，格式为：Bearer <token>", required=True, type=OpenApiTypes.STR, location=OpenApiParameter.HEADER)
+    ],
+    description="根据jouney——id查询行程维度数据",
+    summary="根据jouney——id查询行程维度数据",
+    tags=['行程数据']
+)
+# @api_view(['POST'])
+# @permission_classes([IsAuthenticated])
+@api_view(['POST'])
+@authentication_classes([])  # 清空认证类
+@permission_classes([AllowAny])  # 允许任何人访问
+async def get_journey_dimention_entrance(request):
+    journey_id =  request.data.get('journey_id')
+    try:
+        journeys =get_journey_data(
+            # user_uuid='8cbb7009-7df7-44fe-b86f-2933c44eb266',
+            journey_id = journey_id
+        )
+        if journeys:
+            security = ''
+            comfortable = ''
+            efficiency = ''
+            for j in journeys:
+                if j.mpi_risk<0.25:
+                    security = '驾校新生，随时准备踩刹车'
+                elif j.mpi_risk<0.5:
+                    security = '副驾型智驾，变道超车得小心'
+                elif j.mpi_risk<0.75:
+                    security = '老司机附体，仅极端情况接管'
+                else:
+                    security = '智驾王者，甩手掌柜模式已启动'
+                
+                j.auto_dcc_average>=-4 or j.auto_acc_average<=4
+                if j.auto_dcc_average<-7:
+                    comfortable = '油门像蹦迪，刹车似急停'
+                elif j.auto_dcc_average <=-4:
+                    comfortable = '偶尔推背感，减速先点头'
+                elif j.auto_dcc_average <=-2:
+                    comfortable = '丝滑如德芙，加减速隐形'
+                else:
+                    comfortable = '摇篮级平稳，堵车也是SPA'
+                
+                if j.auto_speed_average>=0:
+                    efficiency = '龟速占道王，变道像树懒'
+                elif j.auto_speed_average>=20:
+                    efficiency = '谨慎跟车族，超车看心情'
+                elif j.auto_speed_average>=30:	
+                    efficiency = '高速猎豹，卡位精准'
+                    
+                elif j.auto_speed_average>=50:	
+                    efficiency = '狂暴模式，见缝插针	'														
+															
+    
+            return JsonResponse({
+                'code':200,
+                'success': True, 
+                'message': f"查询成功",
+                'data': {'security':security,'comfortable':comfortable,'efficiency':efficiency
+                }
+            })
+        else:
+            return JsonResponse({'code':200,'success': True, 'message': f'查询失败 没有该journey', 'data':{}})
     
     except Exception as e:
         # logger.error(f"设置trip失败: {str(e)}")
