@@ -536,7 +536,7 @@ async def upload_chunk(request):
         #     # 检查是否需要触发自动合并
         #     asyncio.create_task(check_timeout_trip(_id, trip_id))
         
-        if metadata.get('is_last_chunk'):
+        if metadata.get('is_last_chunk') and (not metadata.get('is_less_5min')):
             # 如果最后一个分片，对journey进行
             await ensure_db_connection_and_set_journey_status(trip_id)
 
