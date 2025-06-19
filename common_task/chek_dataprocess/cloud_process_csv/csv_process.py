@@ -235,7 +235,6 @@ class CSVProcess:
 
         # set all journey time
         self.journey.duration = self.df['time'].iloc[-1]/3600.0
-        print('test_duration',self.journey.duration)
         self.set_journeyStatistics_global_data(self.journey)
 
 
@@ -722,7 +721,7 @@ class CSVProcess:
         duration_total = duration_total if duration_total > 0 else 0
 
         journeyStatistics.datetime = self.journey_datetime  # TODO
-        journeyStatistics.duration = duration_total
+        journeyStatistics.duration = duration_total if duration_total >journeyStatistics.duration else journeyStatistics.duration
         journeyStatistics.odometer_total = odometer_total
         journeyStatistics.odometer_auto = odometer_auto
         journeyStatistics.odometer_hmi = 73  # TODO: detect from hmi
@@ -1358,6 +1357,7 @@ def merge_messages(messages: list):
     if len(messages) == 0:
         return None
     merged_message = chek.ChekMessage()
+        
     # merged user information
     merged_message.user.id = messages[0].user.id
     merged_message.user.name = messages[0].user.name
@@ -1632,7 +1632,8 @@ def merge_messages(messages: list):
     cal_city_proportion(sceneStatistics.urban)
     cal_city_proportion(sceneStatistics.day)
     cal_city_proportion(sceneStatistics.night)
-
+    
+    print('test_duration...',merged_message.journeyStatistics.duration)
     return merged_message
 
 
