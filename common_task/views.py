@@ -49,7 +49,8 @@ from .tasks import (
     background_tasks,
     ensure_db_connection_and_get_abnormal_journey,
     ensure_db_connection_and_set_merge_abnormal_journey,
-    ensure_db_connection_and_set_journey_status)
+    ensure_db_connection_and_set_journey_status,
+    clear_less_5min_journey)
 
 logger = logging.getLogger('common_task')
 
@@ -539,13 +540,20 @@ async def upload_chunk(request):
         if metadata.get('is_last_chunk') and (not metadata.get('is_less_5min')):
             # 如果最后一个分片，对journey进行
             await ensure_db_connection_and_set_journey_status(trip_id)
-
-        #创建后台任务
-        merge_task = asyncio.create_task(
-            handle_merge_task(_id,trip_id, is_last_chunk=metadata.get('is_last_chunk'))
-        )
-        background_tasks.append(merge_task)
+            #创建后台任务
+            merge_task = asyncio.create_task(
+                handle_merge_task(_id,trip_id, is_last_chunk=metadata.get('is_last_chunk'))
+            )
+            background_tasks.append(merge_task)
+            logger.info(f"创建合并任务: trip_id={trip_id}, is_last_chunk=True")
+        else:
+            logger.info(f"跳过创建合并任务: trip_id={trip_id}, is_last_chunk={metadata.get('is_last_chunk')}, is_less_5min={metadata.get('is_less_5min')}")
         
+        if metadata.get('is_last_chunk') and metadata.get('is_less_5min'):
+            # 正常退出行程确认小于5分钟则清理分片数据
+            await clear_less_5min_journey(_id, trip_id, is_last_chunk=True)
+
+
         return JsonResponse({
             'code':200,
             'success': True, 
