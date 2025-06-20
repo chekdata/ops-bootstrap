@@ -23,5 +23,7 @@ urlpatterns = [
     path('get_user_journey_data_entrance', views.get_user_journey_data_entrance),
     path('get_single_journey_data_entrance', views.get_single_journey_data_entrance),
     path('get_journey_intervention_gps_data_entrance', views.get_journey_intervention_gps_data_entrance),
+    path('get_journey_dimention_entrance', views.get_journey_dimention_entrance),
+    path('get_journey_mbti_entrance', views.get_journey_mbti_entrance),
 ]
 
