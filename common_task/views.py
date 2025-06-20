@@ -931,6 +931,7 @@ async def get_journey_data_entrance(request):
                     'journey_end_time': j.journey_end_time.isoformat() if j.journey_end_time else None,
                     'created_date':j.created_date.isoformat() if j.created_date else None,
                     'journey_status': j.journey_status,
+                    'duration':j.duration,
                     }
                     for j in journeys
                 ]
@@ -1188,6 +1189,7 @@ async def get_single_journey_data_entrance(request):
                 'journey_end_time': j.journey_end_time.isoformat() if j.journey_end_time else None,
                 'created_date':j.created_date.isoformat() if j.created_date else None,
                 'journey_status': j.journey_status,
+                'duration':j.duration,
                 }
                 for j in journeys
             ]
