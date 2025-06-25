@@ -551,7 +551,10 @@ async def upload_chunk(request):
         
         if metadata.get('is_last_chunk') and metadata.get('is_less_5min'):
             # 正常退出行程确认小于5分钟则清理分片数据
-            await clear_less_5min_journey(_id, trip_id, is_last_chunk=True)
+            trip_id_list = []
+            trip_id_list.append(trip_id)
+            # 清理小于5分钟的行程数据
+            await clear_less_5min_journey(_id, trip_id_list, is_last_chunk=True)
 
 
         return JsonResponse({
@@ -693,18 +696,21 @@ async def get_abnormal_journey(request):
         # 计算2分钟前时间点,查询2分钟前最后一次更新分片的行程
         num_minutes_ago = timezone.now() - timezone.timedelta(minutes=2)
 
-        trips = await ensure_db_connection_and_get_abnormal_journey(_id, device_id,
+        trips, total_time = await ensure_db_connection_and_get_abnormal_journey(_id, device_id,
                                                                     car_name,
                                                                     hardware_version, 
                                                                     software_version, 
                                                                     num_minutes_ago)
         logger.info(f"查询trip成功。 user_id: {_id}, 'trips': {trips}")
+        logger.info(f"查询trip成功。 user_id: {_id}, '行程更新时间总和约为': {total_time}秒.")
         return JsonResponse({
             'code':200,
             'success': True, 
             'message': f"查询trip成功, user_id: {_id}",
             'data': {
                 'trips': trips,
+                'isLess5Min': False if total_time > 300 else True,  # 如果总时间小于5分钟，则标记为True
+                'total_time': total_time  # 返回总时间
             }
         })
     
@@ -739,16 +745,30 @@ async def set_merge_abnormal_journey(request):
     try:
         
         trips = request.data.get('trips')
-
+        is_less_5min = request.data.get('isLess5Min', False)
         # await ensure_db_connection_and_set_merge_abnormal_journey(trips)
         
-        #创建后台任务
-        for trip_id in trips:
+        # #创建后台任务
+        # for trip_id in trips:
+        #     merge_task = asyncio.create_task(
+        #         handle_merge_task(_id, trip_id, is_last_chunk=True, is_timeout=True)
+        #     )
+        #     background_tasks.append(merge_task)
+        #     logger.info(f"设置trip不参与当前行程数据合并: {trip_id}")
+        
+        # #创建后台任务
+        # 拿到最新的trip_id，进行合并任务
+        trip_id = trips[-1] if isinstance(trips, list) and trips else None
+        if not trip_id:
+            return JsonResponse({'code':200,'success': False, 'message': 'trips列表为空', 'data':{}})
+        if is_less_5min: 
+            # 正常退出行程确认小于5分钟则清理分片数据
+            await clear_less_5min_journey(_id, trips, is_last_chunk=True)
+        else:
             merge_task = asyncio.create_task(
-                handle_merge_task(_id, trip_id, is_last_chunk=True, is_timeout=True)
-            )
+                    handle_merge_task(_id, trip_id, is_last_chunk=True, is_timeout=True))
             background_tasks.append(merge_task)
-            logger.info(f"设置trip不参与当前行程数据合并: {trip_id}")
+            logger.info(f"设置trips进行当前行程数据合并: {trips}")        
 
         return JsonResponse({
             'code':200,

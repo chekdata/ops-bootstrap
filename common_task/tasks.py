@@ -954,32 +954,47 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
             logger.info(f"用户ID: {user_id}, 行程ID: {main_trip.trip_id} 未完成合并，开始进行合并处理！")
             # 找到所有和trip相同的carname hardware_version software_version device_id相同的trip,确保数据不会在进程间产生竞争
             try:
-                # 正常退出
-                if not is_timeout:
-                    # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
-                    all_similar_trips = Trip.objects.filter(
-                        is_completed=False,
-                        user_id=user_id,
-                        device_id=main_trip.device_id,
-                        car_name=main_trip.car_name,
-                        hardware_version=main_trip.hardware_version,
-                        software_version=main_trip.software_version,
-                        merge_into_current=True,
-                        trip_status = main_trip.trip_status,
-                    ).order_by('-last_update')  # 降序排列，从最新到最旧
-                else:
-                    # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
-                    # 超时行程不处理merge_into_current
-                    # 超时行程(异常行程)只合并自己的行程
-                    all_similar_trips = Trip.objects.filter(
-                        trip_id=trip_id,
-                        is_completed=False,
-                        user_id=user_id,
-                        device_id=main_trip.device_id,
-                        car_name=main_trip.car_name,
-                        hardware_version=main_trip.hardware_version,
-                        software_version=main_trip.software_version,
-                    ).order_by('-last_update')  # 降序排列，从最新到最旧     
+                # # 正常退出
+                # if not is_timeout:
+                #     # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
+                #     all_similar_trips = Trip.objects.filter(
+                #         is_completed=False,
+                #         user_id=user_id,
+                #         device_id=main_trip.device_id,
+                #         car_name=main_trip.car_name,
+                #         hardware_version=main_trip.hardware_version,
+                #         software_version=main_trip.software_version,
+                #         merge_into_current=True,
+                #         trip_status = main_trip.trip_status,
+                #     ).order_by('-last_update')  # 降序排列，从最新到最旧
+                # else:
+                #     # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
+                #     # 超时行程不处理merge_into_current
+                #     # 超时行程(异常行程)只合并自己的行程
+                #     all_similar_trips = Trip.objects.filter(
+                #         trip_id=trip_id,
+                #         is_completed=False,
+                #         user_id=user_id,
+                #         device_id=main_trip.device_id,
+                #         car_name=main_trip.car_name,
+                #         hardware_version=main_trip.hardware_version,
+                #         software_version=main_trip.software_version,
+                #         merge_into_current=True,
+                #         trip_status = main_trip.trip_status,
+                #     ).order_by('-last_update')  # 降序排列，从最新到最旧     
+
+                # # 正常退出
+                # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
+                all_similar_trips = Trip.objects.filter(
+                    is_completed=False,
+                    user_id=user_id,
+                    device_id=main_trip.device_id,
+                    car_name=main_trip.car_name,
+                    hardware_version=main_trip.hardware_version,
+                    software_version=main_trip.software_version,
+                    merge_into_current=True,
+                    trip_status = main_trip.trip_status,
+                ).order_by('-last_update')  # 降序排列，从最新到最旧
 
                 # 筛选出需要合并的行程
                 trips_to_merge = []
@@ -1120,7 +1135,7 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
 
 
                         chunks = ChunkFile.objects.filter(trip=trip).order_by('chunk_index')
-
+                        trip_chunk_dir = ''
                         if chunks:
                             # 分片文件夹路径
                             trip_chunk_dir = os.path.dirname(chunks[0].file_path)
@@ -2002,9 +2017,18 @@ async def ensure_db_connection_and_get_abnormal_journey(user_id,
                                     hardware_version=hardware_version,
                                     software_version=software_version,
                                     # last_update__lt=time
-                                    ).values_list('trip_id',flat=True)
+                                    ).order_by('last_update').values_list('trip_id',flat=True)
             )
-            return trips
+            # 获取trips列表中last_update - first_update的时间差和
+            last_update = await sync_to_async(
+                lambda: sum(
+                    (trip.last_update - trip.first_update).total_seconds() 
+                    for trip in Trip.objects.filter(trip_id__in=trips)
+                )
+            )()
+            logger.info(f"获取到 {len(trips)} 个异常退出行程，时间间隔总和: {last_update} 秒")
+            total_time = last_update
+            return trips, total_time
         except Exception as e:
             logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
@@ -2315,7 +2339,7 @@ def ensure_db_connection_and_set_journey_less_than_timethre_sync(trip_id):
                 return False
 
 
-async def clear_less_5min_journey(_id, trip_id, is_last_chunk=False):
+async def clear_less_5min_journey(_id, trip_id_list, is_last_chunk=False):
     """处理行程低于5分钟正常退出行程数据"""
     try:
         if is_last_chunk:
@@ -2325,48 +2349,23 @@ async def clear_less_5min_journey(_id, trip_id, is_last_chunk=False):
                 logger.warning(f"进程池资源紧张: 活跃进程{stats['active_processes']}/{stats['max_workers']}")
                 await asyncio.sleep(0.5)
 
-            logger.info(f"开始处理行程低于5分钟正常退出行程数据, 用户ID: {_id}, 行程ID: {trip_id}")
+            logger.info(f"开始处理行程低于5分钟正常退出行程数据, 用户ID: {_id}, 行程ID: {trip_id_list}")
             with transaction.atomic():
-                
-                try:
-                    main_trip = Trip.objects.select_for_update(nowait=True).get(trip_id=trip_id)
 
-                    # 检查是否正在合并或已完成
-                    if main_trip.is_completed:
-                        logger.info(f"行程 {main_trip.trip_id} 已完成合并，跳过处理")
-                        return None, None
-                    
-                    if getattr(main_trip, 'is_merging', False):
-                        logger.info(f"行程 {main_trip.trip_id} 正在合并中，跳过处理")
-                        return None, None
-                    
-
-                except DatabaseError:
-                    logger.info(f"行程 {main_trip.trip_id} 正在被其他进程处理，跳过")
-                    return None, None
-
-                logger.info(f"用户ID: {_id}, 行程ID: {main_trip.trip_id} 不足5分钟, 开始进行清理处理！")
+                logger.info(f"用户ID: {_id}, 行程ID: {trip_id_list} 不足5分钟, 开始进行清理处理！")
                 # 找到所有和trip相同的carname hardware_version software_version device_id相同的trip,确保数据不会在进程间产生竞争
-                try:
-                    all_similar_trips = Trip.objects.filter(
-                        trip_id=trip_id,
-                        is_completed=False,
-                        user_id=_id,
-                        device_id=main_trip.device_id,
-                        car_name=main_trip.car_name,
-                        hardware_version=main_trip.hardware_version,
-                        software_version=main_trip.software_version,
-                    ).order_by('-last_update')  # 降序排列，从最新到最旧  
+                try:  # 降序排列，从最新到最旧  
 
-                    for trip in all_similar_trips:
+                    for trip in trip_id_list:
                         # 获取所有分片
-                        logger.info(f"开始清理行程 {trip.trip_id} 的分片文件")
+                        logger.info(f"开始清理行程 {trip} 的分片文件")
                         # 确保分片文件存在
                         chunks = ChunkFile.objects.filter(trip=trip).order_by('chunk_index')
+                        trip_chunk_dir = ''
                         if chunks:
                             # 分片文件夹路径
                             trip_chunk_dir = os.path.dirname(chunks[0].file_path)
-                            logger.info(f"行程 {trip.trip_id} 的分片文件夹路径: {trip_chunk_dir}")
+                            logger.info(f"行程 {trip} 的分片文件夹路径: {trip_chunk_dir}")
                         # 清理分片文件
                         for chunk in chunks:
                             try:
@@ -2380,19 +2379,39 @@ async def clear_less_5min_journey(_id, trip_id, is_last_chunk=False):
                         if os.path.exists(trip_chunk_dir):
                             try:
                                 shutil.rmtree(trip_chunk_dir)
-                                logger.info(f"清理行程 {trip.trip_id} 的分片文件夹: {trip_chunk_dir}")
+                                logger.info(f"清理行程 {trip} 的分片文件夹: {trip_chunk_dir}")
                             except Exception as e:
-                                logger.error(f"清理行程 {trip.trip_id} 的分片文件夹失败: {e}")
-                        logger.info(f"完成清理行程 {trip.trip_id} 的分片文件")
+                                logger.error(f"清理行程 {trip} 的分片文件夹失败: {e}")
+                        logger.info(f"完成清理行程 {trip} 的分片文件")
                         # 找到对应trip_id的行程数据
                         # 数据库里删除
                         try:
-                            logger.info(f"行程 {trip.trip_id} 开始删除")
-                            trip_id = trip.trip_id
-                            trip.delete()
+                            # 查找行程
+                            trip_journey = Trip.objects.filter(
+                                trip_id=trip,
+                            ).order_by('-last_update')  # 降序排列，从最新到最旧
+
+                            logger.info(f"行程 {trip} 开始删除")
+                            trip_id = trip
+                            trip_journey.delete()
                             logger.info(f"行程 {trip_id} 已成功删除")
                         except Exception as e:
-                            logger.error(f"删除行程 {trip.trip_id} 失败: {e}")
+                            logger.error(f"删除行程 {trip} 失败: {e}")
+
+                        try:
+                            # 查找行程
+                            journey = Journey.objects.using('core_user').filter(
+                                journey_id=trip)
+
+                            if not journey:
+                                logger.info(f"journey 行程 {trip} 开始删除")
+                                trip_id = trip
+                                journey.delete()
+                                logger.info(f"journey 行程 {trip_id} 已成功删除")
+                            else:
+                                logger.info(f"journey 行程 {trip} 不存在, 无需删除")
+                        except Exception as e:
+                            logger.error(f"删除journey行程 {trip} 失败: {e}")
 
                 except DatabaseError as e:
                     # 如果无法获取锁（其他进程正在处理），记录并跳过
@@ -2401,7 +2420,7 @@ async def clear_less_5min_journey(_id, trip_id, is_last_chunk=False):
                     return None, None     
                 
     except Exception as e:
-        logger.error(f"合并文件失败: {e}")
+        logger.error(f"清理文件失败: {e}")
         return None, None
 
 
