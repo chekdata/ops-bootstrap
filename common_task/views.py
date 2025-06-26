@@ -826,7 +826,7 @@ def get_journey_data(user_uuid=None, start_date=None, end_date=None, city=None, 
     query_conditions &= Q(is_less_than_5min=0)
 
     # 假设journey_status是一个包含允许状态的列表
-    query_conditions &= Q(journey_status__in=['正常', '异常退出待确认', '行程上传中'])
+    query_conditions &= Q(journey_status__in=['正常', '异常退出待确认', '行程生成中'])
     
     # 添加is_less_than_5min条件，要求等于0
     query_conditions &= Q(is_less_than_5min=0)
