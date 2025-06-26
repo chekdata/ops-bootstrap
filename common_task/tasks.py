@@ -2068,7 +2068,7 @@ async def ensure_db_connection_and_set_merge_abnormal_journey(trips):
 
 
 # 将嵌套函数移到外部作为独立函数
-async def ensure_db_connection_and_set_journey_status(trip_id, status="行程上传中"):
+async def ensure_db_connection_and_set_journey_status(trip_id, status="行程生成中"):
     """确保数据库连接并执行合并操作"""
     # 最大重试次数
     max_retries = 3
@@ -2116,7 +2116,7 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程上
                         # "异常退出待确认"行程状态更新journey_start_time，journey_end_time
                         # 确保行程筛选时正常
                         # 然后根据状态和是否新创建来更新时间字段
-                        if status == "异常退出待确认":
+                        if status == "异常退出待确认" or status == "行程生成中":
                             journey.journey_start_time = trip.first_update
                             journey.journey_end_time = trip.last_update
                         elif not created:
@@ -2130,7 +2130,17 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程上
                         journey.save(using="core_user")
                         logger.info(f"已将行程 {trip_id} 的 jouney_status 字段设置为: {status}")
                         logger.info(f"已将行程 {trip_id} 的 默认字段设置为: brand: {trip.car_name}, model: {trip.car_name}, hardware_config: {trip.hardware_version}, software_config: {trip.software_version}, user_uuid: {core_user_profile.id}")
-                        logger.info(f"已将行程 {trip_id} 的 默认字段设置为: journey_start_time: {trip.first_update if status == '异常退出待确认' else journey.journey_start_time if not created else None}, journey_end_time: {trip.last_update if status == '异常退出待确认' else journey.journey_end_time if not created else None}")
+
+                        if status == "异常退出待确认" or status == "行程生成中":
+                            log_journey_start_time = trip.first_update
+                            log_journey_end_time = trip.last_update
+                        elif not created:
+                            log_journey_start_time = journey.journey_start_time
+                            log_journey_end_time = journey.journey_end_time
+                        else:
+                            log_journey_start_time = None
+                            log_journey_end_time = None
+                        logger.info(f"已将行程 {trip_id} 的 默认字段设置为: journey_start_time: {log_journey_start_time}, journey_end_time: {log_journey_end_time}")
                     except Trip.DoesNotExist:
                         logger.error(f"行程 {trip_id} 不存在")
                     except Exception as e:
