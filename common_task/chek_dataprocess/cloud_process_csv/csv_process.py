@@ -76,6 +76,12 @@ class CSVProcess:
         self.total_message = None
         self.pre_intervention_time = None
 
+        self.average_speed_thre = 30
+        self.MBTI_i = '内敛小i人'
+        self.MBTI_e = '狂飙小e人'
+
+
+
     def get_data_list(self):
         # 文件路径构成： **/data/xx/xx.csv
         data_list = set()
@@ -302,6 +308,17 @@ class CSVProcess:
         self.add_truck_avoidance_statistics(self.journey.noa, dict_avoid,noa=True)
         self.add_truck_avoidance_statistics(self.journey.lcc, dict_avoid,lcc=True)
         self.add_truck_avoidance_statistics(self.journey.driver, dict_avoid,driving=True)
+
+        # 设置MBTI 暂时服务于小程序
+        if self.journey.driver.speed_average > self.average_speed_thre:
+            chek_message.user.MBTI = self.MBTI_e
+        else:
+            chek_message.user.MBTI = self.MBTI_i
+
+        if self.journey.auto.speed_average > self.average_speed_thre:
+            chek_message.car.MBTI = self.MBTI_e
+        else:
+            chek_message.car.MBTI = self.MBTI_i    
 
         return chek_message
 
@@ -1357,7 +1374,11 @@ def merge_messages(messages: list):
     if len(messages) == 0:
         return None
     merged_message = chek.ChekMessage()
-        
+
+    average_speed_thre = 30
+    MBTI_i = '内敛小i人'
+    MBTI_e = '狂飙小e人'
+
     # merged user information
     merged_message.user.id = messages[0].user.id
     merged_message.user.name = messages[0].user.name
@@ -1633,6 +1654,17 @@ def merge_messages(messages: list):
     cal_city_proportion(sceneStatistics.day)
     cal_city_proportion(sceneStatistics.night)
     
+    # 设置MBTI 暂时服务于小程序
+    if merged_message.journeyStatistics.driver.speed_average > average_speed_thre:
+        merged_message.user.MBTI = MBTI_e
+    else:
+        merged_message.user.MBTI = MBTI_i
+
+    if merged_message.journeyStatistics.auto.speed_average > average_speed_thre:
+        merged_message.car.MBTI = MBTI_e
+    else:
+        merged_message.car.MBTI = MBTI_i  
+
     print('test_duration...',merged_message.journeyStatistics.duration)
     return merged_message
 
