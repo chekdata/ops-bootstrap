@@ -2144,7 +2144,7 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程生
                     except Trip.DoesNotExist:
                         logger.error(f"行程 {trip_id} 不存在")
                     except Exception as e:
-                        logger.error(f"更新行程 {trip_id} jouney_status, brand, journey_start_time 失败: {e}")
+                        logger.error(f"更新行程 {trip_id} jouney_status, brand, journey_start_time 失败: {e}", exc_info=True)
             # 执行更新操作
             await update_trips()
             return True
@@ -2213,7 +2213,7 @@ def ensure_db_connection_and_set_tos_path_sync(trip_id, results):
             except Trip.DoesNotExist:
                 logger.error(f"行程 {trip_id} 不存在")
             except Exception as e:
-                logger.error(f"更新行程 {trip_id} Reported_Journey 失败: {e}")
+                logger.error(f"更新行程 {trip_id} Reported_Journey 失败: {e}", exc_info=True)
             return True
         except Exception as e:
             logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
