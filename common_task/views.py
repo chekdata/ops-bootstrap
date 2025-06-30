@@ -1334,38 +1334,43 @@ async def get_journey_dimention_entrance(request):
             journey_id = journey_id
         )
         if journeys:
+            
             security = ''
             comfortable = ''
             efficiency = ''
             for j in journeys:
-                if j.mpi_risk<0.25:
+                auto_safe_duration = j.auto_safe_duration if j.auto_safe_duration  else 0
+                if auto_safe_duration<1/3:
                     security = '驾校新生，随时准备踩刹车'
-                elif j.mpi_risk<0.5:
+                elif auto_safe_duration<1:
                     security = '副驾型智驾，变道超车得小心'
-                elif j.mpi_risk<0.75:
+                elif auto_safe_duration<2:
                     security = '老司机附体，仅极端情况接管'
                 else:
                     security = '智驾王者，甩手掌柜模式已启动'
                 
-                j.auto_dcc_average>=-4 or j.auto_acc_average<=4
-                if j.auto_dcc_average<-7:
+                # j.auto_dcc_average>=-4 or j.auto_acc_average<=4
+                auto_dcc_average = j.auto_dcc_average if j.auto_dcc_average  else 0
+                if auto_dcc_average<-7:
                     comfortable = '油门像蹦迪，刹车似急停'
-                elif j.auto_dcc_average <=-4:
+                elif auto_dcc_average<=-4:
                     comfortable = '偶尔推背感，减速先点头'
-                elif j.auto_dcc_average <=-2:
+                elif auto_dcc_average <=-2:
                     comfortable = '丝滑如德芙，加减速隐形'
                 else:
                     comfortable = '摇篮级平稳，堵车也是SPA'
                 
-                if j.auto_speed_average>=0:
+                auto_speed_average = j.auto_speed_average if j.auto_speed_average  else 0
+                if auto_speed_average>=0:
                     efficiency = '龟速占道王，变道像树懒'
-                elif j.auto_speed_average>=20:
+                elif auto_speed_average>=20:
                     efficiency = '谨慎跟车族，超车看心情'
-                elif j.auto_speed_average>=30:	
+                elif auto_speed_average>=30:	
                     efficiency = '高速猎豹，卡位精准'
                     
-                elif j.auto_speed_average>=50:	
+                elif auto_speed_average>=50:	
                     efficiency = '狂暴模式，见缝插针	'														
+																			
 															
     
             return JsonResponse({
