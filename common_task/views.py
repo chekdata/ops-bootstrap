@@ -1279,22 +1279,38 @@ async def get_journey_mbti_entrance(request):
             journey_id = journey_id
         )
         if journeys:
-            MBTI_text = '内敛小i人'
+            car_MBTI_text = '内敛小i人'
+            human_MBTI_text = '内敛小i人'
             for j in journeys:
-                if j.auto_speed_average>30 and (j.auto_dcc_average<-4 or j.auto_acc_average>4):
-                    MBTI_text = '狂飙小e人'
-                elif  j.auto_speed_average<=30 and (j.auto_dcc_average<-4 or j.auto_acc_average>4):
-                    MBTI_text = '苦苦装e小i人'
-                elif j.auto_speed_average>30 and (j.auto_dcc_average>=-4 or j.auto_acc_average<=4):
-                    MBTI_text = '快乐小e人'
-                elif j.auto_speed_average<=30 and (j.auto_dcc_average>=-4 or j.auto_acc_average<=4):
-                    MBTI_text = '内敛小i人'
-            if MBTI_text:
+                auto_speed_average = j.auto_speed_average if j.auto_speed_average else 0
+                auto_acc_average = j.auto_acc_average if j.auto_acc_average else 0
+                auto_dcc_average = j.auto_dcc_average if j.auto_dcc_average else 0
+                if auto_speed_average>30 and (auto_dcc_average<-4 or auto_acc_average>4):
+                    car_MBTI_text = '狂飙小e人'
+                elif  auto_speed_average<=30 and (auto_dcc_average<-4 or auto_acc_average>4):
+                    car_MBTI_text = '苦苦装e小i人'
+                elif auto_speed_average>30 and (auto_dcc_average>=-4 or auto_acc_average<=4):
+                    car_MBTI_text = '快乐小e人'
+                elif auto_speed_average<=30 and (auto_dcc_average>=-4 or auto_acc_average<=4):
+                    car_MBTI_text = '内敛小i人'
+
+                driver_speed_average =j.driver_speed_average if j.driver_speed_average else 0
+                driver_acc_average = j.driver_acc_average if j.driver_acc_average else 0
+                driver_dcc_average = j.driver_dcc_average if j.driver_dcc_average else 0
+                if driver_speed_average>30 and (driver_acc_average<-4 or driver_acc_average>4):
+                    human_MBTI_text = '狂飙小e人'
+                elif  driver_speed_average<=30 and (driver_acc_average<-4 or driver_acc_average>4):
+                    human_MBTI_text = '苦苦装e小i人'
+                elif driver_speed_average>30 and (driver_acc_average>=-4 or driver_acc_average<=4):
+                    human_MBTI_text = '快乐小e人'
+                elif driver_speed_average<=30 and (driver_acc_average>=-4 or driver_acc_average<=4):
+                    human_MBTI_text = '内敛小i人'
+            if car_MBTI_text or human_MBTI_text:
                 return JsonResponse({
                     'code':200,
                     'success': True, 
                     'message': f"查询成功",
-                    'data': {'MBTI_test':MBTI_text
+                    'data': {'car_MBTI':car_MBTI_text,'human_MBTI':human_MBTI_text,'match_situation':'慢热的你遇上暴躁的性能猛兽'
                     }
                 })
         else:
