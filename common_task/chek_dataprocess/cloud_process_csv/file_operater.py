@@ -4,7 +4,7 @@ import glob
 from pathlib import Path
 from pathlib import PurePath
 from .tinder_os import TinderOS
-
+# from tinder_os import TinderOS
 print(sys.path)
 # 获取当前脚本所在的目录
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -127,3 +127,4 @@ def remove_file(file_path):
     if Path(file_path).exists():
         os.remove(str(file_path))
         print(f'remove file: {file_path}')
+        

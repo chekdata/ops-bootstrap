@@ -418,7 +418,8 @@ class DataProcessor:
 
     def save(self, output_csv_file: str):
         print(f'Save to {output_csv_file}')
-        self.df.to_csv(output_csv_file, index=False)
+        # self.df.to_csv(output_csv_file, index=False)
+        return  self.df
 
     def recover(self, pro_csv_file: str = None):
         if pro_csv_file:

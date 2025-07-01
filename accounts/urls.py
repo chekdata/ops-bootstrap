@@ -25,5 +25,6 @@ urlpatterns = [
     path('check_sms_process_login',views.check_sms_process_login),
     path('bound_wechat_id',views.bound_wechat_id),
     path('unbound_wechat_id',views.unbound_wechat_id),
+    path('get_tos_right',views.get_tos_right),
     
 ]

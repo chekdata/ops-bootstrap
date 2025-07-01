@@ -108,7 +108,40 @@ class ChekMessageParser:
                 item['gps_datetime'] = _.gps_position.datetime
                 item['is_risk'] = _.is_risk
                 list_intervention_gps.append(item)
-        print('test_duration',self.chek_message.journeyStatistics.duration)
+        
+        #暂时加在结果后续积攒加在算法里
+        auto_safe_duration = None
+        if self.chek_message.journeyStatistics and self.chek_message.journeyStatistics.auto:
+            if self.chek_message.journeyStatistics.auto.duration :
+                if self.chek_message.journeyStatistics and self.chek_message.journeyStatistics.auto and self.chek_message.journeyStatistics.auto.intervention_statistics:
+                    if self.chek_message.journeyStatistics.auto.intervention_statistics.risk_cnt>0:
+                        auto_safe_duration = self.chek_message.journeyStatistics.auto.duration/self.chek_message.journeyStatistics.auto.intervention_statistics.risk_cnt
+                    else:
+                        auto_safe_duration = self.chek_message.journeyStatistics.auto.duration
+                else:
+                    auto_safe_duration = self.chek_message.journeyStatistics.auto.duration
+        
+        noa_safe_duration = None
+        if self.chek_message.journeyStatistics and self.chek_message.journeyStatistics.noa:
+            if self.chek_message.journeyStatistics.noa.duration :
+                if self.chek_message.journeyStatistics and self.chek_message.journeyStatistics.noa and self.chek_message.journeyStatistics.noa.intervention_statistics:
+                    if self.chek_message.journeyStatistics.noa.intervention_statistics.risk_cnt>0:
+                        noa_safe_duration = self.chek_message.journeyStatistics.noa.duration/self.chek_message.journeyStatistics.noa.intervention_statistics.risk_cnt
+                    else:
+                        noa_safe_duration = self.chek_message.journeyStatistics.noa.duration
+                else:
+                    noa_safe_duration = self.chek_message.journeyStatistics.noa.duration
+
+        lcc_safe_duration = None
+        if self.chek_message.journeyStatistics and self.chek_message.journeyStatistics.lcc:
+            if self.chek_message.journeyStatistics.lcc.duration :
+                if self.chek_message.journeyStatistics and self.chek_message.journeyStatistics.lcc and self.chek_message.journeyStatistics.lcc.intervention_statistics:
+                    if self.chek_message.journeyStatistics.lcc.intervention_statistics.risk_cnt>0:
+                        lcc_safe_duration = self.chek_message.journeyStatistics.lcc.duration/self.chek_message.journeyStatistics.lcc.intervention_statistics.risk_cnt
+                    else:
+                        lcc_safe_duration = self.chek_message.journeyStatistics.lcc.duration
+                else:
+                    lcc_safe_duration = self.chek_message.journeyStatistics.lcc.duration
         data = {
                 "auto_mileages": float(self.chek_message.journeyStatistics.odometer_auto) if self.chek_message.journeyStatistics else 0.0,
                 "total_mileages": float(self.chek_message.journeyStatistics.odometer_total) if self.chek_message.journeyStatistics else 0.0,
@@ -158,8 +191,12 @@ class ChekMessageParser:
                 "driver_dcc_cnt": int(self.chek_message.journeyStatistics.driver.dcc_cnt) if self.chek_message.journeyStatistics and self.chek_message.journeyStatistics.driver else 0,
                 "driver_acc_cnt": int(self.chek_message.journeyStatistics.driver.acc_cnt) if self.chek_message.journeyStatistics and self.chek_message.journeyStatistics.driver else 0,
                 'intervention_gps':list_intervention_gps,
-                'duration':float(  self.chek_message.journeyStatistics.duration if self.chek_message.journeyStatistics  else 0)
-
+                'duration':float(  self.chek_message.journeyStatistics.duration if self.chek_message.journeyStatistics  else 0),
+                "driver_acc_average": float(self.chek_message.journeyStatistics.driver.acc_average) if self.chek_message.journeyStatistics and self.chek_message.journeyStatistics.driver else 0.0,
+                "driver_dcc_average": float(self.chek_message.journeyStatistics.driver.dcc_average) if self.chek_message.journeyStatistics and self.chek_message.journeyStatistics.driver else 0.0,
+                "auto_safe_duration":auto_safe_duration,
+                'lcc_safe_duration':lcc_safe_duration,
+                'noa_safe_duration':noa_safe_duration,
         }
         return data
     

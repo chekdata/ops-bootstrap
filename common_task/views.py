@@ -38,6 +38,8 @@ from .models import Trip, ChunkFile, Journey
 from django.db.models import Q
 #from .chek_dataprocess.cloud_process_csv.wechat_csv_process import process_csv
 # from .chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
+from tmp_tools.monitor import *
+
 from .tasks import (
     upload_chunk_file, 
     check_chunks_complete, 
@@ -179,6 +181,7 @@ async def prepare_upload_file_path(_id,status_tag,file_name):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def process_after_inference_data(request):
     user = request.user  # 获取当前登录用户
     _id = user.id
@@ -252,6 +255,7 @@ async def process_after_inference_data(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def process_after_analysis_data_csv(request):
     user = request.user  # 获取当前登录用户
     _id = user.id
@@ -317,6 +321,7 @@ async def process_after_analysis_data_csv(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def process_after_analysis_data(request):
     user = request.user
     # profile =  await sync_to_async(User.objects.get, thread_sensitive=True)(id=user.id)
@@ -390,6 +395,7 @@ async def process_after_analysis_data(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def process_inference_detial_det_data(request):
     user = request.user  # 获取当前登录用户
     _id = user.id
@@ -455,6 +461,7 @@ async def process_inference_detial_det_data(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def process_tos_play_link(request):
     try:
         tos_link = request.data.get('tos_link')
@@ -489,6 +496,7 @@ async def process_tos_play_link(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def upload_chunk(request):
     """上传分片文件"""
     user = request.user  # 获取当前登录用户
@@ -679,6 +687,7 @@ async def setStartMerge(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def get_abnormal_journey(request):
     """获取异常退出行程数据"""
     user = request.user  # 获取当前登录用户
@@ -845,6 +854,7 @@ def get_journey_data(user_uuid=None, start_date=None, end_date=None, city=None, 
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def get_journey_data_entrance(request):
     """设置合并异常行程数据"""
     user = request.user  # 获取当前登录用户
@@ -932,6 +942,11 @@ async def get_journey_data_entrance(request):
                     'created_date':j.created_date.isoformat() if j.created_date else None,
                     'journey_status': j.journey_status,
                     'duration':j.duration,
+                    'driver_dcc_average':j.driver_dcc_average,
+                    'driver_acc_average':j.driver_acc_average,
+                    'auto_safe_duration':j.auto_safe_duration,
+                    'noa_safe_duration':j.noa_safe_duration,
+                    'lcc_safe_duration':j.lcc_safe_duration,
                     }
                     for j in journeys
                 ]
@@ -1007,6 +1022,7 @@ def query_journey_intervention_gps_data(journey_id_list):
 @api_view(['POST'])
 @authentication_classes([])  # 清空认证类
 @permission_classes([AllowAny])  # 允许任何人访问
+@monitor
 async def get_journey_gps_data_entrance(request):
     try:
         user = request.user  # 获取当前登录用户
@@ -1048,6 +1064,7 @@ async def get_journey_gps_data_entrance(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def get_user_journey_data_entrance(request):
     user = request.user  # 获取当前登录用户
     _id = user.id
@@ -1113,6 +1130,7 @@ async def get_user_journey_data_entrance(request):
 @api_view(['POST'])
 @authentication_classes([])  # 清空认证类
 @permission_classes([AllowAny])  # 允许任何人访问
+@monitor
 async def get_single_journey_data_entrance(request):
     """设置合并异常行程数据"""
     user = request.user  # 获取当前登录用户
@@ -1190,6 +1208,11 @@ async def get_single_journey_data_entrance(request):
                 'created_date':j.created_date.isoformat() if j.created_date else None,
                 'journey_status': j.journey_status,
                 'duration':j.duration,
+                'driver_dcc_average':j.driver_dcc_average,
+                'driver_acc_average':j.driver_acc_average,
+                'auto_safe_duration':j.auto_safe_duration,
+                'noa_safe_duration':j.noa_safe_duration,
+                'lcc_safe_duration':j.lcc_safe_duration,
                 }
                 for j in journeys
             ]
@@ -1227,6 +1250,7 @@ async def get_single_journey_data_entrance(request):
 @api_view(['POST'])
 @authentication_classes([])  # 清空认证类
 @permission_classes([AllowAny])  # 允许任何人访问
+@monitor
 async def get_journey_intervention_gps_data_entrance(request):
     try:
         # user = request.user  # 获取当前登录用户
@@ -1271,6 +1295,7 @@ async def get_journey_intervention_gps_data_entrance(request):
 @api_view(['POST'])
 @authentication_classes([])  # 清空认证类
 @permission_classes([AllowAny])  # 允许任何人访问
+@monitor
 async def get_journey_mbti_entrance(request):
     journey_id =  request.data.get('journey_id')
     try:
@@ -1279,22 +1304,38 @@ async def get_journey_mbti_entrance(request):
             journey_id = journey_id
         )
         if journeys:
-            MBTI_text = '内敛小i人'
+            car_MBTI_text = '内敛小i人'
+            human_MBTI_text = '内敛小i人'
             for j in journeys:
-                if j.auto_speed_average>30 and (j.auto_dcc_average<-4 or j.auto_acc_average>4):
-                    MBTI_text = '狂飙小e人'
-                elif  j.auto_speed_average<=30 and (j.auto_dcc_average<-4 or j.auto_acc_average>4):
-                    MBTI_text = '苦苦装e小i人'
-                elif j.auto_speed_average>30 and (j.auto_dcc_average>=-4 or j.auto_acc_average<=4):
-                    MBTI_text = '快乐小e人'
-                elif j.auto_speed_average<=30 and (j.auto_dcc_average>=-4 or j.auto_acc_average<=4):
-                    MBTI_text = '内敛小i人'
-            if MBTI_text:
+                auto_speed_average = j.auto_speed_average if j.auto_speed_average else 0
+                auto_acc_average = j.auto_acc_average if j.auto_acc_average else 0
+                auto_dcc_average = j.auto_dcc_average if j.auto_dcc_average else 0
+                if auto_speed_average>30 and (auto_dcc_average<-4 or auto_acc_average>4):
+                    car_MBTI_text = '狂飙小e人'
+                elif  auto_speed_average<=30 and (auto_dcc_average<-4 or auto_acc_average>4):
+                    car_MBTI_text = '苦苦装e小i人'
+                elif auto_speed_average>30 and (auto_dcc_average>=-4 or auto_acc_average<=4):
+                    car_MBTI_text = '快乐小e人'
+                elif auto_speed_average<=30 and (auto_dcc_average>=-4 or auto_acc_average<=4):
+                    car_MBTI_text = '内敛小i人'
+
+                driver_speed_average =j.driver_speed_average if j.driver_speed_average else 0
+                driver_acc_average = j.driver_acc_average if j.driver_acc_average else 0
+                driver_dcc_average = j.driver_dcc_average if j.driver_dcc_average else 0
+                if driver_speed_average>30 and (driver_acc_average<-4 or driver_acc_average>4):
+                    human_MBTI_text = '狂飙小e人'
+                elif  driver_speed_average<=30 and (driver_acc_average<-4 or driver_acc_average>4):
+                    human_MBTI_text = '苦苦装e小i人'
+                elif driver_speed_average>30 and (driver_acc_average>=-4 or driver_acc_average<=4):
+                    human_MBTI_text = '快乐小e人'
+                elif driver_speed_average<=30 and (driver_acc_average>=-4 or driver_acc_average<=4):
+                    human_MBTI_text = '内敛小i人'
+            if car_MBTI_text or human_MBTI_text:
                 return JsonResponse({
                     'code':200,
                     'success': True, 
                     'message': f"查询成功",
-                    'data': {'MBTI_test':MBTI_text
+                    'data': {'car_MBTI':car_MBTI_text,'human_MBTI':human_MBTI_text,'match_situation':'慢热的你遇上暴躁的性能猛兽'
                     }
                 })
         else:
@@ -1326,6 +1367,7 @@ async def get_journey_mbti_entrance(request):
 @api_view(['POST'])
 @authentication_classes([])  # 清空认证类
 @permission_classes([AllowAny])  # 允许任何人访问
+@monitor
 async def get_journey_dimention_entrance(request):
     journey_id =  request.data.get('journey_id')
     try:
@@ -1338,33 +1380,36 @@ async def get_journey_dimention_entrance(request):
             comfortable = ''
             efficiency = ''
             for j in journeys:
-                if j.mpi_risk<0.25:
+                auto_safe_duration = j.auto_safe_duration if j.auto_safe_duration  else 0
+                if auto_safe_duration<1/3:
                     security = '驾校新生，随时准备踩刹车'
-                elif j.mpi_risk<0.5:
+                elif auto_safe_duration<1:
                     security = '副驾型智驾，变道超车得小心'
-                elif j.mpi_risk<0.75:
+                elif auto_safe_duration<2:
                     security = '老司机附体，仅极端情况接管'
                 else:
                     security = '智驾王者，甩手掌柜模式已启动'
                 
-                j.auto_dcc_average>=-4 or j.auto_acc_average<=4
-                if j.auto_dcc_average<-7:
+                # j.auto_dcc_average>=-4 or j.auto_acc_average<=4
+                auto_dcc_average = j.auto_dcc_average if j.auto_dcc_average  else 0
+                if auto_dcc_average<-7:
                     comfortable = '油门像蹦迪，刹车似急停'
-                elif j.auto_dcc_average <=-4:
+                elif auto_dcc_average<=-4:
                     comfortable = '偶尔推背感，减速先点头'
-                elif j.auto_dcc_average <=-2:
+                elif auto_dcc_average <=-2:
                     comfortable = '丝滑如德芙，加减速隐形'
                 else:
                     comfortable = '摇篮级平稳，堵车也是SPA'
                 
-                if j.auto_speed_average>=0:
+                auto_speed_average = j.auto_speed_average if j.auto_speed_average  else 0
+                if auto_speed_average>=0:
                     efficiency = '龟速占道王，变道像树懒'
-                elif j.auto_speed_average>=20:
+                elif auto_speed_average>=20:
                     efficiency = '谨慎跟车族，超车看心情'
-                elif j.auto_speed_average>=30:	
+                elif auto_speed_average>=30:	
                     efficiency = '高速猎豹，卡位精准'
                     
-                elif j.auto_speed_average>=50:	
+                elif auto_speed_average>=50:	
                     efficiency = '狂暴模式，见缝插针	'														
 															
     
