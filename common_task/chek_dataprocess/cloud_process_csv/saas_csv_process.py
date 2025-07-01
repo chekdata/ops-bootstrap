@@ -296,7 +296,7 @@ if __name__ == "__main__":
     data_processor = DataProcessor_sync()
     pro_csv_list = []
     pro_dataframe_list = []
-    file_data =   "./智己L6_Max 标准版_IMOS 2.6.5_spcialPoint_2025-06-29 15-11-34.csv"
+    file_data =   "./阿维塔12_2023款 650 三激光四驱性能版_AVATR.OS 4.0.0_2025-07-01 16-00-59.csv"
     data_processor.recover(str(file_data))
     data_processor.process()
     df = data_processor.save(file_data)
