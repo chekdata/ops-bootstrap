@@ -78,14 +78,10 @@ class CSVProcess:
         self.total_message = None
         self.pre_intervention_time = None
 
-<<<<<<< Updated upstream
         self.average_speed_thre = 30
         self.MBTI_i = '内敛小i人'
         self.MBTI_e = '狂飙小e人'
 
-=======
-      
->>>>>>> Stashed changes
 
 
     def get_data_list(self):
