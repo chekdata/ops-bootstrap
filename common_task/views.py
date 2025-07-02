@@ -1397,6 +1397,7 @@ async def get_journey_dimention_entrance(request):
             journey_id = journey_id
         )
         if journeys:
+            
             security = ''
             comfortable = ''
             efficiency = ''
@@ -1432,6 +1433,7 @@ async def get_journey_dimention_entrance(request):
                     
                 elif auto_speed_average>=50:	
                     efficiency = '狂暴模式，见缝插针	'														
+																			
 															
     
             return JsonResponse({
