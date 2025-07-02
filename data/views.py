@@ -28,6 +28,9 @@ from django.db.models import Q
 import os
 from django.core.files.storage import FileSystemStorage
 import datetime
+from tmp_tools.monitor import *
+from collections import defaultdict
+from django.core.cache import cache
 # class DataListCreateView(generics.ListCreateAPIView):
 #     queryset = Data.objects.all()
 #     serializer_class = DataSerializer
@@ -66,6 +69,7 @@ class DataDetailView(generics.RetrieveUpdateDestroyAPIView):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def search_model_hardware(request):
 
     try:
@@ -106,55 +110,119 @@ async def search_model_hardware(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def search_model_fuzzy(request):
     try:
-        # model = request.POST.get( 'model')
         model = request.data.get('model')
+        cache_key = f"model_search:{model or 'all'}"
+
+        # 优先查缓存
+        cached = cache.get(cache_key)
+        if cached:
+            return Response({'code': 200, 'message': '成功', 'data': cached})
 
         pre_model = None
+        #key 20250624暂停用
         pre_model =  model_config.objects.filter(model=model)
 
         if  model and pre_model:
-            return Response({'code': 200, 'message': '成功', 'data': handle_model_search(pre_model)})
+            data = handle_model_search(pre_model)
+            cache.set(cache_key, data, timeout=300)
+            return Response({'code': 200, 'message': '成功', 'data':data })
 
         elif model:
             words = list(jieba.cut(model))
-            pattern = '|'.join(map(re.escape, words))
-            pre_model =  model_config.objects.filter(model__iregex=pattern)[:20]
+            # pattern = '|'.join(map(re.escape, words))
+            # pre_model =  model_config.objects.filter(model__iregex=pattern)[:20]
+
+            query = Q()
+            for word in words:
+                query |= Q(model__icontains=word)
+            pre_model = model_config.objects.filter(query).distinct()[:10]
         else:
             pre_model =   model_config.objects.all()[:20]
 
         if  pre_model:
+            data = handle_model_search(pre_model)
+            cache.set(cache_key, data, timeout=300)
             return   Response({'code': 200, 'message': '成功', 'data': handle_model_search(pre_model)})
         else:
             return Response({'code': 500, 'message': '这款车型可能还没适配', 'data': []})
+        # if not model:
+        #     pre_model = model_config.objects.all()[:20]
+        # else:
+        #     exact_match = model_config.objects.filter(model=model)
+        #     if exact_match.exists():
+        #         result = handle_model_search(exact_match)
+        #         return Response({'code': 200, 'message': '成功', 'data': result})
+
+        #     # # 使用 FULLTEXT 查询
+        #     # pre_model = model_config.objects.extra(
+        #     #     where=["MATCH(model) AGAINST (%s IN NATURAL LANGUAGE MODE)"],
+        #     #     params=[model]
+        #     # )[:20]
+        #     # words = list(jieba.cut(model))
+        #     # query = Q()
+        #     # for word in words:
+        #     #     query |= Q(model__icontains=word)
+        #     words = list(jieba.cut(model))
+        #     pattern = '|'.join(map(re.escape, words))
+        #     pre_model =  model_config.objects.filter(model__iregex=pattern)[:20]
+        #     # pre_model = model_config.objects.filter(query).distinct()[:20]
+
+        # result = handle_model_search(pre_model)
+        # if  pre_model:
+        #     return   Response({'code': 200, 'message': '成功', 'data': handle_model_search(pre_model)})
+        # else:
+        #     return Response({'code': 500, 'message': '这款车型可能还没适配', 'data': []})
+        
     except Exception as e:
         print(e)
         return Response({'code': 500, 'message': '内部服务报错', 'data': []})
 
+#key 2025 0624停用
+# def handle_model_search(data):
+#     list_res = []
+#     middle_dict = {}
+#     for _ in data:
+#         model = _.model
+#         hardware_config_version = _.hardware_config_version
+#         if model not in middle_dict.keys():
+#             middle_dict[model] = []
+#             if hardware_config_version:
+#                 middle_dict[model].append(hardware_config_version)
 
+#         else:
+#             if hardware_config_version:
+#                 middle_dict[model].append(hardware_config_version)
+
+#     for k,v in middle_dict.items():
+#         item = {}
+#         item['model'] = k
+#         item['hardware_config_version'] = v
+#         if item['hardware_config_version']:
+#             item['hardware_config_version'].sort(reverse=False)
+#         list_res.append(item)
+#     return list_res
+
+#key 20250624
 def handle_model_search(data):
+    middle_dict = defaultdict(list)
+
+    for item in data:
+        model = item.model
+        hw_version = item.hardware_config_version
+        if hw_version:
+            middle_dict[model].append(hw_version)
+
     list_res = []
-    middle_dict = {}
-    for _ in data:
-        model = _.model
-        hardware_config_version = _.hardware_config_version
-        if model not in middle_dict.keys():
-            middle_dict[model] = []
-            if hardware_config_version:
-                middle_dict[model].append(hardware_config_version)
+    for model, versions in middle_dict.items():
+        versions = sorted(set(versions))  # 去重并排序
+        list_res.append({
+            'model': model,
+            'hardware_config_version': versions
+        })
 
-        else:
-            if hardware_config_version:
-                middle_dict[model].append(hardware_config_version)
-
-    for k,v in middle_dict.items():
-        item = {}
-        item['model'] = k
-        item['hardware_config_version'] = v
-        if item['hardware_config_version']:
-            item['hardware_config_version'].sort(reverse=False)
-        list_res.append(item)
     return list_res
 
 def handle_hardware_search(data):
@@ -195,6 +263,7 @@ def handle_hardware_search(data):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def judge_high_way_process(request):
     # try:
     #     lon = request.data.get('lon')
@@ -246,6 +315,7 @@ async def judge_high_way_process(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def update_model_config_app(request):
     try:
         user = request.user
@@ -290,6 +360,7 @@ async def update_model_config_app(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def search_model_tos(request):
     try:
         user = request.user
@@ -446,6 +517,7 @@ def model_search_pipline(model,hardware_config_version,software_config_version):
 @api_view(['POST'])
 @authentication_classes([])  # 清空认证类
 @permission_classes([AllowAny])  # 允许任何人访问
+@monitor
 async def update_model_tos(request):
     try:
         desc = request.data.get('desc')
@@ -602,6 +674,7 @@ def calculate_md5_value(file_path):
 @api_view(['POST'])
 @authentication_classes([])  # 清空认证类
 @permission_classes([AllowAny])  # 允许任何人访问
+@monitor
 async def search_model_info(request):
     try:
         # model = request.POST.get( 'model')
@@ -745,6 +818,7 @@ def update_model_info_by_match_model(brand,model_config_data):
 @api_view(['POST'])
 @authentication_classes([])  # 清空认证类
 @permission_classes([AllowAny])  # 允许任何人访问
+@monitor
 async def update_version_vault(request):
     try:
         package_name = request.data.get('package_name')
@@ -840,6 +914,7 @@ async def update_version_vault(request):
 @api_view(['POST'])
 @authentication_classes([])  # 清空认证类
 @permission_classes([AllowAny])  # 允许任何人访问
+@monitor
 async def judge_version_vault(request):
     try:
         version_profile = await sync_to_async(
@@ -856,7 +931,8 @@ async def judge_version_vault(request):
             forced_update = version_profile.forced_update 
             update_info = version_profile.update_info if version_profile.update_info else None
             return Response({'code': 200, 'message': '成功', 'data': {'package_name':package_name,'version_name':version_name,'chanel':chanel,'version_code':version_code,  'md5_value':md5_value,'link':link,'forced_update':forced_update,'update_info':update_info}})
-
+        else:
+            return Response({'code': 200, 'message': '成功', 'data': {}})
         
     except Exception as e:
     #     print(e)

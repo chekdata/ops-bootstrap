@@ -24,6 +24,8 @@ sys.path.append(parent_dir)
 
 from .file_operater import save_to_json, get_all_specify_filename_files,  create_folders_from_filename
 
+# from file_operater import save_to_json, get_all_specify_filename_files,  create_folders_from_filename
+
 from proto_v1_2 import chek_message_pb2 as chek
 from proto_v1_2 import chek_message_pb2_grpc as chek_grpc
 # from chek_gps2city import regeocode
@@ -85,12 +87,14 @@ class CSVProcess:
     def get_data_list(self):
         # 文件路径构成： **/data/xx/xx.csv
         data_list = set()
-        for filename in self.csv_files:
-            file_path_parts = filename.split('/')
-            end_path = file_path_parts[-3]
-            data_list.add(end_path)
-        file_path_parts = self.csv_files[0].split('/')
-        root_path = '/'.join(file_path_parts[:-4])
+        root_path = ''
+        #暂停使用
+        # for filename in self.csv_files:
+        #     file_path_parts = filename.split('/')
+        #     end_path = file_path_parts[-3]
+        #     data_list.add(end_path)
+        # file_path_parts = self.csv_files[0].split('/')
+        # root_path = '/'.join(file_path_parts[:-4])
         return data_list, root_path
 
 
@@ -118,7 +122,12 @@ class CSVProcess:
             #df = util.post_process_csv(csv_file)
             test = 0
         else:
-            self.df = pd.read_csv(csv_file)
+            # self.df = pd.read_csv(csv_file)
+            self.df = csv_file
+            #嵌套for循环提取
+            self.states = self.df['state'].values
+            self.times = self.df['time'].values
+            self.accs = self.df['acc'].values
 
         chek_message = chek.ChekMessage()
 
@@ -799,7 +808,10 @@ class CSVProcess:
             # Intervention
             rows = self.df.shape[0]
             
-            near_max_dcc = self.df['acc'][max(0, rows_id-3):rows_id+3].min()
+            # near_max_dcc = self.df['acc'][max(0, rows_id-3):rows_id+3].min()
+            near_window_start = max(0, rows_id - 3)
+            near_window_end = min(len(self.accs), rows_id + 3)
+            near_max_dcc = self.accs[near_window_start:near_window_end].min()
             if pre_state == 'noa' or pre_state == 'lcc':
                 # print(f'intervention at {i}')
 
@@ -818,30 +830,59 @@ class CSVProcess:
                 # 
                 time_thre_before = 5
                 time_thre_after = 5 #0.5
-                if rows_id == 5081:
-                    k = 100
-                frames_time = self.df.iloc[rows_id]['time']
+                # if rows_id == 5081:
+                #     k = 100
+
+                # frames_time = self.df.iloc[rows_id]['time']
+
+                frames_time = self.times[rows_id]
                 # NOTE: frams_time_next 赋初值
                 frams_time_next = frames_time
-                for i in range(rows_id, len(self.df)):
-                    if self.df.iloc[i]['state'] != 'noa' and self.df.iloc[i]['state'] != 'lcc':
-                        frams_time_next = self.df.iloc[i]['time']
+                #20250623暂停使用
+                # for i in range(rows_id, len(self.df)):
+                #     if self.df.iloc[i]['state'] != 'noa' and self.df.iloc[i]['state'] != 'lcc':
+                #         frams_time_next = self.df.iloc[i]['time']
+                #         if frams_time_next - frames_time > time_thre_after:
+                #             break
+                #     else:
+                #         break
+     
+
+                #key
+                for i in range(rows_id, len(self.states)):
+                    s = self.states[i]
+                    if s not in ('noa', 'lcc'):
+                        frams_time_next = self.times[i]
                         if frams_time_next - frames_time > time_thre_after:
                             break
                     else:
                         break
-                
+                    
                 # 计算当前帧time_thre之前的连续状态为智驾
                 #start_frame_id = min(max(0,(rows_id - fps * time_thre)), len(df) - 1)
+                
                 start_frame_id = min(max(0,(rows_id - 1)), len(self.df) - 1)
                 # NOTE： frames_time_before 赋初值
-                frames_time_before = self.df.iloc[start_frame_id]['time']
-                for i in range(start_frame_id, -1, -1):
-                    if start_frame_id == 11063:
-                        a = 100
-                    #if df.iloc[i]['state'] == pre_state:
-                    if self.df.iloc[i]['state'] == 'noa' or self.df.iloc[i]['state'] == 'lcc':
-                        frames_time_before = self.df.iloc[i]['time']
+                # frames_time_before = self.df.iloc[start_frame_id]['time']
+                # for i in range(start_frame_id, -1, -1):
+                #     # if start_frame_id == 11063:
+                #     #     a = 100
+                #     #if df.iloc[i]['state'] == pre_state:
+                #     if self.df.iloc[i]['state'] == 'noa' or self.df.iloc[i]['state'] == 'lcc':
+                #         frames_time_before = self.df.iloc[i]['time']
+                #         if frames_time - frames_time_before > time_thre_before:
+                #             break
+                #     else:
+                #         break
+
+                #           start_idx = max(0, rows_id - 1)
+
+                start_idx = max(0, rows_id - 1)
+                frames_time_before = self.times[start_idx]
+                for i in range(start_idx, -1, -1):
+                    s = self.states[i]
+                    if s in ('noa', 'lcc'):
+                        frames_time_before = self.times[i]
                         if frames_time - frames_time_before > time_thre_before:
                             break
                     else:
@@ -1016,8 +1057,8 @@ class CSVProcess:
         frame_intervention_risk_file = {}
 
         for file_name in self.csv_files:
-            file_name = str(file_name)
-            print("processed csv is: " + file_name)
+            # file_name = str(file_name)
+            # print("processed csv is: " + file_name)
             chek_message = self.extract_chek_message(file_name)
 
             # Set user information
@@ -1041,27 +1082,31 @@ class CSVProcess:
             chek_message.description.pdf_file_path        = self.description_pdf_file_path
 
             # path = create_folders_from_filename(self.json_root_path, file_name, self.json_name, start_index = 8)
-            file_path_parts = file_name.split('/')
-            end_path = file_path_parts[-1]
-            end_path = re.sub(r'\.pro\.csv', '.json', end_path)
-            file_path_parts[-1] = end_path
-            json_file = '/'.join(file_path_parts)
-            save_to_json(chek_message, json_file)
-            json_file_list.append(json_file)
+            #暂停使用
+            # file_path_parts = file_name.split('/')
+            # end_path = file_path_parts[-1]
+            # end_path = re.sub(r'\.pro\.csv', '.json', end_path)
+            # file_path_parts[-1] = end_path
+            # json_file = '/'.join(file_path_parts)
+            
+            # save_to_json(chek_message, json_file)
+            # json_file_list.append(json_file)
             message.append(chek_message)
 
             # 统计接管每一个文件帧
-            new_file = file_name #"/".join(file_name.split('/')[1:])
-            file_path_parts = new_file.split('/')
-            fileName = file_path_parts[-1]
-            new_file_name = re.sub(r'\.pro(?=\.csv)','',fileName)
-            file_path_parts[-1] = new_file_name
-            new_file = '/'.join(file_path_parts)
-            if len(self.gps_status_lcc_noa['intervention']) > 0:
-                frame_intervention_file[new_file] = copy.deepcopy(self.gps_status_lcc_noa['intervention'])
+            #暂停使用
+            # new_file = file_name #"/".join(file_name.split('/')[1:])
+            # file_path_parts = new_file.split('/')
+            # fileName = file_path_parts[-1]
+            # new_file_name = re.sub(r'\.pro(?=\.csv)','',fileName)
+            # file_path_parts[-1] = new_file_name
+            # new_file = '/'.join(file_path_parts)
+
+            # if len(self.gps_status_lcc_noa['intervention']) > 0:
+            #     frame_intervention_file[new_file] = copy.deepcopy(self.gps_status_lcc_noa['intervention'])
             
-            if len(self.gps_status_lcc_noa['intervention_risk']) > 0: 
-                frame_intervention_risk_file[new_file] = copy.deepcopy(self.gps_status_lcc_noa['intervention_risk'])
+            # if len(self.gps_status_lcc_noa['intervention_risk']) > 0: 
+            #     frame_intervention_risk_file[new_file] = copy.deepcopy(self.gps_status_lcc_noa['intervention_risk'])
 
 
         total_message = merge_messages(message)    
@@ -1076,8 +1121,8 @@ class CSVProcess:
         
         total_message_name += '.json'
 
-        save_to_json(total_message, _save_root_path + total_message_name)
-        json_file_list.append(_save_root_path + total_message_name)
+        # save_to_json(total_message, _save_root_path + total_message_name)
+        # json_file_list.append(_save_root_path + total_message_name)
         print("all pro csv have been successfully completed!")
 
         # if (upload_journey and total_message.journey.odometer_total > self.odometer_thresh):

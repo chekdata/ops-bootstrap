@@ -29,7 +29,7 @@ import multiprocessing
 from accounts.models import User,CoreUser
 from .db_utils import db_retry, ensure_connection
 from .chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
-
+from django.db import close_old_connections
 
 # 创建进程池，数量为CPU核心数
 process_pool = Pool(processes=cpu_count())
@@ -650,7 +650,7 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
         # 更新Trip的最后更新时间
         trip.last_update = timezone.now()
         await sync_to_async(trip.save, thread_sensitive=True)()
-        
+        await sync_to_async(close_old_connections)()
         return True, "分片上传成功", chunk_file
     except Exception as e:
         logger.error(f"保存分片文件失败: {e}")
@@ -1185,7 +1185,7 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
                                     f"- DET路径: {trip.merged_det_path}"
                                 )
                         except Exception as e:
-                            logger.error(f"更新行程状态失败: {e}")
+                            logger.error(f"更新行程状态失败: {e}",exc_info=True)
                             # 发生错误时回滚事务
                             transaction.set_rollback(True)
                         
@@ -1282,6 +1282,7 @@ def process_and_upload_files_sync(user_id, csv_path_list, det_path_list):
 async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False):
     """处理合并任务"""
     try:
+       
         if is_last_chunk:
             # 检查进程池状态
             stats = get_process_pool_stats()
@@ -1538,8 +1539,23 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
             #         # if type(value) != 'str' or value:
             #         core_Journey_profile.key = value
             #         print(key,core_Journey_profile.key)
+            if data.get('auto_safe_duration') or type(data.get('auto_safe_duration')) != 'str':
+                core_Journey_profile.auto_safe_duration = data.get('auto_safe_duration')
+            
+            if data.get('lcc_safe_duration') or type(data.get('lcc_safe_duration')) != 'str':
+                core_Journey_profile.lcc_safe_duration = data.get('lcc_safe_duration')
+
+            if data.get('noa_safe_duration') or type(data.get('noa_safe_duration')) != 'str':
+                core_Journey_profile.noa_safe_duration = data.get('noa_safe_duration')
+               
             if data.get('duration') or type(data.get('duration')) != 'str':
                 core_Journey_profile.duration = data.get('duration')
+
+            if data.get('driver_acc_average') or type(data.get('duration')) != 'str':
+                core_Journey_profile.driver_acc_average = data.get('driver_acc_average')
+
+            if data.get('driver_dcc_average') or type(data.get('driver_dcc_average')) != 'str':
+                core_Journey_profile.driver_dcc_average = data.get('driver_dcc_average')
 
             if data.get('auto_mileages') or type(data.get('auto_mileages')) != 'str':
                 core_Journey_profile.auto_mileages = data.get('auto_mileages')
@@ -1839,11 +1855,13 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
                 )
               
                 # trip_id = 'ee1a65b673504d13b9c4d5c7e39d8737'
-                # NOTE: gps处理
-
+                # NOTE: gps处理     
+                async_to_sync(ensure_db_connection)()
                 handle_message_gps_data(file_path_list,trip_id)
                 # NOTE: trip_id 关联id 落库结果数据
              
+                
+                async_to_sync(ensure_db_connection)()
                 handle_message_data(total_message,trip_id,model,hardware_version,software_version)
                 # # 小程序协议
                 # process_csv(file_path_list, 
@@ -1878,7 +1896,7 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
             logger.warning(f"file name:{file_name} 格式不正确, 行程未处理！")
             return False, "文件名格式不正确"
     except Exception as e:
-        logger.error(f"处理app数据失败: {e}")
+        logger.error(f"处理app数据失败: {e}",exc_info=True)
         return False, str(e)
 
 
@@ -2073,7 +2091,7 @@ async def ensure_db_connection_and_set_merge_abnormal_journey(trips):
                         except Trip.DoesNotExist:
                             logger.error(f"行程 {trip_id} 不存在")
                         except Exception as e:
-                            logger.error(f"更新行程 {trip_id} merge_into_current 失败: {e}")
+                            logger.error(f"更新行程 {trip_id} merge_into_current 失败: {e}",exc_info=True)
             # 执行更新操作
             await update_trips()
             return True
@@ -2168,7 +2186,7 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程生
                     except Trip.DoesNotExist:
                         logger.error(f"行程 {trip_id} 不存在")
                     except Exception as e:
-                        logger.error(f"更新行程 {trip_id} jouney_status, brand, journey_start_time 失败: {e}")
+                        logger.error(f"更新行程 {trip_id} jouney_status, brand, journey_start_time 失败: {e}", exc_info=True)
             # 执行更新操作
             await update_trips()
             return True
@@ -2183,6 +2201,39 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程生
                 # 最后一次尝试也失败
                 logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
                 return False
+
+
+
+# 将嵌套函数移到外部作为独立函数
+async def ensure_db_connection():
+    """确保数据库连接并执行合并操作"""
+    # 最大重试次数
+    max_retries = 3
+    retry_delay = 1.0
+    
+    for attempt in range(max_retries):
+        try:
+            # 确保数据库连接有效
+            ensure_connection()
+            # 测试连接是否正常
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            
+            return True
+        except Exception as e:
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                # 关闭所有连接并等待重试
+                from django.db import connections
+                connections.close_all()
+                time.sleep(retry_delay * (attempt + 1))
+            else:
+                # 最后一次尝试也失败
+                logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
+                return False
+
 
 
 # 将嵌套函数移到外部作为独立函数
@@ -2237,7 +2288,7 @@ def ensure_db_connection_and_set_tos_path_sync(trip_id, results):
             except Trip.DoesNotExist:
                 logger.error(f"行程 {trip_id} 不存在")
             except Exception as e:
-                logger.error(f"更新行程 {trip_id} Reported_Journey 失败: {e}")
+                logger.error(f"更新行程 {trip_id} Reported_Journey 失败: {e}", exc_info=True)
             return True
         except Exception as e:
             logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
@@ -2288,7 +2339,7 @@ def ensure_db_connection_and_set_sub_journey_sync(trip_id):
             except Trip.DoesNotExist:
                 logger.error(f"行程 {trip_id} 不存在")
             except Exception as e:
-                logger.error(f"更新行程 {trip_id}  is_sub_journey 失败: {e}")
+                logger.error(f"更新行程 {trip_id}  is_sub_journey 失败: {e}",exc_info=True)
             return True
         except Exception as e:
             logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
@@ -2334,10 +2385,10 @@ def ensure_db_connection_and_set_journey_less_than_timethre_sync(trip_id):
             except Trip.DoesNotExist:
                 logger.error(f"行程 {trip_id} 不存在")
             except Exception as e:
-                logger.error(f"更新行程 {trip_id}  less_than_timethre 失败: {e}")
+                logger.error(f"更新行程 {trip_id}  less_than_timethre 失败: {e}",exc_info=True)
             return True
         except Exception as e:
-            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}",exc_info=True)
             if attempt < max_retries - 1:
                 # 关闭所有连接并等待重试
                 from django.db import connections

@@ -45,6 +45,8 @@ def mongo_update_image(conn):
     conn.update_many( {'model': { '$regex': '通用模型' } }, { '$set': { 'model_guide': "chek/model/app_project_image/XiaoMi.jpg" } } )
     conn.update_many( {'model': { '$regex': '东风日产' } }, { '$set': { 'model_guide': "chek/model/app_project_image/NissanN7.png" } } )
     conn.update_many( {'model': { '$regex': '路特斯' } }, { '$set': { 'model_guide': "chek/model/app_project_image/EMEYA.png" } } )
+    conn.update_many( {'model': { '$regex': '奥迪' } }, { '$set': { 'model_guide': "chek/model/app_project_image/aodi_q6.png" } } )
+    conn.update_many( {'model': { '$regex': '坦克' } }, { '$set': { 'model_guide': "chek/model/app_project_image/tank_500.png" } } )
     # model_config_version
 
     conn.update_many( {'model': { '$regex': '极越' } }, { '$set': { 'screen_type': "中控屏" } } )
@@ -69,15 +71,18 @@ def mongo_update_image(conn):
     conn.update_many( {'model': { '$regex': '岚图' } }, { '$set': { 'screen_type': "仪表屏" } } )
     conn.update_many( {'model': { '$regex': '昊铂' } }, { '$set': { 'screen_type': "仪表屏" } } )
     conn.update_many( {'model': { '$regex': '通用模型' } }, { '$set': { 'screen_type': "仪表屏" } } )
-    conn.update_many( {'model': { '$regex': '东风日产' } }, { '$set': { 'screen_type': "通用模型" } } )
-    conn.update_many( {'model': { '$regex': '路特斯' } }, { '$set': { 'screen_type': "通用模型" } } )
+    conn.update_many( {'model': { '$regex': '东风日产' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '路特斯' } }, { '$set': { 'screen_type': "仪表屏" } } )
+    conn.update_many( {'model': { '$regex': '坦克' } }, { '$set': { 'screen_type': "仪表屏" } } )
     #
 
 
 from bson import ObjectId
 
 if __name__ == '__main__':
-    # client, db, coll = connect_mongo('vehicle', 'model_version_repository', mongo_source_link)
+    
+    client, db, coll = connect_mongo('vehicle', 'model_version_repository', mongo_source_link)
+    mongo_update_image(conn)
     # # result = coll.delete_many({"model": "蔚来ES8"})
     # rest_list = list(coll.find({},{'_id':1,'model_tos_link':1}))
     # for _ in rest_list:
@@ -90,10 +95,10 @@ if __name__ == '__main__':
     #         coll.update_one({'_id':ObjectId(_id)},{'$set':{'model_tos_link':model_tos_link}})
 
 
-    client, db, coll = connect_mongo('vehicle', 'hot_brand_vehicle', mongo_source_link)
-    rest_list = list(coll.find({'model':'极越01'}, {'_id': 1,'model':1}))
-    print(rest_list)
-    for _ in rest_list:
-        _id = _.get('_id')
+    # client, db, coll = connect_mongo('vehicle', 'hot_brand_vehicle', mongo_source_link)
+    # rest_list = list(coll.find({'model':'极越01'}, {'_id': 1,'model':1}))
+    # print(rest_list)
+    # for _ in rest_list:
+    #     _id = _.get('_id')
 
-        coll.update_one({'_id':ObjectId(_id)},{'$set':{'software_config_version':[{'publish_code':'V2.0.0','update_data':'2024年8月30日'}]}})
+    #     coll.update_one({'_id':ObjectId(_id)},{'$set':{'software_config_version':[{'publish_code':'V2.0.0','update_data':'2024年8月30日'}]}})

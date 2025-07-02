@@ -37,7 +37,8 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExampl
 from drf_spectacular.types import OpenApiTypes
 from rest_framework import status,serializers
 from .serializers import *
-
+from tmp_tools.monitor import *
+from accounts.handle_tos_request import *
 def generate_random_code(length=4):
     import random
     import string
@@ -88,6 +89,7 @@ class UserCreateView(generics.CreateAPIView):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @authentication_classes([])
+@monitor
 async def custom_token_obtain_pair_view(request):
     code = request.data.get('code')
     unionid = get_access_token(SOCIAL_AUTH_WEIXIN_appid, SOCIAL_AUTH_WEIXIN_secret, code)
@@ -158,6 +160,7 @@ async def custom_token_obtain_pair_view(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def check_user_info(request):
     user = request.user  # 获取当前登录用户
     user_token = request.auth
@@ -192,6 +195,7 @@ async def check_user_info(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def update_user_info(request):
     user = request.user  # 获取当前登录用户
     user_token = request.auth
@@ -272,6 +276,7 @@ async def update_user_info(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def check_phone(request):
     user = request.user  # 获取当前登录用户
 
@@ -305,6 +310,7 @@ async def check_phone(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def send_sms_process(request):
     user = request.user
     _id = user.id
@@ -389,6 +395,7 @@ async def send_sms_process(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def check_sms_process(request):
     user = request.user
     _id = user.id
@@ -431,6 +438,7 @@ async def check_sms_process(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def update_phone(request):
     user = request.user
     phone = request.data.get('phone')
@@ -473,6 +481,7 @@ async def update_phone(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def update_name(request):
     user = request.user
     name = request.data.get('name')
@@ -512,6 +521,7 @@ async def update_name(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def update_signature(request):
     user = request.user
     desc = request.data.get('desc')
@@ -552,6 +562,7 @@ async def update_signature(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def update_app_software_version(request):
     user = request.user
     app_software_config_version =  request.data.get('app_software_config_version')
@@ -615,6 +626,7 @@ async def update_app_software_version(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def update_pic(request):
     user = request.user
     _id = user.id
@@ -684,6 +696,7 @@ async def update_pic(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def update_model_config(request):
     user = request.user
     model_config = request.data.get('model_config')
@@ -743,6 +756,7 @@ async def update_model_config(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def update_project_version(request):
     user = request.user
     _id = user.id
@@ -803,6 +817,7 @@ async def update_project_version(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @authentication_classes([])
+@monitor
 async def send_sms_process_login(request):
     phone = request.data.get('phone')
     #生产环境
@@ -864,6 +879,7 @@ async def send_sms_process_login(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @authentication_classes([])
+@monitor
 async def check_sms_process_login(request):
  
     phone = request.data.get('phone')
@@ -949,6 +965,7 @@ async def check_sms_process_login(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def unbound_wechat_id(request):
     user = request.user
     _id = user.id
@@ -982,6 +999,7 @@ async def unbound_wechat_id(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@monitor
 async def bound_wechat_id(request):
     user = request.user
     _id = user.id
@@ -1001,4 +1019,33 @@ async def bound_wechat_id(request):
     except Exception as e:
         print(e)
         return Response({'code': 500, 'message': '内部服务报错','data':{}})
-    
+
+
+
+@extend_schema(
+    # 方法说明
+    summary="tos权限获取",
+    description="tos权限获取",
+    # 请求体说明（如果有）
+    request=UpdatePicResponseSerializer,  # 如果有需要接收的请求体，可以设置对应的序列化器
+    parameters=[
+        OpenApiParameter(name="Authorization", description="认证令牌，格式为：Bearer <token>", required=True, type=OpenApiTypes.STR, location=OpenApiParameter.HEADER)
+    ],
+    # 响应体说明
+    responses={
+        200: OpenApiResponse(response=SuccessResponseSerializer, description="成功"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务报错")
+    },
+    # 标签，用于分类
+    tags=['用户'],
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@monitor
+async def get_tos_right(request):
+    request_right = main_entrance()
+    if request_right:
+        return Response({'code': 200, 'success': '成功','data':request_right})
+    else:
+        return Response({'code': 500, 'success': '内部服务报错','data':request_right})
+ 

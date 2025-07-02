@@ -172,13 +172,18 @@ class Journey(models.Model):
     driver_speed_max = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='车主最高车速')
     driver_dcc_cnt = models.IntegerField(null=True, blank=True, verbose_name='车主急刹次数')
     driver_acc_cnt = models.IntegerField(null=True, blank=True, verbose_name='车主急加速次数')
-    
+    driver_acc_average =models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='车主平均急加速加速度')
+    driver_dcc_average =models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='车主平均急刹车加速度')
+
     # 行程时间相关
     journey_start_time = models.DateTimeField(null=True, blank=True, verbose_name='行程开始时间')
     journey_end_time = models.DateTimeField(null=True, blank=True, verbose_name='行程结束时间')
     # journey_generated_time = models.DateTimeField(null=True, blank=True, verbose_name='行程落库时间')
     journey_status = models.CharField(max_length=64, null=True, blank=True, verbose_name='行程状态')
     duration = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='智驾时长')
+    auto_safe_duration = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='安全智驾时长')
+    lcc_safe_duration = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='lcc安全智驾时长')
+    noa_safe_duration = models.DecimalField(max_length=10, decimal_places=5, null=True, blank=True, verbose_name='noa安全智驾时长')
 
     # 文件相关
     pdf_name = models.CharField(max_length=255, null=True, blank=True, verbose_name='文件名称')

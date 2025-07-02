@@ -12,6 +12,14 @@ from .json2excel import process_json_file_list
 from .file_operater import download_file_tos, upload_files_tos
 
 from .async_csv_clean import DataProcessor as DataProcessor_async
+# from csv_clean import DataProcessor as DataProcessor_sync
+# from csv_process import CSVProcess
+# from special_point_to_json import special_point2_json
+# from json2excel import process_json_file_list
+# from file_operater import download_file_tos, upload_files_tos
+
+# from async_csv_clean import DataProcessor as DataProcessor_async
+
 
 
 
@@ -132,6 +140,7 @@ def process_journey(file_path_list, user_id, user_name, phone,
         # csv->pro.csv
         data_processor = DataProcessor_sync()
         pro_csv_list = []
+        pro_dataframe_list = []
         for file_path in file_path_list:
 
             file_parts = str(file_path).split('/')
@@ -143,11 +152,15 @@ def process_journey(file_path_list, user_id, user_name, phone,
 
             data_processor.recover(str(file_path))
             data_processor.process()
-            data_processor.save(new_file_path)
-            pro_csv_list.append(new_file_path)
+            df = data_processor.save(new_file_path)
+            # pro_csv_list.append(new_file_path)
+            pro_dataframe_list.append(df)
 
         print(f"process data process!")
-        csvProcess = CSVProcess(pro_csv_list, user_id = user_id, user_name = user_name, user_phone = phone, 
+        # csvProcess = CSVProcess(pro_csv_list, user_id = user_id, user_name = user_name, user_phone = phone, 
+        #          car_brand = car_brand, car_model = car_model, car_hardware_version = car_hardware_version, car_software_version = car_software_version) 
+
+        csvProcess = CSVProcess(pro_dataframe_list, user_id = user_id, user_name = user_name, user_phone = phone, 
                  car_brand = car_brand, car_model = car_model, car_hardware_version = car_hardware_version, car_software_version = car_software_version) 
 
         print(f"user_id: {user_id}, user_name: {user_name}, phone: {phone}, car_brand: {car_brand}, car_model: {car_model}, car_version: {car_hardware_version}")
@@ -277,4 +290,39 @@ if __name__ == "__main__":
     # process(args)
 
     # 运行异步主函数
-    asyncio.run(main())
+    # asyncio.run(main())
+
+  
+    data_processor = DataProcessor_sync()
+    pro_csv_list = []
+    pro_dataframe_list = []
+    file_data =   "./阿维塔12_2023款 650 三激光四驱性能版_AVATR.OS 4.0.0_2025-07-01 16-00-59.csv"
+    data_processor.recover(str(file_data))
+    data_processor.process()
+    df = data_processor.save(file_data)
+    # pro_csv_list.append(new_file_path)
+    pro_dataframe_list.append(df)
+    # for file_path in file_path_list:
+
+    #     file_parts = str(file_path).split('/')
+    #     file_parts[-1] = file_parts[-1].replace('.csv', '.pro.csv')
+    #     new_file_path = '/'.join(file_parts)
+    #     if Path(new_file_path).exists():
+    #         print(f'文件已存在: {str(new_file_path)}')
+    #         pro_csv_list.append(new_file_path)
+
+    #     data_processor.recover(str(file_path))
+    #     data_processor.process()
+    #     df = data_processor.save(new_file_path)
+    #     # pro_csv_list.append(new_file_path)
+    #     pro_dataframe_list.append(df)
+
+    print(f"process data process!")
+    # csvProcess = CSVProcess(pro_csv_list, user_id = user_id, user_name = user_name, user_phone = phone, 
+    #          car_brand = car_brand, car_model = car_model, car_hardware_version = car_hardware_version, car_software_version = car_software_version) 
+
+    csvProcess = CSVProcess(pro_dataframe_list, user_name = 'user_name', user_phone = 'phone', 
+                car_brand = 'car_brand', car_model = 'car_model', car_hardware_version = 'car_hardware_version', car_software_version = 'car_software_version') 
+
+    # print(f"user_id: {user_id}, user_name: {user_name}, phone: {phone}, car_brand: {car_brand}, car_model: {car_model}, car_version: {car_hardware_version}")
+    frame_intervention_file, frame_intervention_risk_file, json_file_list,total_message = csvProcess.process_list_csv_save_journey(upload_journey=True)
