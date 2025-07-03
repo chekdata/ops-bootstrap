@@ -30,7 +30,7 @@ from accounts.models import User,CoreUser
 from .db_utils import db_retry, ensure_connection
 from .chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
 from django.db import close_old_connections
-
+from tmp_tools.monitor import monitor
 # 创建进程池，数量为CPU核心数
 process_pool = Pool(processes=cpu_count())
 
@@ -1824,6 +1824,7 @@ def handle_message_gps_data(file_path_list,trip_id):
 # NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
 # 小程序proto1.0版本
 # 没有上传中间结果
+@monitor
 def process_wechat_data_sync(trip_id,user, file_path_list):
     try:
         if not (file_path_list and isinstance(file_path_list, list) and len(file_path_list) > 0):
@@ -2034,7 +2035,7 @@ async def ensure_db_connection_and_get_abnormal_journey(user_id,
                                     car_name=car_name,
                                     hardware_version=hardware_version,
                                     software_version=software_version,
-                                    # last_update__lt=time
+                                    last_update__lt=time
                                     ).order_by('last_update').values_list('trip_id',flat=True)
             )
             # 获取trips列表中last_update - first_update的时间差和

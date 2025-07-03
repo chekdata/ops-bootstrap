@@ -703,7 +703,7 @@ async def get_abnormal_journey(request):
         software_version = request.data.get('software_version')
 
         # 计算2分钟前时间点,查询2分钟前最后一次更新分片的行程
-        num_minutes_ago = timezone.now() - timezone.timedelta(minutes=2)
+        num_minutes_ago = timezone.now() - timezone.timedelta(minutes=0.5)
 
         trips, total_time = await ensure_db_connection_and_get_abnormal_journey(_id, device_id,
                                                                     car_name,
