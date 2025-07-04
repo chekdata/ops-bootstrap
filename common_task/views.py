@@ -1481,6 +1481,7 @@ async def set_recordUploadTosStatus(request):
         upload_status = request.data.get('upload_status')
         trip_id = record_file_name.split('_')[0] if record_file_name else None
 
+        trip_id = trip_id.replace('-','') if trip_id else None
 
         if not record_file_name:
             return JsonResponse({'code':200,'success': False, 'message': 'record_file_name: 为空.', 'data':{}})
