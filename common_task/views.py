@@ -1449,3 +1449,72 @@ async def get_journey_dimention_entrance(request):
     except Exception as e:
         # logger.error(f"设置trip失败: {str(e)}")
         return JsonResponse({'code':500,'success': False, 'message': f'请求处理失败: {str(e)}', 'data':{}})
+
+
+
+
+@extend_schema(
+    # 指定请求体的参数和类型
+    # request=InferenceDetialDetDataSerializer,
+    # 指定响应的信息
+    responses={
+        200: OpenApiResponse(response=SuccessResponseSerializer, description="处理成功"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务错误")
+    },
+    parameters=[
+        OpenApiParameter(name="Authorization", description="认证令牌，格式为：Bearer <token>", required=True, type=OpenApiTypes.STR, location=OpenApiParameter.HEADER)
+    ],
+    description="设置行程音频文件落库",
+    summary="设置行程音频文件落库",
+    tags=['行程数据']
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+async def set_recordUploadTosStatus(request):
+    """设置行程音频文件落库"""
+    """单文件上传"""
+    user = request.user  # 获取当前登录用户
+    _id = user.id
+    try:
+
+        record_file_name = request.data.get('record_file_name')
+        upload_status = request.data.get('upload_status')
+        trip_id = record_file_name.split('_')[0] if record_file_name else None
+
+
+        if not record_file_name:
+            return JsonResponse({'code':200,'success': False, 'message': 'record_file_name: 为空.', 'data':{}})
+        trip = await sync_to_async(Trip.objects.filter(trip_id=trip_id).first, thread_sensitive=True)()
+        trip_chunk = await sync_to_async(ChunkFile.objects.filter(trip__trip_id=trip_id).first, thread_sensitive=True)()
+
+        if not trip_chunk:
+            return JsonResponse({'code':200,'success': False, 'message': f'没有找到trip_id: {trip_id}', 'data':{}})
+
+        # 更新Trip的record_file_name和upload_status字段
+        if upload_status not in ['上传中', '上传成功', '上传失败']:
+            return JsonResponse({'code':200,'success': False, 'message': f'upload_status: {upload_status} 不合法', 'data':{}})
+        
+        if upload_status == '上传成功' and record_file_name:
+            file_name = Path(trip_chunk.file_name).name
+            model = file_name.split('_')[0]
+            time_line = file_name.split('_')[-1].split('.')[0]
+            
+            # 获取品牌信息
+            tos_upload_path = f"app_project/{_id}/inference_data/{trip_chunk.car_name}/{time_line.split(' ')[0]}/{time_line}/{file_name}"
+
+            trip.recorded_audio_file_path = tos_upload_path
+
+        trip.recored_upload_tos_status = upload_status
+        await sync_to_async(trip.save, thread_sensitive=True)()      
+
+        return JsonResponse({
+            'code':200,
+            'success': True, 
+            'message': f"更新trip 音频上传信息成功, trip id: {trip}",
+            'data': {
+            }
+        })
+    
+    except Exception as e:
+        logger.error(f"更新trip 音频上传信息失败: {str(e)}")
+        return JsonResponse({'code':500,'success': False, 'message': f'请求处理失败: {str(e)}', 'data':{}})

@@ -62,12 +62,15 @@ class Trip(models.Model):
     reported_car_name = models.CharField(max_length=100, null=True, blank=True,verbose_name='上报模式车型名')
     reported_hardware_version = models.CharField(max_length=64, null=True, blank=True, default=None, verbose_name='上报模式行程硬件版本')
     reported_software_version = models.CharField(max_length=64, null=True, blank=True, verbose_name='上报模式行程软件版本')
+    parent_trip_id = models.UUIDField(null=True, blank=True, verbose_name='父行程ID', help_text='如果是子行程，则指向父行程的ID')
+    recored_upload_tos_status = models.CharField(max_length=50,default=False, verbose_name='行程音频文件落库状态')
+    recorded_audio_file_path = models.CharField(max_length=500, null=True, blank=True, verbose_name='行程音频文件路径')
     
     def __str__(self):
-        return f"Trip {self.car_name}"
+        return f"trip {self.car_name}"
     
     class Meta:
-        db_table = 'Trip'
+        db_table = 'trip'
 
 class ChunkFile(models.Model):
     trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='chunks')
@@ -84,11 +87,32 @@ class ChunkFile(models.Model):
 
     class Meta:
         unique_together = ('trip', 'chunk_index', 'file_type')
-        db_table = 'ChunkFile'
+        db_table = 'chunkfile'
+        
+    def __str__(self):
+        return f"chunk {self.chunk_index} of {self.trip.car_name}"
+    
+
+class RecoredChunkFile(models.Model):
+    trip = models.ForeignKey(Trip, on_delete=models.CASCADE, related_name='recored_chunks')
+    chunk_index = models.IntegerField()
+    file_path = models.CharField(max_length=255)
+    file_type = models.CharField(max_length=10)  # 'csv' 或 'det'
+    file_name = models.CharField(max_length=500, blank=True)
+    upload_time = models.DateTimeField(auto_now_add=True)
+    car_name = models.CharField(max_length=100)
+    hardware_version = models.CharField(max_length=64, null=True, blank=True)
+    software_version = models.CharField(max_length=64, null=True, blank=True)
+    device_id = models.CharField(max_length=255, null=True, blank=True)
+    # chunk_status = models.CharField(max_length=50, blank=True, verbose_name='行程分片状态')
+
+    class Meta:
+        unique_together = ('trip', 'chunk_index', 'file_type')
+        db_table = 'RecoredChunkFile'
         
     def __str__(self):
         return f"Chunk {self.chunk_index} of {self.trip.car_name}"
-    
+
 
 class Journey(models.Model):
     """
