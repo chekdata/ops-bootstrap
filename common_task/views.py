@@ -1402,18 +1402,15 @@ async def get_journey_dimention_entrance(request):
                 else:
                     comfortable = '摇篮级平稳，堵车也是SPA'
                 
-                auto_speed_average = j.auto_speed_average if j.auto_speed_average  else 0
-                if auto_speed_average>=0:
-                    efficiency = '龟速占道王，变道像树懒'
-                elif auto_speed_average>=20:
-                    efficiency = '谨慎跟车族，超车看心情'
+                auto_speed_average = j.auto_speed_average if j.auto_speed_average  else 0       
+                if auto_speed_average>=50:	
+                    efficiency = '狂暴模式，见缝插针	'	    
                 elif auto_speed_average>=30:	
-                    efficiency = '高速猎豹，卡位精准'
-                    
-                elif auto_speed_average>=50:	
-                    efficiency = '狂暴模式，见缝插针	'														
-															
-    
+                    efficiency = '高速猎豹，卡位精准'													
+                elif auto_speed_average>=20:
+                    efficiency = '谨慎跟车族，超车看心情'									
+                elif auto_speed_average>=0:
+                    efficiency = '龟速占道王，变道像树懒'
             return JsonResponse({
                 'code':200,
                 'success': True, 
