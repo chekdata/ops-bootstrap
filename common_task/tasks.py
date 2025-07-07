@@ -1,4 +1,26 @@
+# 设置protobuf兼容性
 import os
+
+####################################################################
+# # NOTE: python 文件调试增加内容
+# os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
+
+# # Django设置
+# os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'myproject.settings')
+
+# # 添加项目根目录到Python路径
+# import sys
+# project_root = '/chekkk/code/chekappbackendnew'
+# if project_root not in sys.path:
+#     sys.path.insert(0, project_root)
+
+# # 初始化Django
+# import django
+# from django.conf import settings as django_settings
+# if not django_settings.configured:
+#     django.setup()
+######################################################################
+
 import re
 import pandas as pd
 import logging
@@ -13,7 +35,7 @@ from concurrent.futures import ThreadPoolExecutor
 from django.conf import settings
 from django.db import transaction
 from asgiref.sync import sync_to_async, async_to_sync
-from .models import Trip, ChunkFile, Journey, Reported_Journey
+from common_task.models import Trip, ChunkFile, Journey, Reported_Journey
 from django.utils import timezone
 from data.models import model_config
 from accounts.models import CoreUser
@@ -27,8 +49,8 @@ from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor
 import multiprocessing
 from accounts.models import User,CoreUser
-from .db_utils import db_retry, ensure_connection
-from .chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
+from common_task.db_utils import db_retry, ensure_connection
+from common_task.chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
 from django.db import close_old_connections
 from tmp_tools.monitor import monitor
 # 创建进程池，数量为CPU核心数
@@ -924,6 +946,342 @@ async def cleanup_resources():
         background_tasks = []
 
 
+# # NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
+# def merge_files_sync(user_id, trip_id, is_timeout=False):
+#     """同步版本的合并文件函数，用于进程池执行"""
+#     normal_trip_status = "正常"
+#     time_interval_thre = 300
+#     try:
+#         logger.info(f"开始合并文件, 用户ID: {user_id}, 行程ID: {trip_id}")
+#         with transaction.atomic():
+#             # trip = Trip.objects.select_for_update().get(trip_id=trip_id)
+            
+#             try:
+#                 main_trip = Trip.objects.select_for_update(nowait=True).get(trip_id=trip_id)
+
+#                 # 检查是否正在合并或已完成
+#                 if main_trip.is_completed:
+#                     logger.info(f"行程 {main_trip.trip_id} 已完成合并，跳过处理")
+#                     return None, None
+                
+#                 if getattr(main_trip, 'is_merging', False):
+#                     logger.info(f"行程 {main_trip.trip_id} 正在合并中，跳过处理")
+#                     return None, None
+                
+
+#             except DatabaseError:
+#                 logger.info(f"行程 {main_trip.trip_id} 正在被其他进程处理，跳过")
+#                 return None, None
+
+#             logger.info(f"用户ID: {user_id}, 行程ID: {main_trip.trip_id} 未完成合并，开始进行合并处理！")
+#             # 找到所有和trip相同的carname hardware_version software_version device_id相同的trip,确保数据不会在进程间产生竞争
+#             try:
+#                 # # 正常退出
+#                 # if not is_timeout:
+#                 #     # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
+#                 #     all_similar_trips = Trip.objects.filter(
+#                 #         is_completed=False,
+#                 #         user_id=user_id,
+#                 #         device_id=main_trip.device_id,
+#                 #         car_name=main_trip.car_name,
+#                 #         hardware_version=main_trip.hardware_version,
+#                 #         software_version=main_trip.software_version,
+#                 #         merge_into_current=True,
+#                 #         trip_status = main_trip.trip_status,
+#                 #     ).order_by('-last_update')  # 降序排列，从最新到最旧
+#                 # else:
+#                 #     # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
+#                 #     # 超时行程不处理merge_into_current
+#                 #     # 超时行程(异常行程)只合并自己的行程
+#                 #     all_similar_trips = Trip.objects.filter(
+#                 #         trip_id=trip_id,
+#                 #         is_completed=False,
+#                 #         user_id=user_id,
+#                 #         device_id=main_trip.device_id,
+#                 #         car_name=main_trip.car_name,
+#                 #         hardware_version=main_trip.hardware_version,
+#                 #         software_version=main_trip.software_version,
+#                 #         merge_into_current=True,
+#                 #         trip_status = main_trip.trip_status,
+#                 #     ).order_by('-last_update')  # 降序排列，从最新到最旧     
+
+#                 # # 正常退出
+#                 # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
+#                 all_similar_trips = Trip.objects.filter(
+#                     is_completed=False,
+#                     user_id=user_id,
+#                     device_id=main_trip.device_id,
+#                     car_name=main_trip.car_name,
+#                     hardware_version=main_trip.hardware_version,
+#                     software_version=main_trip.software_version,
+#                     merge_into_current=True,
+#                     trip_status = main_trip.trip_status,
+#                 ).order_by('-last_update')  # 降序排列，从最新到最旧
+
+#                 # 筛选出需要合并的行程
+#                 trips_to_merge = []
+#                 prev_trip = None
+
+#                 for trip in all_similar_trips:
+#                     if not prev_trip:  # 第一个行程（最新的行程）
+#                         trips_to_merge.append(trip)
+#                         prev_trip = trip
+#                         continue
+                    
+#                     # 计算当前行程与前一个行程的时间间隔（秒）
+#                     # 注意：由于是降序排列，所以是prev_trip.first_update - trip.last_update
+#                     time_diff = (prev_trip.first_update - trip.last_update).total_seconds()
+
+#                     # 正常退出
+#                     # if not is_timeout:                    
+#                     #     if time_diff <= time_interval_thre:  # 5分钟 = 300秒
+#                     #         # 如果间隔小于等于5分钟，则添加到合并行程列表
+#                     #         trips_to_merge.append(trip)
+#                     #         prev_trip = trip
+#                     #     else:
+#                     #         # 找到了间隔超过5分钟的行程，停止查找
+#                     #         logger.info(f"找到间隔超过5分钟的行程，停止查找。行程ID: {trip.trip_id}, 时间间隔: {time_diff}秒")
+#                     #         break
+#                     # else:
+#                     #         # 如果正常退出，选择所有之前没处理的数据进行合并，不区分间隔小于等于5分钟，则添加到合并行程列表
+#                     #         trips_to_merge.append(trip)
+
+#                     # NOTE: 无论是异常行程单独合并还是正常行程合并上一次异常行程
+#                     # 最多只有两个行程合并，因为app在每一次跑分前必须让行程上一次异常行程合并
+#                     # 所以这里当前行程合并上一次行程不用考虑时间间隔
+#                     trips_to_merge.append(trip)
+
+#                 # 按照时间升序排序（从旧到新），便于处理
+#                 trips_to_merge.sort(key=lambda x: x.last_update)
+
+#                 logger.info(f"找到 {len(trips_to_merge)} 个需要合并的行程，时间范围: {trips_to_merge[0].first_update} 到 {trips_to_merge[-1].last_update}")
+#                 trips = trips_to_merge
+
+
+#                 # 记录锁定的行程数量
+#                 trips_count = len(trips) if isinstance(trips, list) else trips.count()
+#                 logger.info(f"已锁定 {trips_count} 个相关行程记录")
+
+#                 csv_merged_results = []
+#                 det_merged_results = []
+
+#                 for trip in trips:
+#                     try:
+#                         # 检查是否正在合并或生成
+#                         if trip.is_completed:
+#                             logger.info(f"行程 {trip.trip_id} 已完成合并，跳过处理")
+#                             continue
+                        
+#                         if getattr(trip, 'is_merging', False):
+#                             logger.info(f"行程 {trip.trip_id} 正在合并中，跳过处理")
+#                             continue
+                        
+#                         logger.info(f"行程 {trip.trip_id} 马上开始合并处理！")
+#                         # 标记正在合并
+#                         trip.is_merging = True
+#                         # trip.save()
+#                         trip.save(update_fields=['is_merging'])
+
+
+#                         logger.info(f"用户Id {user_id}, 行程 {trip.trip_id}  正在合并中...")
+#                         # 获取所有分片
+#                         chunks = ChunkFile.objects.filter(trip=trip).order_by('chunk_index')
+#                         merged_results = {'csv': None, 'det': None}
+
+#                         # 合并CSV文件
+#                         csv_chunks = chunks.filter(file_type='csv')
+                        
+#                         logger.info(f"行程 {trip.trip_id} CSV分片数量: {csv_chunks.count()} !")
+#                         if csv_chunks.exists():
+#                             # 统计csv_chunks数量
+#                             trip.csv_chunk_count = csv_chunks.count()
+#                             logger.info(f"行程 {trip.trip_id} CSV分片数量: {csv_chunks.count()} !")
+#                             csv_indexes = list(csv_chunks.values_list('chunk_index', flat=True))
+#                             if csv_indexes:
+#                                 min_index = min(csv_indexes)
+#                                 max_index = max(csv_indexes)
+#                                 # 生成完整的索引集合
+#                                 full_indexes = set(range(min_index, max_index + 1))
+#                                 # 找出缺失的索引
+#                                 missing_indexes = full_indexes - set(csv_indexes)
+#                                 missing_count = len(missing_indexes)
+#                             else:
+#                                 missing_count = 0
+#                             trip.csv_chunk_lose = missing_count
+#                             logger.info(f"行程 {trip.trip_id} 中间缺少CSV分片数量: {missing_count}")
+#                             update_fields = ['csv_chunk_count']
+#                             update_fields.append('csv_chunk_lose')
+#                             trip.save(update_fields=update_fields)
+
+#                             merged_csv = pd.DataFrame()
+#                             for chunk in csv_chunks:
+#                                 try:
+#                                     df = pd.read_csv(chunk.file_path)
+#                                     merged_csv = pd.concat([merged_csv, df])
+#                                 except Exception as e:
+#                                     logger.error(f"读取CSV分片失败 {chunk.chunk_index}: {e}")
+
+#                             if not merged_csv.empty:
+#                                 # 处理文件名
+#                                 merged_csv_filename = None
+#                                 for chunk in csv_chunks:
+#                                     if hasattr(chunk, 'file_name') and chunk.file_name and 'spcialPoint' in chunk.file_name:
+#                                         merged_csv_filename = chunk.file_name.split('/')[-1]
+#                                         break
+#                                 if not merged_csv_filename:
+#                                     merged_csv_filename = trip.file_name.split('/')[-1] if trip.file_name else f"merged_{trip.trip_id}.csv"
+
+#                                 # 创建合并目录
+#                                 merged_dir = os.path.join(settings.MEDIA_ROOT, 'merged', str(trip.trip_id))
+#                                 os.makedirs(merged_dir, exist_ok=True)
+
+#                                 # 保存合并文件
+#                                 merged_path = os.path.join(merged_dir, merged_csv_filename)
+#                                 merged_csv.to_csv(merged_path, index=False)
+#                                 trip.merged_csv_path = merged_path
+#                                 merged_results['csv'] = merged_path
+#                                 logger.info(f"合并CSV文件成功.保存到 {merged_path}")
+
+#                         # 合并DET文件
+#                         det_chunks = chunks.filter(file_type='det')
+#                         logger.info(f"行程 {trip.trip_id} DET分片数量: {det_chunks.count()} !")
+#                         if det_chunks.exists():
+
+#                             # 统计csv_chunks数量
+#                             trip.det_chunk_count = det_chunks.count()
+#                             logger.info(f"行程 {trip.trip_id} DET分片数量: {det_chunks.count()} !")
+#                             det_indexes = list(det_chunks.values_list('chunk_index', flat=True))
+#                             if det_indexes:
+#                                 min_index = min(det_indexes)
+#                                 max_index = max(det_indexes)
+#                                 # 生成完整的索引集合
+#                                 full_indexes = set(range(min_index, max_index + 1))
+#                                 # 找出缺失的索引
+#                                 missing_indexes = full_indexes - set(det_indexes)
+#                                 missing_count = len(missing_indexes)
+#                             else:
+#                                 missing_count = 0
+#                             trip.det_chunk_lose = missing_count
+#                             logger.info(f"行程 {trip.trip_id} 中间缺少det分片数量: {missing_count}")
+#                             update_fields = ['det_chunk_count']
+#                             update_fields.append('det_chunk_lose')
+#                             trip.save(update_fields=update_fields)
+
+
+#                             merged_dir = os.path.join(settings.MEDIA_ROOT, 'merged', str(trip.trip_id))
+#                             os.makedirs(merged_dir, exist_ok=True)
+
+#                             # 处理文件名
+#                             merged_det_filename = None
+#                             for chunk in det_chunks:
+#                                 if hasattr(chunk, 'file_name') and chunk.file_name and 'spcialPoint' in chunk.file_name:
+#                                     merged_det_filename = chunk.file_name.split('/')[-1]
+#                                     break
+#                             if not merged_det_filename:
+#                                 merged_det_filename = trip.file_name.split('/')[-1][:-4] + '.det' if trip.file_name else f"merged_{trip.trip_id}.det"
+
+#                             det_merged_path = os.path.join(merged_dir, merged_det_filename)
+#                             with open(det_merged_path, 'wb') as outfile:
+#                                 for chunk in det_chunks:
+#                                     try:
+#                                         with open(chunk.file_path, 'rb') as infile:
+#                                             outfile.write(infile.read())
+#                                     except Exception as e:
+#                                         logger.error(f"读取DET分片失败 {chunk.chunk_index}: {e}")
+
+#                             trip.merged_det_path = det_merged_path
+#                             merged_results['det'] = det_merged_path
+#                             logger.info(f"合并DET文件成功.保存到 {det_merged_path}")
+
+#                         if merged_results['csv'] is not None and Path(merged_results['csv']).exists():
+#                             csv_merged_results.append(merged_results['csv'])
+#                         if merged_results['det'] is not None and Path(merged_results['det']).exists():
+#                             det_merged_results.append(merged_results['det'])
+
+
+#                         chunks = ChunkFile.objects.filter(trip=trip).order_by('chunk_index')
+#                         trip_chunk_dir = ''
+#                         if chunks:
+#                             # 分片文件夹路径
+#                             trip_chunk_dir = os.path.dirname(chunks[0].file_path)
+#                             logger.info(f"行程 {trip.trip_id} 的分片文件夹: {trip_chunk_dir}")
+
+#                         # 清理分片文件
+#                         for chunk in chunks:
+#                             try:
+#                                 if os.path.exists(chunk.file_path):
+#                                     os.remove(chunk.file_path)
+#                                 chunk.delete()
+#                             except Exception as e:
+#                                 logger.error(f"清理分片文件失败 {chunk.chunk_index}: {e}")
+#                         # 清理分片文件夹
+#                         if os.path.exists(trip_chunk_dir):
+#                             try:
+#                                 shutil.rmtree(trip_chunk_dir)
+#                                 logger.info(f"清理行程 {trip.trip_id} 的分片文件夹: {trip_chunk_dir}")
+#                             except Exception as e:
+#                                 logger.error(f"清理行程 {trip.trip_id} 的分片文件夹失败: {e}")
+#                         logger.info(f"完成清理行程 {trip.trip_id} 的分片文件")
+
+
+#                         try:
+#                             # 更新状态
+#                             trip.refresh_from_db()
+#                             if not trip.is_completed:
+#                                 trip.is_completed = True
+#                                 trip.is_merging = False
+#                                 # trip.save()
+#                                 update_fields = ['is_merging']
+#                                 update_fields.append('is_completed')
+#                                 if merged_results['csv']:
+#                                     trip.merged_csv_path = merged_results['csv']
+#                                     update_fields.append('merged_csv_path')
+#                                 if merged_results['det']:
+#                                     trip.merged_det_path = merged_results['det']
+#                                     update_fields.append('merged_det_path')
+
+#                                 trip.save(update_fields=update_fields)
+
+#                                 logger.info(
+#                                     f"行程 {trip_id} 更新完成:\n"
+#                                     f"- 完成状态: {trip.is_completed}\n"
+#                                     f"- 合并状态: {trip.is_merging}\n"
+#                                     f"- CSV路径: {trip.merged_csv_path}\n"
+#                                     f"- DET路径: {trip.merged_det_path}"
+#                                 )
+#                         except Exception as e:
+#                             logger.error(f"更新行程状态失败: {e}",exc_info=True)
+#                             # 发生错误时回滚事务
+#                             transaction.set_rollback(True)
+                        
+#                         # 更新行程的状态，对于已合并行程
+#                         try:
+#                             if str(trip.trip_id) != trip_id:
+#                                 # 设置非主行程为子行程
+#                                 ensure_db_connection_and_set_sub_journey_sync(trip.trip_id)
+#                         except Exception as e:
+#                             logger.error(f"设置行程为子行程失败: {e}")
+
+#                     except Exception as e:
+#                         # 发生错误时重置合并状态
+#                         trip.is_merging = False
+#                         trip.save()
+#                         logger.error(f"合并文件失败: {e}")
+#                         return None, None
+
+#                 return csv_merged_results, det_merged_results
+
+#             except DatabaseError as e:
+#                 # 如果无法获取锁（其他进程正在处理），记录并跳过
+#                 logger.warning(f"无法锁定相关行程记录，可能有其他进程正在处理: {e}")
+#                 # 可以选择稍后重试或跳过
+#                 return None, None
+            
+#     except Exception as e:
+#         logger.error(f"合并文件失败: {e}")
+#         return None, None
+
+
 # NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
 def merge_files_sync(user_id, trip_id, is_timeout=False):
     """同步版本的合并文件函数，用于进程池执行"""
@@ -953,35 +1311,7 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
 
             logger.info(f"用户ID: {user_id}, 行程ID: {main_trip.trip_id} 未完成合并，开始进行合并处理！")
             # 找到所有和trip相同的carname hardware_version software_version device_id相同的trip,确保数据不会在进程间产生竞争
-            try:
-                # # 正常退出
-                # if not is_timeout:
-                #     # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
-                #     all_similar_trips = Trip.objects.filter(
-                #         is_completed=False,
-                #         user_id=user_id,
-                #         device_id=main_trip.device_id,
-                #         car_name=main_trip.car_name,
-                #         hardware_version=main_trip.hardware_version,
-                #         software_version=main_trip.software_version,
-                #         merge_into_current=True,
-                #         trip_status = main_trip.trip_status,
-                #     ).order_by('-last_update')  # 降序排列，从最新到最旧
-                # else:
-                #     # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
-                #     # 超时行程不处理merge_into_current
-                #     # 超时行程(异常行程)只合并自己的行程
-                #     all_similar_trips = Trip.objects.filter(
-                #         trip_id=trip_id,
-                #         is_completed=False,
-                #         user_id=user_id,
-                #         device_id=main_trip.device_id,
-                #         car_name=main_trip.car_name,
-                #         hardware_version=main_trip.hardware_version,
-                #         software_version=main_trip.software_version,
-                #         merge_into_current=True,
-                #         trip_status = main_trip.trip_status,
-                #     ).order_by('-last_update')  # 降序排列，从最新到最旧     
+            try: 
 
                 # # 正常退出
                 # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
@@ -994,11 +1324,21 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
                     software_version=main_trip.software_version,
                     merge_into_current=True,
                     trip_status = main_trip.trip_status,
-                ).order_by('-last_update')  # 降序排列，从最新到最旧
+                ).order_by('last_update')  # 升序排列，从历史到当前最新
 
                 # 筛选出需要合并的行程
                 trips_to_merge = []
                 prev_trip = None
+                parent_trip = None
+                if all_similar_trips.exists():
+                    # 历史事件最早的行程为父行程
+                    parent_trip = all_similar_trips.first()
+                    # 记录父行程的时间范围
+                    logger.info(f"找到父行程: {parent_trip.trip_id}, 时间范围: {parent_trip.first_update} 到 {parent_trip.last_update}")
+                    logger.info(f"找到 {all_similar_trips.count()} 个符合条件的行程")
+                else:
+                    logger.info("没有找到符合条件的行程，直接返回")
+                    return None, None
 
                 for trip in all_similar_trips:
                     if not prev_trip:  # 第一个行程（最新的行程）
@@ -1008,7 +1348,7 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
                     
                     # 计算当前行程与前一个行程的时间间隔（秒）
                     # 注意：由于是降序排列，所以是prev_trip.first_update - trip.last_update
-                    time_diff = (prev_trip.first_update - trip.last_update).total_seconds()
+                    # time_diff = (prev_trip.first_update - trip.last_update).total_seconds()
 
                     # 正常退出
                     # if not is_timeout:                    
@@ -1068,8 +1408,29 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
 
                         # 合并CSV文件
                         csv_chunks = chunks.filter(file_type='csv')
+                        
                         logger.info(f"行程 {trip.trip_id} CSV分片数量: {csv_chunks.count()} !")
                         if csv_chunks.exists():
+                            # 统计csv_chunks数量
+                            trip.csv_chunk_count = csv_chunks.count()
+                            logger.info(f"行程 {trip.trip_id} CSV分片数量: {csv_chunks.count()} !")
+                            csv_indexes = list(csv_chunks.values_list('chunk_index', flat=True))
+                            if csv_indexes:
+                                min_index = min(csv_indexes)
+                                max_index = max(csv_indexes)
+                                # 生成完整的索引集合
+                                full_indexes = set(range(min_index, max_index + 1))
+                                # 找出缺失的索引
+                                missing_indexes = full_indexes - set(csv_indexes)
+                                missing_count = len(missing_indexes)
+                            else:
+                                missing_count = 0
+                            trip.csv_chunk_lose = missing_count
+                            logger.info(f"行程 {trip.trip_id} 中间缺少CSV分片数量: {missing_count}")
+                            update_fields = ['csv_chunk_count']
+                            update_fields.append('csv_chunk_lose')
+                            trip.save(update_fields=update_fields)
+
                             merged_csv = pd.DataFrame()
                             for chunk in csv_chunks:
                                 try:
@@ -1103,6 +1464,28 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
                         det_chunks = chunks.filter(file_type='det')
                         logger.info(f"行程 {trip.trip_id} DET分片数量: {det_chunks.count()} !")
                         if det_chunks.exists():
+
+                            # 统计csv_chunks数量
+                            trip.det_chunk_count = det_chunks.count()
+                            logger.info(f"行程 {trip.trip_id} DET分片数量: {det_chunks.count()} !")
+                            det_indexes = list(det_chunks.values_list('chunk_index', flat=True))
+                            if det_indexes:
+                                min_index = min(det_indexes)
+                                max_index = max(det_indexes)
+                                # 生成完整的索引集合
+                                full_indexes = set(range(min_index, max_index + 1))
+                                # 找出缺失的索引
+                                missing_indexes = full_indexes - set(det_indexes)
+                                missing_count = len(missing_indexes)
+                            else:
+                                missing_count = 0
+                            trip.det_chunk_lose = missing_count
+                            logger.info(f"行程 {trip.trip_id} 中间缺少det分片数量: {missing_count}")
+                            update_fields = ['det_chunk_count']
+                            update_fields.append('det_chunk_lose')
+                            trip.save(update_fields=update_fields)
+
+
                             merged_dir = os.path.join(settings.MEDIA_ROOT, 'merged', str(trip.trip_id))
                             os.makedirs(merged_dir, exist_ok=True)
 
@@ -1191,9 +1574,15 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
                         
                         # 更新行程的状态，对于已合并行程
                         try:
-                            if str(trip.trip_id) != trip_id:
+                            # if str(trip.trip_id) != trip_id:
+                            # 由最新的一个行程id为主行程id->
+                            # 历史最早的行程为主行程 因为第一个
+                            # 行程会关联task_id
+                            if parent_trip is not None and str(trip.trip_id) != parent_trip.trip_id:
                                 # 设置非主行程为子行程
-                                ensure_db_connection_and_set_sub_journey_sync(trip.trip_id)
+                                ensure_db_connection_and_set_sub_journey_sync(trip.trip_id, parent_trip.trip_id)
+                                # 设置当前行程的父行程id
+                                ensure_db_connection_and_set_sub_journey_parent_id_sync(trip.trip_id, parent_trip.trip_id)
                         except Exception as e:
                             logger.error(f"设置行程为子行程失败: {e}")
 
@@ -1215,7 +1604,6 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
     except Exception as e:
         logger.error(f"合并文件失败: {e}")
         return None, None
-
 
 
 
@@ -2035,6 +2423,7 @@ async def ensure_db_connection_and_get_abnormal_journey(user_id,
                                     car_name=car_name,
                                     hardware_version=hardware_version,
                                     software_version=software_version,
+                                    trip_status='正常',
                                     last_update__lt=time
                                     ).order_by('last_update').values_list('trip_id',flat=True)
             )
@@ -2305,7 +2694,7 @@ def ensure_db_connection_and_set_tos_path_sync(trip_id, results):
 
 
 # 将trip_id行程设置为子行程，不在行程返回列表
-def ensure_db_connection_and_set_sub_journey_sync(trip_id):
+def ensure_db_connection_and_set_sub_journey_sync(trip_id, parent_trip_id=None):
     """确保数据库连接并执行合并操作"""
     # 最大重试次数
     max_retries = 3
@@ -2353,6 +2742,52 @@ def ensure_db_connection_and_set_sub_journey_sync(trip_id):
                 # 最后一次尝试也失败
                 logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
                 return False
+
+# 将trip_id行程设置为子行程，不在行程返回列表
+def ensure_db_connection_and_set_sub_journey_parent_id_sync(trip_id, parent_trip_id=None):
+    """确保数据库连接并执行合并操作"""
+    # 最大重试次数
+    max_retries = 3
+    retry_delay = 1.0
+    
+    for attempt in range(max_retries):
+        try:
+            # 确保数据库连接有效
+            ensure_connection()
+            # 测试连接是否正常
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            
+            logger.info(f"数据库连接正常，开始执行设置当前行程{trip_id}:父行程操作")
+            try:
+                trip = Trip.objects.get(trip_id=trip_id)
+                if parent_trip_id:
+                    trip.parent_trip_id = parent_trip_id
+                else:
+                    # 如果没有提供parent_trip_id，则设置为None
+                    trip.parent_trip_id = None
+                    # 更新其他字段
+                    trip.save()
+                logger.info(f"已将行程 {trip_id} 的父行程设为 {parent_trip_id}")
+            except Trip.DoesNotExist:
+                logger.error(f"行程 {trip_id} 不存在")
+            except Exception as e:
+                logger.error(f"更新行程 {trip_id}  的父行程id 失败: {e}",exc_info=True)
+            return True
+        except Exception as e:
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                # 关闭所有连接并等待重试
+                from django.db import connections
+                connections.close_all()
+                time.sleep(retry_delay * (attempt + 1))
+            else:
+                # 最后一次尝试也失败
+                logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
+                return False
+
 
 # 将trip_id行程设置为子行程，不在行程返回列表
 def ensure_db_connection_and_set_journey_less_than_timethre_sync(trip_id):
@@ -2487,8 +2922,12 @@ async def clear_less_5min_journey(_id, trip_id_list, is_last_chunk=False):
 
 
 if __name__ == '__main__':
-    file_path_list = ['tos://chek/temp/for 汽车之家/25.5.15-成都重庆测试/阿维塔06/det_csv/2025-05-16/2025-05-16 10-11-23/阿维塔12_2023款 700 三激光后驱奢享版_AVATR.OS 4.0.0_spcialPoint_2025-05-16 10-11-23.csv','tos://chek/temp/for 汽车之家/25.5.15-成都重庆测试/阿维塔06/det_csv/2025-05-16/2025-05-16 10-11-23/阿维塔12_2023款 700 三激光后驱奢享版_AVATR.OS 4.0.0_spcialPoint_2025-05-16 10-11-23.det']
-    trip_id = '82ef3322-8aa9-4cd2-81aa-3ef1499eca3d'
+    # file_path_list = ['tos://chek/temp/for 汽车之家/25.5.15-成都重庆测试/阿维塔06/det_csv/2025-05-16/2025-05-16 10-11-23/阿维塔12_2023款 700 三激光后驱奢享版_AVATR.OS 4.0.0_spcialPoint_2025-05-16 10-11-23.csv','tos://chek/temp/for 汽车之家/25.5.15-成都重庆测试/阿维塔06/det_csv/2025-05-16/2025-05-16 10-11-23/阿维塔12_2023款 700 三激光后驱奢享版_AVATR.OS 4.0.0_spcialPoint_2025-05-16 10-11-23.det']
+    # trip_id = '82ef3322-8aa9-4cd2-81aa-3ef1499eca3d'
+
+    file_path_list = ['/tos/chek-app/app_project/6ab29710-9254-4e73-b6b6-15546a781be7/inference_data/蔚来/全新蔚来ES6/2025-07-06/2025-07-06 14-44-11/全新蔚来ES6_2023款 75kWh_Banyan 3.0.0_spcialPoint_2025-07-06 14-44-11.csv']
+    trip_id = 'bfa597d1-1dd4-40ae-97cb-ff7735aea676'
+
     total_message = process_journey(file_path_list, 
                                     user_id=100000, 
                                     user_name='念书人', 

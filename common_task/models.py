@@ -65,7 +65,11 @@ class Trip(models.Model):
     parent_trip_id = models.UUIDField(null=True, blank=True, verbose_name='父行程ID', help_text='如果是子行程，则指向父行程的ID')
     recored_upload_tos_status = models.CharField(max_length=50,default=False, verbose_name='行程音频文件落库状态')
     recorded_audio_file_path = models.CharField(max_length=500, null=True, blank=True, verbose_name='行程音频文件路径')
-    
+    csv_chunk_count = models.IntegerField(default=0, verbose_name='行程csv分片数量')
+    csv_chunk_lose = models.IntegerField(default=0, verbose_name='行程csv分片丢失数量')
+    det_chunk_count = models.IntegerField(default=0, verbose_name='行程det分片数量')
+    det_chunk_lose = models.IntegerField(default=0, verbose_name='行程det分片丢失数量')
+
     def __str__(self):
         return f"trip {self.car_name}"
     

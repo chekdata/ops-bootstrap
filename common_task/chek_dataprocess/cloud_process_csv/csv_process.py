@@ -1662,11 +1662,11 @@ def merge_messages(messages: list):
         sub_scene1.auto_odometer += sub_scene2.auto_odometer
         sub_scene1.Intervention += sub_scene2.Intervention
         sub_scene1.risk_intervention += sub_scene2.risk_intervention
-        for (city,num) in sub_scene2.city_dict.items(): 
+        for city in sub_scene2.city_dict: 
             if city in sub_scene1.city_dict:   
-                sub_scene1.city_dict[city] += num   
+                sub_scene1.city_dict[city] += sub_scene2.city_dict[city]   
             else:                                #.update(sub_scene2.city_dict)
-                sub_scene1.city_dict[city] = num   
+                sub_scene1.city_dict[city] = sub_scene2.city_dict[city]   
         print("*"*10 + "odometer:"+ str(sub_scene1.odometer) + "*"*10)
         print("*"*10 + "auto_odometer:"+ str(sub_scene1.auto_odometer) + "*"*10)
 
@@ -1676,10 +1676,10 @@ def merge_messages(messages: list):
         # 计算城市占比
         scene_city = scene.city_dict
         total_gsp_point = 1e-5
-        for (city, num) in scene_city.items():
-            total_gsp_point += num
+        for city in scene_city:
+            total_gsp_point += scene_city[city]
         
-        for (city, num) in scene_city.items():
+        for city in scene_city:
             scene_city[city] /= total_gsp_point
 
     journeyStatistics = merged_message.journeyStatistics
