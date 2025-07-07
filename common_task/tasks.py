@@ -53,6 +53,9 @@ from common_task.db_utils import db_retry, ensure_connection
 from common_task.chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
 from django.db import close_old_connections
 from tmp_tools.monitor import monitor
+
+from tmp_tools.zip import package_files
+
 # 创建进程池，数量为CPU核心数
 process_pool = Pool(processes=cpu_count())
 
@@ -1298,21 +1301,22 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
                 # 检查是否正在合并或已完成
                 if main_trip.is_completed:
                     logger.info(f"行程 {main_trip.trip_id} 已完成合并，跳过处理")
-                    return None, None
+                    return None, None, None
                 
                 if getattr(main_trip, 'is_merging', False):
                     logger.info(f"行程 {main_trip.trip_id} 正在合并中，跳过处理")
-                    return None, None
+                    return None, None, None
                 
 
             except DatabaseError:
                 logger.info(f"行程 {main_trip.trip_id} 正在被其他进程处理，跳过")
-                return None, None
+                return None, None, None
 
             logger.info(f"用户ID: {user_id}, 行程ID: {main_trip.trip_id} 未完成合并，开始进行合并处理！")
             # 找到所有和trip相同的carname hardware_version software_version device_id相同的trip,确保数据不会在进程间产生竞争
             try: 
-
+                # 记录合并行程音频路径列表
+                record_audio_paths = []
                 # # 正常退出
                 # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
                 all_similar_trips = Trip.objects.filter(
@@ -1338,9 +1342,17 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
                     logger.info(f"找到 {all_similar_trips.count()} 个符合条件的行程")
                 else:
                     logger.info("没有找到符合条件的行程，直接返回")
-                    return None, None
+                    return None, None, None
 
                 for trip in all_similar_trips:
+                    # 记录音频路径列表
+                    if hasattr(trip, 'recorded_audio_file_path'):
+                        if trip.recorded_audio_file_path:
+                            # 记录音频路径
+                            logger.info(f"行程 {trip.trip_id} 记录音频路径: {trip.recorded_audio_file_path}")
+                            # 记录音频路径
+                            record_audio_paths.extend(trip.recorded_audio_file_path)
+
                     if not prev_trip:  # 第一个行程（最新的行程）
                         trips_to_merge.append(trip)
                         prev_trip = trip
@@ -1578,7 +1590,7 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
                             # 由最新的一个行程id为主行程id->
                             # 历史最早的行程为主行程 因为第一个
                             # 行程会关联task_id
-                            if parent_trip is not None and str(trip.trip_id) != parent_trip.trip_id:
+                            if parent_trip is not None and str(trip.trip_id) != str(parent_trip.trip_id):
                                 # 设置非主行程为子行程
                                 ensure_db_connection_and_set_sub_journey_sync(trip.trip_id, parent_trip.trip_id)
                                 # 设置当前行程的父行程id
@@ -1591,24 +1603,84 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
                         trip.is_merging = False
                         trip.save()
                         logger.error(f"合并文件失败: {e}")
-                        return None, None
-
-                return csv_merged_results, det_merged_results
+                        return None, None, None
+                return csv_merged_results, det_merged_results, record_audio_paths
 
             except DatabaseError as e:
                 # 如果无法获取锁（其他进程正在处理），记录并跳过
                 logger.warning(f"无法锁定相关行程记录，可能有其他进程正在处理: {e}")
                 # 可以选择稍后重试或跳过
-                return None, None
+                return None, None, None
             
     except Exception as e:
-        logger.error(f"合并文件失败: {e}")
-        return None, None
+        logger.error(f"合并文件失败: {e}", exc_info=True)
+        return None, None, None
+
+
+
+# # NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
+# def process_and_upload_files_sync(user_id, csv_path_list, det_path_list):
+#     """同步版本的文件处理和上传函数"""
+#     try:
+#         tinder_os = TinderOS()
+#         results = []
+        
+#         files_to_process = []
+#         if csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0:
+#             for csv_path in csv_path_list:
+#                 if csv_path and Path(csv_path).exists():
+#                     files_to_process.append((csv_path, 'csv'))
+
+#         if det_path_list and isinstance(det_path_list, list) and len(det_path_list) > 0:   
+#             for det_path in det_path_list:                 
+#                 if det_path and Path(det_path).exists():
+#                     files_to_process.append((det_path, 'det'))        
+
+#         # for file_path, file_type in [(csv_path, 'csv'), (det_path, 'det')]:
+#         for file_path, file_type in files_to_process:
+#             if not file_path:
+#                 continue
+                
+#             file_name = Path(file_path)
+#             model = file_name.name.split('_')[0]
+#             time_line = file_name.name.split('_')[-1].split('.')[0]
+            
+#             # 获取品牌信息
+#             middle_model = model_config.objects.filter(model=model).first()
+#             if middle_model:
+#                 brand = middle_model.brand
+#                 upload_path = f"app_project/{user_id}/inference_data/{brand}/{model}/{time_line.split(' ')[0]}/{time_line}/{file_name.name}"
+                
+#                 # 上传文件
+#                 tinder_os.upload_file('chek-app', upload_path, file_path)
+                
+#                 # 记录到数据库
+#                 data_tos_model = tos_csv_app.objects.create(
+#                     user_id=user_id,
+#                     tos_file_path=upload_path,
+#                     tos_file_type='inference'
+#                 )
+
+#                 data_tos_model.user_id = user_id
+#                 data_tos_model.tos_file_path =upload_path
+#                 data_tos_model.tos_file_type = 'inference'
+#                 data_tos_model.save()
+
+#                 results.append((file_type, upload_path))
+                
+#                 # # 可以选择删除本地文件
+#                 # os.remove(file_path)
+        
+#         return True, results
+#     except Exception as e:
+#         logger.error(f"处理和上传文件失败: {e}")
+#         return False, []
 
 
 
 # NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
-def process_and_upload_files_sync(user_id, csv_path_list, det_path_list):
+# 增加音频处理
+def process_and_upload_files_sync(user_id, csv_path_list, det_path_list, record_audio_paths):
     """同步版本的文件处理和上传函数"""
     try:
         tinder_os = TinderOS()
@@ -1625,6 +1697,7 @@ def process_and_upload_files_sync(user_id, csv_path_list, det_path_list):
                 if det_path and Path(det_path).exists():
                     files_to_process.append((det_path, 'det'))        
 
+        # NOTE: 待改造成本地挂载tos
         # for file_path, file_type in [(csv_path, 'csv'), (det_path, 'det')]:
         for file_path, file_type in files_to_process:
             if not file_path:
@@ -1660,13 +1733,136 @@ def process_and_upload_files_sync(user_id, csv_path_list, det_path_list):
                 # # 可以选择删除本地文件
                 # os.remove(file_path)
         
-        return True, results
+        # 处理音频文件
+        record_audio_zip = None
+        if record_audio_paths and isinstance(record_audio_paths, list) and len(record_audio_paths) > 0:
+
+            file_name = Path(record_audio_paths[0])
+            model = file_name.name.split('_')[0]
+            time_line = file_name.name.split('_')[-1].split('.')[0]
+            file_name = file_name.with_suffix('.zip')  # 假设音频文件打包成zip格式
+
+            output_zip = f"/tos/video-on-demand/app_project/{user_id}/inference_data/{model}/{time_line.split(' ')[0]}/{time_line}/{file_name.name}"
+            package_result = package_files(file_paths, output_zip)
+            if not package_result:
+                logger.error(f"打包音频文件失败: {file_name}")
+            else:
+                record_audio_zip = output_zip
+                logger.info(f"音频文件打包成功: {output_zip}")
+
+        return True, results, record_audio_zip
     except Exception as e:
         logger.error(f"处理和上传文件失败: {e}")
         return False, []
 
 
+
 # 
+# async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False):
+#     """处理合并任务"""
+#     try:
+       
+#         if is_last_chunk:
+#             # 检查进程池状态
+#             stats = get_process_pool_stats()
+#             if stats and stats['available_workers'] <= 1:
+#                 logger.warning(f"进程池资源紧张: 活跃进程{stats['active_processes']}/{stats['max_workers']}")
+#                 await asyncio.sleep(0.5)
+
+#             loop = asyncio.get_event_loop()
+
+
+#                 # 使用外部定义的函数，传递参数
+#             csv_path_list, det_path_list = await loop.run_in_executor(
+#                 process_executor,
+#                 ensure_db_connection_and_merge,
+#                 _id,
+#                 trip_id,
+#                 is_timeout
+#             )
+            
+#             is_valid_interval = False
+#             if csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0:
+#                 is_valid_interval = await loop.run_in_executor(
+#                         process_executor,
+#                         get_csv_time_interval,
+#                         csv_path_list
+#                 )
+
+#             if ((csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0) or \
+#                 (det_path_list and isinstance(det_path_list, list) and len(det_path_list) > 0)) :
+
+#                 # 在进程池中执行文件处理和上传
+#                 success, results = await loop.run_in_executor(
+#                     process_executor,
+#                     ensure_db_connection_and_process_and_upload_files_sync,
+#                     _id,
+#                     csv_path_list,
+#                     det_path_list
+#                 )
+
+#                 if success:
+#                     await loop.run_in_executor(
+#                         process_executor,
+#                         ensure_db_connection_and_set_tos_path_sync,
+#                         trip_id,
+#                         results
+#                     )
+#                     logger.info(f"文件处理和上传成功: {results}")
+#                 else:
+#                     logger.error("文件处理和上传失败")
+
+#             if (csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0):
+
+#                 user = await loop.run_in_executor(
+#                     process_executor,
+#                     ensure_db_connection_and_get_user,
+#                     _id
+#                 )
+
+#                 if user and is_valid_interval:
+#                     # 处理行程数据
+#                     success, message = await loop.run_in_executor(
+#                         process_executor,
+#                         process_wechat_data_sync,
+#                         trip_id,
+#                         user,
+#                         csv_path_list
+#                     )
+#                     if success:
+#                         logger.info(f"进程池处理行程数据成功，{message}")
+#                     else:
+#                         logger.error(f"进程池处理数据失败，用户: {user.name}, 错误信息: {message}")
+#                 else:
+#                     logger.error(f"用户 {_id} 不存在, 或行程持续时间小于240s. 无法处理行程数据 {csv_path_list}.")
+
+#                 if not is_valid_interval: 
+#                     ensure_db_connection_and_set_journey_less_than_timethre_sync(trip_id)
+#                     logger.warning(f"CSV文件 {csv_path_list} 时间间隔小于240秒，跳过处理")
+#                 else:
+#                     logger.info(f"CSV文件 {csv_path_list} 时间间隔大于240秒，正常处理")
+
+#             if csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0:
+#                 for csv_path in csv_path_list:
+#                     if Path(csv_path).exists():
+#                         os.remove(str(csv_path))
+#                         logger.info(f'删除合并csv文件: {csv_path}')
+
+#             if det_path_list and isinstance(det_path_list, list) and len(det_path_list) > 0:
+#                 for det_path in det_path_list:
+#                     if Path(det_path).exists():
+#                         os.remove(str(det_path))
+#                         logger.info(f'删除合并det文件: {det_path}')
+
+#         else:
+#             # 检查是否需要触发自动合并
+#             await check_timeout_trip(_id, trip_id)
+                
+#     except Exception as e:
+#         logger.error(f"合并任务处理失败: {e}")
+
+
+# 加入音频合并逻辑
 async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False):
     """处理合并任务"""
     try:
@@ -1682,7 +1878,7 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False)
 
 
                 # 使用外部定义的函数，传递参数
-            csv_path_list, det_path_list = await loop.run_in_executor(
+            csv_path_list, det_path_list, record_audio_paths = await loop.run_in_executor(
                 process_executor,
                 ensure_db_connection_and_merge,
                 _id,
@@ -1702,12 +1898,13 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False)
                 (det_path_list and isinstance(det_path_list, list) and len(det_path_list) > 0)) :
 
                 # 在进程池中执行文件处理和上传
-                success, results = await loop.run_in_executor(
+                success, results, record_audio_package_path = await loop.run_in_executor(
                     process_executor,
                     ensure_db_connection_and_process_and_upload_files_sync,
                     _id,
                     csv_path_list,
-                    det_path_list
+                    det_path_list,
+                    record_audio_paths
                 )
 
                 if success:
@@ -1718,8 +1915,19 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False)
                         results
                     )
                     logger.info(f"文件处理和上传成功: {results}")
+
                 else:
                     logger.error("文件处理和上传失败")
+                
+                if record_audio_package_path is not None:
+                    # 记录音频包路径到数据库
+                    await loop.run_in_executor(
+                        process_executor,
+                        ensure_db_connection_and_set_record_path_sync,
+                        trip_id,
+                        record_audio_package_path
+                    )
+                    logger.info(f"音频包处理和上传成功: {record_audio_package_path}")
 
             if (csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0):
 
@@ -1772,7 +1980,6 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False)
 
 
 
-
 # 将嵌套函数移到外部作为独立函数
 def ensure_db_connection_and_merge(user_id, trip_id, is_timeout=False):
     """确保数据库连接并执行合并操作"""
@@ -1806,7 +2013,7 @@ def ensure_db_connection_and_merge(user_id, trip_id, is_timeout=False):
                 return None, None
 
 # 将嵌套函数移到外部作为独立函数
-def ensure_db_connection_and_process_and_upload_files_sync(user_id, csv_path_list, det_path_list):
+def ensure_db_connection_and_process_and_upload_files_sync(user_id, csv_path_list, det_path_list, record_audio_paths):
     """确保数据库连接并执行合并操作"""
     # 最大重试次数
     max_retries = 3
@@ -1824,7 +2031,7 @@ def ensure_db_connection_and_process_and_upload_files_sync(user_id, csv_path_lis
             
             logger.info(f"数据库连接正常，开始执行数据上传操作")
             # 连接正常，执行合并操作
-            return process_and_upload_files_sync(user_id, csv_path_list, det_path_list)
+            return process_and_upload_files_sync(user_id, csv_path_list, det_path_list, record_audio_paths)
         except Exception as e:
             logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
@@ -2425,7 +2632,7 @@ async def ensure_db_connection_and_get_abnormal_journey(user_id,
                                     software_version=software_version,
                                     trip_status='正常',
                                     last_update__lt=time
-                                    ).order_by('last_update').values_list('trip_id',flat=True)
+                                    ).order_by('-last_update').values_list('trip_id',flat=True)
             )
             # 获取trips列表中last_update - first_update的时间差和
             last_update = await sync_to_async(
@@ -2693,6 +2900,51 @@ def ensure_db_connection_and_set_tos_path_sync(trip_id, results):
                 return False
 
 
+# 将嵌套函数移到外部作为独立函数
+def ensure_db_connection_and_set_record_path_sync(trip_id, recorded_audio_file_path):
+    """确保数据库连接并执行合并操作"""
+    # 最大重试次数
+    max_retries = 3
+    retry_delay = 1.0
+    
+    for attempt in range(max_retries):
+        try:
+            # 确保数据库连接有效
+            ensure_connection()
+            # 测试连接是否正常
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            
+            logger.info(f"数据库连接正常，开始执行csv,det在tos数据路径落库操作")
+            try:
+                trip = Trip.objects.get(trip_id=trip_id)
+                journey = Journey.objects.using("core_user").get(journey_id=trip_id)
+                # trip 和 journey 的recorded_audio_file_path落库
+                journey.recorded_audio_file_path = recorded_audio_file_path
+                trip.recorded_audio_file_path = recorded_audio_file_path
+                trip.save()                      
+                journey.save(using="core_user")
+                logger.info(f"已将行程 {trip_id} 的 recorded_audio_file_path更新. recorded_audio_file_path: {recorded_audio_file_path}")
+            except Trip.DoesNotExist:
+                logger.error(f"行程 {trip_id} 不存在")
+            except Exception as e:
+                logger.error(f"更新行程 {trip_id} recorded_audio_file_path 失败: {e}", exc_info=True)
+            return True
+        except Exception as e:
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                # 关闭所有连接并等待重试
+                from django.db import connections
+                connections.close_all()
+                time.sleep(retry_delay * (attempt + 1))
+            else:
+                # 最后一次尝试也失败
+                logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
+                return False
+
+
 # 将trip_id行程设置为子行程，不在行程返回列表
 def ensure_db_connection_and_set_sub_journey_sync(trip_id, parent_trip_id=None):
     """确保数据库连接并执行合并操作"""
@@ -2716,6 +2968,7 @@ def ensure_db_connection_and_set_sub_journey_sync(trip_id, parent_trip_id=None):
                 try:
                     journey = Journey.objects.using("core_user").get(journey_id=trip_id)
                     journey.is_sub_journey = True
+                    journey.parent_trip_id = parent_trip_id
                     # 更新其他字段
                     journey.save()
                 except Journey.DoesNotExist:
@@ -2723,6 +2976,7 @@ def ensure_db_connection_and_set_sub_journey_sync(trip_id, parent_trip_id=None):
                     journey = Journey.objects.using("core_user").create(
                         journey_id=trip_id,
                         is_sub_journey=True,
+                        parent_trip_id = parent_trip_id,
                         # 其他字段
                     )
                 logger.info(f"已将行程 {trip_id} 设置为子行程")

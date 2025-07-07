@@ -218,8 +218,20 @@ class Journey(models.Model):
     pdf_path = models.CharField(max_length=255, null=True, blank=True, verbose_name='文件路径')
     auto_MBTI = models.CharField(max_length=255, null=True, blank=True, verbose_name='智驾MBTI')
     standby_MBTI = models.CharField(max_length=255, null=True, blank=True, verbose_name='人驾MBTI')
+
+    # 行程所属关系相关
     is_sub_journey = models.BooleanField(default=False, verbose_name='是否是子行程')
     is_less_than_5min = models.BooleanField(default=False, verbose_name='行程是否小于5分钟')
+    parent_trip_id = models.UUIDField(null=True, blank=True, verbose_name='父行程ID', help_text='如果是子行程，则指向父行程的ID')
+
+    # 音频相关
+    recored_upload_tos_status = models.CharField(max_length=50, null=True, blank=True, verbose_name='行程音频文件落库状态')
+    recorded_audio_file_path = models.CharField(max_length=500, null=True, blank=True, verbose_name='行程音频文件路径')
+
+    # 长图相关
+    longimg_upload_tos_status = models.CharField(max_length=50, null=True, blank=True, verbose_name='行程音频文件落库状态')
+    longimg_file_path = models.CharField(max_length=500, null=True, blank=True, verbose_name='行程音频文件路径')
+
     # 创建信息
     # created_by = models.CharField(max_length=50, null=True, blank=True)
     created_date = models.DateTimeField(auto_now_add=True,null=True, blank=True)
