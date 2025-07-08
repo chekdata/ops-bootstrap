@@ -346,6 +346,7 @@ class JourneyRecordLongImg(models.Model):
     车辆行程评测数据模型
     """
     id = models.AutoField(primary_key=True)
+    user_id = models.CharField(max_length=50, blank=True, verbose_name='app用户id')
     journey_id = models.CharField(max_length=64, null=False, verbose_name='评测数据编码')
     # 音频相关
     record_upload_tos_status = models.CharField(max_length=50, null=True, blank=True, verbose_name='行程音频文件落库状态')
@@ -355,6 +356,10 @@ class JourneyRecordLongImg(models.Model):
     longimg_upload_tos_status = models.CharField(max_length=50, null=True, blank=True, verbose_name='行程音频文件落库状态')
     longimg_file_path = models.CharField(max_length=500, null=True, blank=True, verbose_name='行程音频文件路径')
 
+    car_name = models.CharField(max_length=100, verbose_name='车型名')
+    hardware_version = models.CharField(max_length=64, null=True, blank=True, verbose_name='行程硬件版本')
+    software_version = models.CharField(max_length=64, null=True, blank=True, verbose_name='行程软件版本')
+    device_id = models.CharField(max_length=255, null=True, blank=True, verbose_name='行程生成设备id')
     # 创建信息
     # created_by = models.CharField(max_length=50, null=True, blank=True)
     created_date = models.DateTimeField(auto_now_add=True,null=True, blank=True)

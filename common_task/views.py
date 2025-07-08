@@ -1544,6 +1544,20 @@ async def set_recordUploadTosStatus(request):
             # 更新其他字段
             logger.info(f"音频状态上传，上传成功。journey_id: {journey_id} , 用户ID: {_id}, 行程ID: {trip_id}, record_audio_file_path:{journey_record_longImg.record_audio_file_path}, record_upload_tos_status:{journey_record_longImg.record_upload_tos_status}")
 
+
+        # 更新行程信息
+        if not journey_record_longImg.user_id:
+            journey_record_longImg.user_id = trip.user_id
+        if not journey_record_longImg.car_name:
+            journey_record_longImg.car_name = trip.car_name
+        if not journey_record_longImg.hardware_version:
+            journey_record_longImg.hardware_version = trip.hardware_version
+        if not journey_record_longImg.software_version:
+            journey_record_longImg.software_version = trip.software_version
+        if not journey_record_longImg.device_id:
+            journey_record_longImg.device_id = trip.device_id
+
+
         journey_record_longImg.record_upload_tos_status = upload_status
         logger.info(f"音频状态上传。journey_record_longImg中音频上传状态设置: {upload_status} , 用户ID: {_id}, 行程ID: {trip_id}")
         await sync_to_async(journey_record_longImg.save, thread_sensitive=True)()      
@@ -1608,16 +1622,18 @@ async def get_notUploadTosRecord(request):
                 defaults['software_version'] = metadata['software_version']
             if 'device_id' in metadata:
                 defaults['device_id'] = metadata['device_id']
+
+
         # 从trip表中获取未上传成功的行程音频文件
         # 过滤条件为 record_upload_tos_status='上传失败'或者 record_upload_tos_status='上传中'
         # 使用sync_to_async来异步执行数据库查询 
         
         trips = await sync_to_async(
             lambda: list(
-                Trip.objects.filter(
+                JourneyRecordLongImg.objects.using("core_user").filter(
                     user_id=_id
                 ).filter(
-                    Q(record_upload_tos_status='上传中') | Q(record_upload_tos_status='上传失败'),
+                    Q(record_upload_tos_status='上传中') | Q(record_upload_tos_status='上传成功'),
                     **defaults  # 解包defaults字典作为过滤条件
                 )
             ),
@@ -1630,18 +1646,18 @@ async def get_notUploadTosRecord(request):
         # 构建返回数据
         result_data = []
         for trip in trips:
-            trip_id = trip.trip_id
-            recorded_audio_file_path = trip.recorded_audio_file_path
+            journey_id = trip.journey_id
+            record_audio_file_path = trip.record_audio_file_path
             result_data.append({
-                'trip_id': trip_id,
-                'recorded_audio_file_path': recorded_audio_file_path,
+                'trip_id': journey_id,
+                'record_audio_file_path': record_audio_file_path,
             })
         return JsonResponse({
             'code':200,
             'success': True, 
             'message': f"获取未上传成功的行程音频文件成功",
             'data': {
-                'not_upload_record_files': result_data
+                'required_upload_record_files': result_data
             }
         })
 
