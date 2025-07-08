@@ -388,3 +388,13 @@ class JourneyRecordLongImg(models.Model):
     # 创建信息
     # created_by = models.CharField(max_length=50, null=True, blank=True)
     created_date = models.DateTimeField(auto_now_add=True,null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'journey_record_longimg'
+        app_label = 'core_user'     # 指定应用标签为 core_user
+        verbose_name = '行程评测数据音频&长图'
+        verbose_name_plural = '行程评测数据音频&长图'
+    
+    def __str__(self):
+        return f"JourneyRecordLongImg {self.journey_id}"
