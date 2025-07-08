@@ -23,15 +23,15 @@ def package_files(file_paths, output_zip):
         print(f"已打包到: {output_zip}")
         return True
     except FileNotFoundError as e:
-        print(f"打包失败: 文件未找到 {e}", exec_info=True)
+        print(f"打包失败: 文件未找到 {e}", exc_info=True)
         return False
     except zipfile.BadZipFile as e:
-        print(f"打包失败: 无效的zip文件 {e}", exec_info=True)
+        print(f"打包失败: 无效的zip文件 {e}", exc_info=True)
         if os.path.exists(tmp_zip):
             os.remove(tmp_zip)
         return False
     except shutil.Error as e:
-        print(f"打包失败: shutil错误 {e}", exec_info=True)
+        print(f"打包失败: shutil错误 {e}", exc_info=True)
         if os.path.exists(tmp_zip):
             os.remove(tmp_zip)
         return False    

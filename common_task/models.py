@@ -63,8 +63,8 @@ class Trip(models.Model):
     reported_hardware_version = models.CharField(max_length=64, null=True, blank=True, default=None, verbose_name='上报模式行程硬件版本')
     reported_software_version = models.CharField(max_length=64, null=True, blank=True, verbose_name='上报模式行程软件版本')
     parent_trip_id = models.UUIDField(null=True, blank=True, verbose_name='父行程ID', help_text='如果是子行程，则指向父行程的ID')
-    recored_upload_tos_status = models.CharField(max_length=50,default=False, verbose_name='行程音频文件落库状态')
-    recorded_audio_file_path = models.CharField(max_length=500, null=True, blank=True, verbose_name='行程音频文件路径')
+    record_upload_tos_status = models.CharField(max_length=50,default=False, verbose_name='行程音频文件落库状态')
+    record_audio_file_path = models.CharField(max_length=500, null=True, blank=True, verbose_name='行程音频文件路径')
     csv_chunk_count = models.IntegerField(default=0, verbose_name='行程csv分片数量')
     csv_chunk_lose = models.IntegerField(default=0, verbose_name='行程csv分片丢失数量')
     det_chunk_count = models.IntegerField(default=0, verbose_name='行程det分片数量')
@@ -225,8 +225,8 @@ class Journey(models.Model):
     parent_trip_id = models.UUIDField(null=True, blank=True, verbose_name='父行程ID', help_text='如果是子行程，则指向父行程的ID')
 
     # 音频相关
-    recored_upload_tos_status = models.CharField(max_length=50, null=True, blank=True, verbose_name='行程音频文件落库状态')
-    recorded_audio_file_path = models.CharField(max_length=500, null=True, blank=True, verbose_name='行程音频文件路径')
+    record_upload_tos_status = models.CharField(max_length=50, null=True, blank=True, verbose_name='行程音频文件落库状态')
+    record_audio_file_path = models.CharField(max_length=500, null=True, blank=True, verbose_name='行程音频文件路径')
 
     # 长图相关
     longimg_upload_tos_status = models.CharField(max_length=50, null=True, blank=True, verbose_name='行程音频文件落库状态')
@@ -341,85 +341,30 @@ class JourneyGPSTracking(models.Model):
         db_table = 'journey_gps_tracking'
         app_label = 'core_user'
 
-# class Journey(models.Model):
-#     # id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, verbose_name='唯一标识ID')
-#     id = models.AutoField(primary_key=True)
-#     brand = models.CharField(max_length=50, blank=True, null=True)
-#     model = models.CharField(max_length=50, blank=True, null=True)
-#     software_config = models.CharField(max_length=50, blank=True, null=True)
-#     hardware_config =  models.CharField(max_length=50, blank=True, null=True)
+class JourneyRecordLongImg(models.Model):
+    """
+    车辆行程评测数据模型
+    """
+    id = models.AutoField(primary_key=True)
+    journey_id = models.CharField(max_length=64, null=False, verbose_name='评测数据编码')
+    # 音频相关
+    record_upload_tos_status = models.CharField(max_length=50, null=True, blank=True, verbose_name='行程音频文件落库状态')
+    record_audio_file_path = models.CharField(max_length=500, null=True, blank=True, verbose_name='行程音频文件路径')
 
+    # 长图相关
+    longimg_upload_tos_status = models.CharField(max_length=50, null=True, blank=True, verbose_name='行程音频文件落库状态')
+    longimg_file_path = models.CharField(max_length=500, null=True, blank=True, verbose_name='行程音频文件路径')
 
-#     journey_id = models.CharField(max_length=50, blank=True, null=True)
-#     journey_name =  models.CharField(max_length=50, blank=True, null=True)
-#     user_uuid = models.CharField(max_length=50, blank=True, null=True)
-#     # user = models.ForeignKey(CoreUser, on_delete=models.CASCADE, null=True, blank=True)
-#     journey_category =  models.IntegerField(null=True)
-#     city_status_code = models.IntegerField(null=True)
-#     city = models.CharField(max_length=255, blank=True, null=True)
-#     scene_status_code = models.CharField(max_length=50, blank=True, null=True)
-#     scene = models.CharField(max_length=255, blank=True, null=True)
-
-#     # polar_star 这里可以考虑用JSONField 来存储复杂结构，假设用TextField 简单存储
-#     polar_star = models.JSONField(blank=True, null=True)
-#     auto_mileages = models.FloatField(null=True)
-#     total_mileages = models.FloatField(null=True)
-#     frames = models.IntegerField(null=True)
-#     auto_frames = models.IntegerField(null=True)
-#     noa_frames = models.IntegerField(null=True)
-#     lcc_frames = models.IntegerField(null=True)
-#     driver_frames = models.IntegerField(null=True)
-#     auto_speed_average = models.FloatField(null=True)
-#     auto_max_speed = models.FloatField(null=True)
-#     invervention_risk_proportion = models.FloatField(null=True)
-#     invervention_mpi = models.FloatField(null=True)
-#     invervention_risk_mpi = models.FloatField(null=True)
-#     invervention_cnt = models.IntegerField(null=True)
-#     invervention_risk_cnt = models.IntegerField(null=True)
-#     noa_invervention_risk_mpi = models.FloatField(null=True)
-#     noa_invervention_mpi = models.FloatField(null=True)
-#     noa_invervention_risk_cnt = models.IntegerField(null=True)
-#     noa_auto_mileages = models.FloatField(null=True)
-#     noa_auto_mileages_proportion = models.FloatField(null=True)
-#     noa_invervention_cnt = models.IntegerField(null=True)
-#     lcc_invervention_risk_mpi = models.FloatField(null=True)
-#     lcc_invervention_mpi = models.FloatField(null=True)
-#     lcc_invervention_risk_cnt = models.IntegerField(null=True)
-#     lcc_auto_mileages = models.FloatField(null=True)
-#     lcc_auto_mileages_proportion = models.FloatField(null=True)
-#     lcc_invervention_cnt = models.IntegerField(null=True)
-#     auto_dcc_max = models.FloatField(null=True)
-#     auto_dcc_frequency = models.FloatField(null=True)
-#     auto_dcc_cnt = models.IntegerField(null=True)
-#     auto_dcc_duration = models.FloatField(null=True)
-#     auto_dcc_average_duration = models.FloatField(null=True)
-#     auto_dcc_average = models.FloatField(null=True)
-#     auto_acc_max = models.FloatField(null=True)
-#     auto_acc_frequency = models.FloatField(null=True)
-#     auto_acc_cnt = models.IntegerField(null=True)
-#     auto_acc_duration = models.FloatField(null=True)
-#     auto_acc_average_duration = models.FloatField(null=True)
-#     auto_acc_average = models.FloatField(null=True)
-#     driver_mileages = models.FloatField(null=True)
-#     driver_dcc_max = models.FloatField(null=True)
-#     driver_dcc_frequency = models.FloatField(null=True)
-#     driver_acc_max = models.FloatField(null=True)
-#     driver_acc_frequency = models.FloatField(null=True)
-#     driver_speed_average = models.FloatField(null=True)
-#     driver_speed_max = models.FloatField(null=True)
-#     driver_dcc_cnt = models.IntegerField(null=True)
-#     driver_acc_cnt = models.IntegerField(null=True)
-#     journey_start_time = models.DateTimeField(blank=True,null=True)
-#     journey_end_time = models.DateTimeField(blank=True,null=True)
-#     journey_status = models.CharField(max_length=50, blank=True, null=True)
-#     pdf_name = models.CharField(max_length=255, blank=True, null=True)
-#     pdf_path = models.CharField(max_length=255, blank=True, null=True)
-#     auto_MBTI = models.CharField(max_length=50, blank=True, null=True)
-#     standby_MBTI = models.CharField(max_length=50, blank=True, null=True)
-#     created_date = models.DateTimeField(auto_now=True)
-
-#     class Meta:
-#         managed = False
-#         db_table = 'total_journey'  # 替换为实际的表名
-#         app_label = 'core_user'
+    # 创建信息
+    # created_by = models.CharField(max_length=50, null=True, blank=True)
+    created_date = models.DateTimeField(auto_now_add=True,null=True, blank=True)
     
+    class Meta:
+        managed = False
+        db_table = 'journey_record_longimg'
+        app_label = 'core_user'     # 指定应用标签为 core_user
+        verbose_name = '行程评测数据音频&长图'
+        verbose_name_plural = '行程评测数据音频&长图'
+    
+    def __str__(self):
+        return f"JourneyRecordLongImg {self.journey_id}"
