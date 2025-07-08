@@ -52,7 +52,7 @@ from accounts.models import User,CoreUser
 from common_task.db_utils import db_retry, ensure_connection
 from common_task.chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
 from django.db import close_old_connections
-from tmp_tools.monitor import monitor
+from tmp_tools.monitor import *
 
 from tmp_tools.zip import package_files
 
@@ -1941,7 +1941,7 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False)
                     # 处理行程数据
                     success, message = await loop.run_in_executor(
                         process_executor,
-                        process_wechat_data_sync,
+                        ensure_db_connection,
                         trip_id,
                         user,
                         csv_path_list
@@ -2452,12 +2452,11 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
               
                 # trip_id = 'ee1a65b673504d13b9c4d5c7e39d8737'
                 # NOTE: gps处理     
-                async_to_sync(ensure_db_connection)()
+          
                 handle_message_gps_data(file_path_list,trip_id)
                 # NOTE: trip_id 关联id 落库结果数据
              
                 
-                async_to_sync(ensure_db_connection)()
                 handle_message_data(total_message,trip_id,model,hardware_version,software_version)
                 # # 小程序协议
                 # process_csv(file_path_list, 
@@ -2802,7 +2801,7 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程生
 
 
 # 将嵌套函数移到外部作为独立函数
-async def ensure_db_connection():
+def ensure_db_connection( trip_id,user,csv_path_list):
     """确保数据库连接并执行合并操作"""
     # 最大重试次数
     max_retries = 3
@@ -2817,8 +2816,8 @@ async def ensure_db_connection():
             with connection.cursor() as cursor:
                 cursor.execute("SELECT 1")
                 cursor.fetchone()
-            
-            return True
+            success, message = process_wechat_data_sync(trip_id,user,csv_path_list)
+            return success, message 
         except Exception as e:
             logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
@@ -2829,7 +2828,7 @@ async def ensure_db_connection():
             else:
                 # 最后一次尝试也失败
                 logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
-                return False
+                return False,f"数据库连接在{max_retries}次尝试后仍然失败"
 
 
 
