@@ -70,6 +70,7 @@ class Trip(models.Model):
     det_chunk_count = models.IntegerField(default=0, verbose_name='行程det分片数量')
     det_chunk_lose = models.IntegerField(default=0, verbose_name='行程det分片丢失数量')
 
+
     def __str__(self):
         return f"trip {self.car_name}"
     
@@ -236,6 +237,8 @@ class Journey(models.Model):
     # created_by = models.CharField(max_length=50, null=True, blank=True)
     created_date = models.DateTimeField(auto_now_add=True,null=True, blank=True)
     
+    cover_image = models.CharField(max_length=255, null=True, blank=True, verbose_name='行程音频文件路径') 
+    
     class Meta:
         managed = False
         db_table = 'total_journey'
@@ -341,6 +344,28 @@ class JourneyGPSTracking(models.Model):
         db_table = 'journey_gps_tracking'
         app_label = 'core_user'
 
+
+
+class HotBrandVehicle(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, verbose_name='ID')
+    brand = models.CharField(max_length=100, blank=True, null=True, verbose_name='品牌')
+    brand_type = models.CharField(max_length=50, blank=True, null=True, verbose_name='品牌类型')
+    cover_image = models.CharField(max_length=255, blank=True, null=True, verbose_name='封面图片')
+    model = models.CharField(max_length=100, blank=True, null=True, verbose_name='车型')
+    description = models.TextField(blank=True, null=True, verbose_name='描述')
+    power_type = models.CharField(max_length=50, blank=True, null=True, verbose_name='动力类型')
+    vehicle_type = models.CharField(max_length=50, blank=True, null=True, verbose_name='车辆类型')
+    hardware_config_version = models.CharField(max_length=50, blank=True, null=True, verbose_name='硬件配置版本')
+    market_price_max = models.FloatField(blank=True, null=True, verbose_name='市场价格最大值')
+    market_price_min = models.FloatField(blank=True, null=True, verbose_name='市场价格最小值')
+    created_date = models.DateTimeField(blank=True, null=True, verbose_name='创建日期')
+    update_date = models.DateTimeField(blank=True, null=True, verbose_name='更新日期')
+
+    class Meta:
+        managed = False
+        db_table = 'hot_brand_vehicle'
+        app_label = 'core_user'
+
 class JourneyRecordLongImg(models.Model):
     """
     车辆行程评测数据模型
@@ -363,13 +388,3 @@ class JourneyRecordLongImg(models.Model):
     # 创建信息
     # created_by = models.CharField(max_length=50, null=True, blank=True)
     created_date = models.DateTimeField(auto_now_add=True,null=True, blank=True)
-    
-    class Meta:
-        managed = False
-        db_table = 'journey_record_longimg'
-        app_label = 'core_user'     # 指定应用标签为 core_user
-        verbose_name = '行程评测数据音频&长图'
-        verbose_name_plural = '行程评测数据音频&长图'
-    
-    def __str__(self):
-        return f"JourneyRecordLongImg {self.journey_id}"
