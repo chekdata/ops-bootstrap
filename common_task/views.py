@@ -968,6 +968,7 @@ async def get_journey_data_entrance(request):
                     'auto_safe_duration':j.auto_safe_duration,
                     'noa_safe_duration':j.noa_safe_duration,
                     'lcc_safe_duration':j.lcc_safe_duration,
+                    'cover_image':j.cover_image if j.cover_image else 'https://app.chekkk.com/assets/imgs/app_project/default/default_car.png'
                     }
                     for j in journeys
                 ]
@@ -1234,6 +1235,7 @@ async def get_single_journey_data_entrance(request):
                 'auto_safe_duration':j.auto_safe_duration,
                 'noa_safe_duration':j.noa_safe_duration,
                 'lcc_safe_duration':j.lcc_safe_duration,
+                'cover_image':j.cover_image if j.cover_image else 'https://app.chekkk.com/assets/imgs/app_project/default/default_car.png'
                 }
                 for j in journeys
             ]
@@ -1519,3 +1521,47 @@ async def set_recordUploadTosStatus(request):
     except Exception as e:
         logger.error(f"更新trip 音频上传信息失败: {str(e)}")
         return JsonResponse({'code':500,'success': False, 'message': f'请求处理失败: {str(e)}', 'data':{}})
+
+
+
+@extend_schema(
+    # 指定请求体的参数和类型
+    # request=InferenceDetialDetDataSerializer,
+    # 指定响应的信息
+    responses={
+        200: OpenApiResponse(response=SuccessResponseSerializer, description="处理成功"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务错误")
+    },
+    parameters=[
+        OpenApiParameter(name="Authorization", description="认证令牌，格式为：Bearer <token>", required=True, type=OpenApiTypes.STR, location=OpenApiParameter.HEADER)
+    ],
+    description="根据jouney——id更新图片路径",
+    summary="根据jouney——id更新图片路径",
+    tags=['行程数据']
+)
+# @api_view(['POST'])
+# @permission_classes([IsAuthenticated])
+@api_view(['POST'])
+@authentication_classes([])  # 清空认证类
+@permission_classes([AllowAny])  # 允许任何人访问
+@monitor
+async def update_journey_image(request):
+    journey_id =  request.data.get('journey_id')
+    image_path =  request.data.get('image_path')
+    try:
+        journeys = Journey.objects.using('core_user').filter(journey_id=journey_id)
+        journeys.longimg_file_path = image_path
+        journeys.save()									
+    
+        return JsonResponse({
+            'code':200,
+            'success': True, 
+            'message': f"图片更新成功",
+            'data': {}
+        })
+    
+    except Exception as e:
+        # logger.error(f"设置trip失败: {str(e)}")
+        return JsonResponse({'code':500,'success': False, 'message': f'请求处理失败: {str(e)}', 'data':{}})
+
+

@@ -39,7 +39,7 @@ from common_task.models import Trip, ChunkFile, Journey, Reported_Journey
 from django.utils import timezone
 from data.models import model_config
 from accounts.models import CoreUser
-from common_task.models import analysis_data_app,tos_csv_app,Journey,JourneyGPS,JourneyInterventionGps
+from common_task.models import analysis_data_app,tos_csv_app,Journey,JourneyGPS,JourneyInterventionGps,HotBrandVehicle
 from common_task.handle_tos import TinderOS
 from common_task.handle_journey_message import *
 from multiprocessing import Pool, cpu_count
@@ -1578,7 +1578,7 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
                             # 由最新的一个行程id为主行程id->
                             # 历史最早的行程为主行程 因为第一个
                             # 行程会关联task_id
-                            if parent_trip is not None and str(trip.trip_id) != parent_trip.trip_id:
+                            if parent_trip is not None and str(trip.trip_id) != str(parent_trip.trip_id):
                                 # 设置非主行程为子行程
                                 ensure_db_connection_and_set_sub_journey_sync(trip.trip_id, parent_trip.trip_id)
                                 # 设置当前行程的父行程id
@@ -1908,7 +1908,11 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
         # 使用 filter 方法筛选符合条件的对象，再用 exists 方法检查是否存在
    
         journey_exists = Journey.objects.using('core_user').filter(journey_id=trip_id).exists()
+
         if journey_exists:
+            cover_image = ''
+            # if HotBrandVehicle.objects.using('core_user').filter(model=model).exists():
+            #     cover_image = HotBrandVehicle.objects.using('core_user').get(model=model)
             # 如果存在，可以进一步获取对象
             core_Journey_profile = Journey.objects.using('core_user').get(journey_id=trip_id)
             # journey_update(parsed_data,trip_id,model,hardware_version,software_version,core_Journey_profile)
@@ -2085,7 +2089,8 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
 
             if data.get('driver_acc_cnt') or type(data.get('driver_acc_cnt')) != 'str':
                 core_Journey_profile.driver_acc_cnt = data.get('driver_acc_cnt')
-
+            if cover_image:
+                core_Journey_profile.cover_image = cover_image
             core_Journey_profile.save()
             if data.get('intervention_gps'):
                 # core_Journey_intervention_gps = Journey.objects.using('core_user').get(journey_id=trip_id)
