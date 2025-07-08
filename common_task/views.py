@@ -1627,7 +1627,16 @@ async def get_notUploadTosRecord(request):
             if 'device_id' in metadata:
                 defaults['device_id'] = metadata['device_id']
 
-
+        # 计算2分钟前时间点,查询2分钟前最后一次更新分片的行程
+        num_minutes_ago = timezone.now() - timezone.timedelta(minutes=0.5)
+        # 获取异常退出行程信息
+        abnormal_trips, _, file_names = await ensure_db_connection_and_get_abnormal_journey(_id, defaults['device_id'],
+                                                                    defaults['car_name'],
+                                                                    defaults['hardware_version'], 
+                                                                    defaults['software_version'], 
+                                                                    num_minutes_ago)
+        trips_data = [ {"trip_id": trip_id, "file_name": file_name}
+                        for trip_id, file_name in zip(abnormal_trips, file_names)]
         # 从trip表中获取未上传成功的行程音频文件
         # 过滤条件为 record_upload_tos_status='上传失败'或者 record_upload_tos_status='上传中'
         # 使用sync_to_async来异步执行数据库查询 
@@ -1648,15 +1657,17 @@ async def get_notUploadTosRecord(request):
             return JsonResponse({'code':200,'success': False, 'message': '没有未上传成功的行程音频文件', 'data':{}})
 
         # 构建返回数据
-        journey_id_list = [trip.journey_id for trip in trips]
-        file_name_list = [trip.file_name for trip in trips]
+        not_upload_trips_data = [{"trip_id": trip.journey_id, "file_name": trip.file_name}
+                                for trip in trips]
+
+        all_trips_data = trips_data + not_upload_trips_data
+
         return JsonResponse({
             'code':200,
             'success': True, 
             'message': f"获取未上传成功的行程音频文件成功",
             'data': {
-                'trips': journey_id_list,
-                'file_names': file_name_list,  # 返回保存路径
+                'trips': all_trips_data,
             }
         })
 
