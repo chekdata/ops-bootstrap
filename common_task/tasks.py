@@ -2638,6 +2638,23 @@ async def ensure_db_connection_and_get_abnormal_journey(user_id,
                                     last_update__lt=time
                                     ).order_by('-last_update').values_list('trip_id',flat=True)
             )
+
+            file_names = await sync_to_async(
+                list,
+                thread_sensitive=True
+            )(
+                Trip.objects.filter(
+                    user_id=user_id,
+                    is_completed=False,
+                    device_id=device_id,
+                    car_name=car_name,
+                    hardware_version=hardware_version,
+                    software_version=software_version,
+                    trip_status='正常',
+                    last_update__lt=time
+                ).order_by('-last_update').values_list('file_name', flat=True)
+            )
+
             # 获取trips列表中last_update - first_update的时间差和
             last_update = await sync_to_async(
                 lambda: sum(
@@ -2647,7 +2664,7 @@ async def ensure_db_connection_and_get_abnormal_journey(user_id,
             )()
             logger.info(f"获取到 {len(trips)} 个异常退出行程，时间间隔总和: {last_update} 秒")
             total_time = last_update
-            return trips, total_time
+            return trips, total_time, file_names
         except Exception as e:
             logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
             if attempt < max_retries - 1:

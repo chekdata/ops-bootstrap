@@ -705,7 +705,7 @@ async def get_abnormal_journey(request):
         # 计算2分钟前时间点,查询2分钟前最后一次更新分片的行程
         num_minutes_ago = timezone.now() - timezone.timedelta(minutes=0.5)
 
-        trips, total_time = await ensure_db_connection_and_get_abnormal_journey(_id, device_id,
+        trips, total_time, file_names = await ensure_db_connection_and_get_abnormal_journey(_id, device_id,
                                                                     car_name,
                                                                     hardware_version, 
                                                                     software_version, 
@@ -719,7 +719,8 @@ async def get_abnormal_journey(request):
             'data': {
                 'trips': trips,
                 'isLess5Min': False if total_time > 300 else True,  # 如果总时间小于5分钟，则标记为True
-                'total_time': total_time  # 返回总时间
+                'total_time': total_time,  # 返回总时间
+                'file_names': file_names,  # 返回保存路径
             }
         })
     
