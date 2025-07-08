@@ -385,6 +385,10 @@ class JourneyRecordLongImg(models.Model):
     hardware_version = models.CharField(max_length=64, null=True, blank=True, verbose_name='行程硬件版本')
     software_version = models.CharField(max_length=64, null=True, blank=True, verbose_name='行程软件版本')
     device_id = models.CharField(max_length=255, null=True, blank=True, verbose_name='行程生成设备id')
+
+    # 行程app存储路径
+    file_name = models.CharField(max_length=255, null=True, blank=True, verbose_name='行程本地存储路径')
+
     # 创建信息
     # created_by = models.CharField(max_length=50, null=True, blank=True)
     created_date = models.DateTimeField(auto_now_add=True,null=True, blank=True)

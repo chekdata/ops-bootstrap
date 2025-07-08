@@ -1559,7 +1559,8 @@ async def set_recordUploadTosStatus(request):
             journey_record_longImg.software_version = trip.software_version
         if not journey_record_longImg.device_id:
             journey_record_longImg.device_id = trip.device_id
-
+        if not journey_record_longImg.file_name:
+            journey_record_longImg.file_name = trip.file_name
 
         journey_record_longImg.record_upload_tos_status = upload_status
         logger.info(f"音频状态上传。journey_record_longImg中音频上传状态设置: {upload_status} , 用户ID: {_id}, 行程ID: {trip_id}")
@@ -1647,20 +1648,15 @@ async def get_notUploadTosRecord(request):
             return JsonResponse({'code':200,'success': False, 'message': '没有未上传成功的行程音频文件', 'data':{}})
 
         # 构建返回数据
-        result_data = []
-        for trip in trips:
-            journey_id = trip.journey_id
-            record_audio_file_path = trip.record_audio_file_path
-            result_data.append({
-                'trip_id': journey_id,
-                'record_audio_file_path': record_audio_file_path,
-            })
+        journey_id_list = [trip.journey_id for trip in trips]
+        file_name_list = [trip.file_name for trip in trips]
         return JsonResponse({
             'code':200,
             'success': True, 
             'message': f"获取未上传成功的行程音频文件成功",
             'data': {
-                'required_upload_record_files': result_data
+                'trips': journey_id_list,
+                'file_names': file_name_list,  # 返回保存路径
             }
         })
 
