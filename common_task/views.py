@@ -1635,7 +1635,7 @@ async def get_notUploadTosRecord(request):
                 JourneyRecordLongImg.objects.using("core_user").filter(
                     user_id=_id
                 ).filter(
-                    Q(record_upload_tos_status='上传中') | Q(record_upload_tos_status='上传成功'),
+                    Q(record_upload_tos_status='上传中') | Q(record_upload_tos_status='上传失败'),
                     **defaults  # 解包defaults字典作为过滤条件
                 )
             ),
