@@ -2138,11 +2138,12 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
         # 使用 filter 方法筛选符合条件的对象，再用 exists 方法检查是否存在
    
         journey_exists = Journey.objects.using('core_user').filter(journey_id=trip_id).exists()
-
+        
         if journey_exists:
             cover_image = ''
-            # if HotBrandVehicle.objects.using('core_user').filter(model=model).exists():
-            #     cover_image = HotBrandVehicle.objects.using('core_user').get(model=model)
+            cover_image_profile = HotBrandVehicle.objects.filter(model=model).first()
+            if cover_image_profile:
+                cover_image = cover_image_profile.cover_image
             # 如果存在，可以进一步获取对象
             core_Journey_profile = Journey.objects.using('core_user').get(journey_id=trip_id)
             # journey_update(parsed_data,trip_id,model,hardware_version,software_version,core_Journey_profile)
