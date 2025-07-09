@@ -7,7 +7,7 @@ from rest_framework import generics
 from data.models import Data
 from data.serializers import DataSerializer
 from rest_framework.permissions import IsAuthenticated
-from data.models import model_config,model_config_app_update,version_vault
+from data.models import model_config,model_config_app_update,version_vault,dashcams_version_vault
 from django.views.decorators.http import require_POST
 import jieba
 from rest_framework.response import Response
@@ -937,3 +937,48 @@ async def judge_version_vault(request):
     except Exception as e:
     #     print(e)
         return Response({'code': 500, 'message': '内部服务报错', 'data': {}})
+
+
+
+@extend_schema(
+    # 指定请求体的参数和类型
+    request=ModelConfigUpdateModelTos,
+    # 指定响应的信息
+    responses={
+        200: OpenApiResponse(response=SuccessfulResponseSerializer, description="固件版本升级"),
+        400: OpenApiResponse(response=SuccessfulResponseSerializer, description="数据缺失"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务错误")
+    },
+    parameters=[
+    ],
+    description="接收用户上传的版本信息判断。处理成功返回200，处理异常返回500。",
+    summary="判断版本信息",
+    tags=['版本包']
+)
+@api_view(['POST'])
+@authentication_classes([])  # 清空认证类
+@permission_classes([AllowAny])  # 允许任何人访问
+@monitor
+async def judge_dashcams_version_vault(request):
+    try:
+        version_profile = await sync_to_async(
+        lambda: dashcams_version_vault.objects.order_by('-version_code').first(),
+        thread_sensitive=True   
+        )()
+        if version_profile:
+            package_name = version_profile.package_name 
+            version_name = version_profile.version_name 
+            chanel = version_profile.chanel 
+            version_code = version_profile.version_code 
+            md5_value = version_profile.md5_value 
+            link = version_profile.link 
+            forced_update = version_profile.forced_update 
+            update_info = version_profile.update_info if version_profile.update_info else None
+            return Response({'code': 200, 'message': '成功', 'data': {'package_name':package_name,'version_name':version_name,'chanel':chanel,'version_code':version_code,  'md5_value':md5_value,'link':link,'forced_update':forced_update,'update_info':update_info}})
+        else:
+            return Response({'code': 200, 'message': '成功', 'data': {}})
+        
+    except Exception as e:
+    #     print(e)
+        return Response({'code': 500, 'message': '内部服务报错', 'data': {}})
+

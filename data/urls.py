@@ -14,4 +14,6 @@ urlpatterns = [
     path('update_model_config_app',views.update_model_config_app),
     path('update_version_vault',views.update_version_vault),
     path('judge_version_vault',views.judge_version_vault),
+    path('judge_dashcams_version_vault',views.judge_dashcams_version_vault),
+    
 ]
