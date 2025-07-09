@@ -720,7 +720,7 @@ async def get_abnormal_journey(request):
             'message': f"查询trip成功, user_id: {_id}",
             'data': {
                 'trips': trips,
-                'isLess5Min': False if total_time > 300 else True,  # 如果总时间小于5分钟，则标记为True
+                'isLess5Min': False if total_time > time_thre else True,  # 如果总时间小于5分钟，则标记为True
                 'total_time': total_time,  # 返回总时间
                 'file_names': file_names,  # 返回保存路径
             }

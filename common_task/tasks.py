@@ -1951,13 +1951,13 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False)
                     else:
                         logger.error(f"进程池处理数据失败，用户: {user.name}, 错误信息: {message}")
                 else:
-                    logger.error(f"用户 {_id} 不存在, 或行程持续时间小于240s. 无法处理行程数据 {csv_path_list}.")
+                    logger.error(f"用户 {_id} 不存在, 或行程持续时间小于{settings.TIME_THRE}s. 无法处理行程数据 {csv_path_list}.")
 
                 if not is_valid_interval: 
                     ensure_db_connection_and_set_journey_less_than_timethre_sync(trip_id)
-                    logger.warning(f"CSV文件 {csv_path_list} 时间间隔小于240秒，跳过处理")
+                    logger.warning(f"CSV文件 {csv_path_list} 时间间隔小于{settings.TIME_THRE}秒，跳过处理")
                 else:
-                    logger.info(f"CSV文件 {csv_path_list} 时间间隔大于240秒，正常处理")
+                    logger.info(f"CSV文件 {csv_path_list} 时间间隔大于{settings.TIME_THRE}秒，正常处理")
 
             if csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0:
                 for csv_path in csv_path_list:
@@ -2595,7 +2595,8 @@ def get_csv_time_interval(csv_path_list):
     获取CSV文件时间间隔
     """
     try:
-        time_interval_thre = 240   # csv时间间隔4分钟,低于该阈值不做行程不做上传小程序处理
+        # time_interval_thre = 240   # csv时间间隔4分钟,低于该阈值不做行程不做上传小程序处理
+        time_interval_thre = settings.TIME_THRE
         if not (csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0):
             logger.error(f"CSV文件列表为空!")
             return False
