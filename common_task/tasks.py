@@ -2354,8 +2354,8 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
             pic = profile.pic
             name = profile.name
             longimg_file_path = real_test()
-            journeys.longimg_file_path = longimg_file_path
-            journeys.save()
+            core_Journey_profile.longimg_file_path = longimg_file_path
+            core_Journey_profile.save()
 
             if data.get('intervention_gps'):
                 # core_Journey_intervention_gps = Journey.objects.using('core_user').get(journey_id=trip_id)
