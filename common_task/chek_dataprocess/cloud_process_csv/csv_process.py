@@ -196,8 +196,9 @@ class CSVProcess:
             # NOTE: 新数据gps_time维度调整  
             # if math.isnan(gps_time):
             #     gps_time = pre_gps_time
-            if not isinstance(gps_time, str) and np.isnan(float(gps_time)):
-                gps_time = pre_gps_time
+            if gps_time:
+                if not isinstance(gps_time, str) and np.isnan(float(gps_time)):
+                    gps_time = pre_gps_time
 
             if math.isnan(lon):
                 lon = pre_lon
@@ -887,7 +888,7 @@ class CSVProcess:
                             break
                     else:
                         break
-
+                
                 isReal_driver = True if frams_time_next - frames_time > time_thre_after else False
                 isReal_auto_driver = True if frames_time - frames_time_before> time_thre_before else False
 

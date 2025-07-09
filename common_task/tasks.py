@@ -53,7 +53,7 @@ from common_task.db_utils import db_retry, ensure_connection
 from common_task.chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
 from django.db import close_old_connections
 from tmp_tools.monitor import *
-
+from common_task.handle_chatgpt import get_chat_response
 from tmp_tools.zip import package_files
 
 # 创建进程池，数量为CPU核心数
@@ -2106,6 +2106,29 @@ def journey_update(total_message,trip_id,model,hardware_version,software_version
     core_Journey_profile.save()
 
 
+def mbti_judge(auto_speed_average,auto_acc_average,auto_dcc_average,driver_speed_average,driver_acc_average,driver_dcc_average):
+    human_MBTI_text = '内敛小i人'
+    car_MBTI_text = '内敛小i人'
+    if auto_speed_average>30 and (auto_dcc_average<-4 or auto_acc_average>4):
+        car_MBTI_text = '狂飙小e人'
+    elif  auto_speed_average<=30 and (auto_dcc_average<-4 or auto_acc_average>4):
+        car_MBTI_text = '苦苦装e小i人'
+    elif auto_speed_average>30 and (auto_dcc_average>=-4 or auto_acc_average<=4):
+        car_MBTI_text = '快乐小e人'
+    elif auto_speed_average<=30 and (auto_dcc_average>=-4 or auto_acc_average<=4):
+        car_MBTI_text = '内敛小i人'
+
+    if driver_speed_average>30 and (driver_acc_average<-4 or driver_acc_average>4):
+        human_MBTI_text = '狂飙小e人'
+    elif  driver_speed_average<=30 and (driver_acc_average<-4 or driver_acc_average>4):
+        human_MBTI_text = '苦苦装e小i人'
+    elif driver_speed_average>30 and (driver_acc_average>=-4 or driver_acc_average<=4):
+        human_MBTI_text = '快乐小e人'
+    elif driver_speed_average<=30 and (driver_acc_average>=-4 or driver_acc_average<=4):
+        human_MBTI_text = '内敛小i人'
+    return car_MBTI_text,human_MBTI_text
+
+
 def handle_message_data(total_message,trip_id,model,hardware_version,software_version):
     try:
         parser = ChekMessageParser(total_message)
@@ -2298,7 +2321,33 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
                 core_Journey_profile.driver_acc_cnt = data.get('driver_acc_cnt')
             if cover_image:
                 core_Journey_profile.cover_image = cover_image
+            car_MBTI_text,human_MBTI_text = mbti_judge(core_Journey_profile.auto_speed_average,core_Journey_profile.auto_acc_average,
+                                                    core_Journey_profile.auto_dcc_average,core_Journey_profile.driver_speed_average,
+                                                    core_Journey_profile.driver_acc_average,core_Journey_profile.driver_dcc_average)
+            car_dict = {
+            "user_style": human_MBTI_text,
+            "user_features": {
+                "avg_speed_kmh": core_Journey_profile.driver_speed_average,
+                "max_speed_kmh": core_Journey_profile.driver_speed_max,
+                "accel_mps2": core_Journey_profile.driver_acc_average,
+                "turn_mps2": None
+            },
+            "car_style": car_MBTI_text,
+            "car_features": {
+                "accel_100_kmh_sec": 8.8,
+                "torque_nm": None,
+                "accel_mps2": core_Journey_profile.auto_acc_average,
+                "turn_mps2": None
+            }
+            }
+            gpt_res = get_chat_response(car_dict)
+            print(gpt_res)
+            if gpt_res :
+                core_Journey_profile.gpt_comment =gpt_res 
             core_Journey_profile.save()
+
+          
+
             if data.get('intervention_gps'):
                 # core_Journey_intervention_gps = Journey.objects.using('core_user').get(journey_id=trip_id)
                 for _ in data.get('intervention_gps'):
@@ -2421,6 +2470,8 @@ def handle_message_gps_data(file_path_list,trip_id):
         # print(f"未找到 journey_id 为 {trip_id} 的行程记录。")
         logger.info(f"未找到 journey_id 为 {trip_id} 的行程记录。")
 
+
+
 # NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
 # 小程序proto1.0版本
 # 没有上传中间结果
@@ -2463,6 +2514,7 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
              
                 
                 handle_message_data(total_message,trip_id,model,hardware_version,software_version)
+
                 # # 小程序协议
                 # process_csv(file_path_list, 
                 #                 user_id=100000, 

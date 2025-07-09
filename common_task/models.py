@@ -239,6 +239,9 @@ class Journey(models.Model):
     
     cover_image = models.CharField(max_length=255, null=True, blank=True, verbose_name='行程音频文件路径') 
     
+    #文本信息
+    gpt_comment = models.CharField(max_length=30, null=True, blank=True, verbose_name='gpt评价')
+
     class Meta:
         managed = False
         db_table = 'total_journey'

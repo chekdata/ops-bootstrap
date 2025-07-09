@@ -296,10 +296,11 @@ if __name__ == "__main__":
     data_processor = DataProcessor_sync()
     pro_csv_list = []
     pro_dataframe_list = []
-    file_data =   "./阿维塔12_2023款 650 三激光四驱性能版_AVATR.OS 4.0.0_2025-07-01 16-00-59.csv"
+    file_data =   "./全新蔚来ES6_2023款 75kWh_Banyan 3.0.0_spcialPoint_2025-07-06 14-44-11.csv"
     data_processor.recover(str(file_data))
     data_processor.process()
     df = data_processor.save(file_data)
+    
     # pro_csv_list.append(new_file_path)
     pro_dataframe_list.append(df)
     # for file_path in file_path_list:
@@ -326,3 +327,5 @@ if __name__ == "__main__":
 
     # print(f"user_id: {user_id}, user_name: {user_name}, phone: {phone}, car_brand: {car_brand}, car_model: {car_model}, car_version: {car_hardware_version}")
     frame_intervention_file, frame_intervention_risk_file, json_file_list,total_message = csvProcess.process_list_csv_save_journey(upload_journey=True)
+
+    print(int(total_message.journeyStatistics.auto.intervention_statistics.cnt) )
