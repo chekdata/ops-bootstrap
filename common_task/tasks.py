@@ -2342,12 +2342,21 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
             }
             }
             gpt_res = get_chat_response(car_dict)
-            print(gpt_res)
+            
             if gpt_res :
                 core_Journey_profile.gpt_comment =gpt_res 
             core_Journey_profile.save()
 
-          
+            trip = await sync_to_async(Trip.objects.get, thread_sensitive=True)(trip_id=trip_id)
+            file_name = trip.file_name.splikt('_')[-1].replace('.csv','')
+            file_path = f'video-on-demand/app_project/{trip.user_id}/inference_data/{trip.car_name}/{file_name[0:10]}/{file_name}/'
+            user_id = trip.user_id
+            profile = await sync_to_async(User.objects.get, thread_sensitive=True)(id=user.id)
+            pic = profile.pic
+            name = profile.name
+            longimg_file_path = real_test()
+            core_Journey_profile.longimg_file_path = longimg_file_path
+            core_Journey_profile.save()
 
             if data.get('intervention_gps'):
                 # core_Journey_intervention_gps = Journey.objects.using('core_user').get(journey_id=trip_id)
