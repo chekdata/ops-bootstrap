@@ -149,7 +149,7 @@ class CSVProcess:
 
 
         # NOTE: ls7 nio特殊处理。noa只在高速上行驶
-        # self.df['state'] = self.df.apply(lambda row: self.change_road_state(row, model=1), axis=1)
+        self.df['state'] = self.df.apply(lambda row: self.change_road_state(row, model=1), axis=1)
         # self.df['road_scene'] = self.df.apply(lambda row: self.change_road_state(row, model=0), axis=1)
 
 
