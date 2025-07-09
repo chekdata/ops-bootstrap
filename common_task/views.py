@@ -36,6 +36,7 @@ from common_task.serializers import *
 from data.models import model_config
 from .models import Trip, ChunkFile, Journey, JourneyRecordLongImg
 from django.db.models import Q
+from django.conf import settings
 #from .chek_dataprocess.cloud_process_csv.wechat_csv_process import process_csv
 # from .chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
 from tmp_tools.monitor import *
@@ -712,6 +713,7 @@ async def get_abnormal_journey(request):
                                                                     num_minutes_ago)
         logger.info(f"查询trip成功。 user_id: {_id}, 'trips': {trips}")
         logger.info(f"查询trip成功。 user_id: {_id}, '行程更新时间总和约为': {total_time}秒.")
+        time_thre = settings.TIME_THRE
         return JsonResponse({
             'code':200,
             'success': True, 
