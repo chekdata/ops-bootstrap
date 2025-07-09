@@ -196,6 +196,8 @@ class Journey(models.Model):
     # created_by = models.CharField(max_length=50, null=True, blank=True)
     created_date = models.DateTimeField(auto_now_add=True,null=True, blank=True)
     
+    #文本信息
+    gpt_comment = models.CharField(max_length=30, null=True, blank=True, verbose_name='gpt评价')
     class Meta:
         managed = False
         db_table = 'total_journey'

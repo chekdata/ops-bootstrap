@@ -1331,12 +1331,14 @@ async def get_journey_mbti_entrance(request):
                     human_MBTI_text = '快乐小e人'
                 elif driver_speed_average<=30 and (driver_acc_average>=-4 or driver_acc_average<=4):
                     human_MBTI_text = '内敛小i人'
+                match_situation = j.gpt_comment if j.gpt_comment else '慢热的你遇上暴躁的性能猛兽'
+
             if car_MBTI_text or human_MBTI_text:
                 return JsonResponse({
                     'code':200,
                     'success': True, 
                     'message': f"查询成功",
-                    'data': {'car_MBTI':car_MBTI_text,'human_MBTI':human_MBTI_text,'match_situation':'慢热的你遇上暴躁的性能猛兽'
+                    'data': {'car_MBTI':car_MBTI_text,'human_MBTI':human_MBTI_text,'match_situation':match_situation
                     }
                 })
         else:
