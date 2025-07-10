@@ -99,13 +99,14 @@ WSGI_APPLICATION = 'myproject.wsgi.application'
 USE_TZ = True  # 确保使用时区
 TIME_ZONE = 'Asia/Shanghai'  # 设置项目时区（根据实际需求调整）
 
+# debug
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'app_project',
-        'USER': 'root',
-        'PASSWORD': 'Qwer4321@',
-        'HOST': '101.126.6.116',
+        'USER': 'developer',
+        'PASSWORD': '6vIODsjoYlYLuSC6',
+        'HOST': '180.184.75.25',
         # 'HOST': '62.234.57.136',
         # 'HOST': '1.95.39.248',
         'PORT': '3306',
@@ -116,9 +117,9 @@ DATABASES = {
     'core_user': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'core_user',
-        'USER': 'root',
-        'PASSWORD': 'Qwer4321@',
-        'HOST': '101.126.6.116',
+        'USER': 'developer',
+        'PASSWORD': '6vIODsjoYlYLuSC6',
+        'HOST': '180.184.75.25',
         # 'HOST': '62.234.57.136',
         # 'HOST': '1.95.39.248',
         'PORT': '3306',
@@ -260,3 +261,10 @@ LOGGING = {
         }
     },
 }
+
+TIME_THRE = 60
+VIDEO_ON_DEMAND = "/tos/video-on-demand/"
+RECORD_UPLOAD_TOS_SUCCESS = "上传成功"
+RECORD_UPLOAD_TOS_FAILED = "上传失败"
+RECORD_UPLOAD_TOS_ING = "上传中"
+RECORD_UPLOAD_TOS_FILE_MISSING = "文件丢失"
