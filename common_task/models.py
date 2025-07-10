@@ -370,9 +370,8 @@ class HotBrandVehicle(models.Model):
     update_date = models.DateTimeField(blank=True, null=True, verbose_name='更新日期')
 
     class Meta:
-        managed = False
         db_table = 'hot_brand_vehicle'
-        app_label = 'core_user'
+
 
 class JourneyRecordLongImg(models.Model):
     """

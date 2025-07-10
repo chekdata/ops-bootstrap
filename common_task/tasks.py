@@ -2139,6 +2139,7 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
             }
             gpt_res = get_chat_response(car_dict)
             
+            
             if gpt_res :
                 core_Journey_profile.gpt_comment =gpt_res 
             core_Journey_profile.save()
