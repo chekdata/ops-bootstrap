@@ -262,7 +262,7 @@ LOGGING = {
     },
 }
 
-TIME_THRE = 60
+TIME_THRE = 300
 VIDEO_ON_DEMAND = "/tos/video-on-demand/"
 RECORD_UPLOAD_TOS_SUCCESS = "上传成功"
 RECORD_UPLOAD_TOS_FAILED = "上传失败"
