@@ -53,7 +53,8 @@ from .tasks import (
     ensure_db_connection_and_get_abnormal_journey,
     ensure_db_connection_and_set_merge_abnormal_journey,
     ensure_db_connection_and_set_journey_status,
-    clear_less_5min_journey)
+    clear_less_5min_journey,
+    process_record_zip_async)
 
 logger = logging.getLogger('common_task')
 
@@ -1505,7 +1506,7 @@ async def set_recordUploadTosStatus(request):
 
         trip_id = record_file_name.split('_')[0] if record_file_name else None
 
-        journey_id = trip_id if trip_id else None
+        # journey_id = trip_id if trip_id else None
         trip_id = trip_id.replace('-','') if trip_id else None
 
         if not record_file_name:
@@ -1523,7 +1524,11 @@ async def set_recordUploadTosStatus(request):
             return JsonResponse({'code':200,'success': False, 'message': f'没有找到trip_id: {trip_id}', 'data':{}})
 
         # 更新Trip的record_file_name和upload_status字段
-        if upload_status not in ['上传中', '上传成功', '上传失败']:
+        # if upload_status not in ['上传中', '上传成功', '上传失败']:
+        if upload_status not in [settings.RECORD_UPLOAD_TOS_SUCCESS, 
+                                 settings.RECORD_UPLOAD_TOS_FAILED, 
+                                 settings.RECORD_UPLOAD_TOS_ING,
+                                 settings.RECORD_UPLOAD_TOS_FILE_MISSING]:
             logger.info(f"音频状态上传。upload_status: {upload_status} 不合法, 用户ID: {_id}, 行程ID: {trip_id}")
             return JsonResponse({'code':200,'success': False, 'message': f'upload_status: {upload_status} 不合法', 'data':{}})
         
@@ -1531,14 +1536,15 @@ async def set_recordUploadTosStatus(request):
             journey_record_longImg, created = await sync_to_async(
                                                     JourneyRecordLongImg.objects.using("core_user").get_or_create,
                                                     thread_sensitive=True
-                                                )(journey_id=journey_id)
-            logger.info(f"journey_record_longImg获取成功。journey_id: {journey_id} , 用户ID: {_id}, 行程ID: {trip_id}")
+                                                )(journey_id=trip_id)
+            logger.info(f"journey_record_longImg获取成功。journey_id: {trip_id} , 用户ID: {_id}, 行程ID: {trip_id}")
         except Exception:
-            logger.info(f"journey_record_longImg获取失败。没有找到或成功创建journey_id: {journey_id} , 用户ID: {_id}", exc_info=True)
+            logger.info(f"journey_record_longImg获取失败。没有找到或成功创建journey_id: {trip_id} , 用户ID: {_id}", exc_info=True)
             return JsonResponse({'code':200,'success': False, 'message': f'journey_record_longImg获取失败', 'data':{}})
 
 
-        if upload_status == '上传成功' and record_file_name:
+        # if upload_status == '上传成功' and record_file_name:
+        if upload_status == settings.RECORD_UPLOAD_TOS_SUCCESS and record_file_name:
             file_name = Path(trip.file_name).name
             model = file_name.split('_')[0]
             time_line = file_name.split('_')[-1].split('.')[0]
@@ -1549,8 +1555,9 @@ async def set_recordUploadTosStatus(request):
             # 获取journey
             journey_record_longImg.record_audio_file_path = tos_upload_path
             # 更新其他字段
-            logger.info(f"音频状态上传，上传成功。journey_id: {journey_id} , 用户ID: {_id}, 行程ID: {trip_id}, record_audio_file_path:{journey_record_longImg.record_audio_file_path}, record_upload_tos_status:{journey_record_longImg.record_upload_tos_status}")
+            logger.info(f"音频状态上传，上传成功。journey_id: {trip_id} , 用户ID: {_id}, 行程ID: {trip_id}, record_audio_file_path:{journey_record_longImg.record_audio_file_path}, record_upload_tos_status:{journey_record_longImg.record_upload_tos_status}")
 
+        
 
         # 更新行程信息
         if not journey_record_longImg.user_id:
@@ -1569,6 +1576,11 @@ async def set_recordUploadTosStatus(request):
         journey_record_longImg.record_upload_tos_status = upload_status
         logger.info(f"音频状态上传。journey_record_longImg中音频上传状态设置: {upload_status} , 用户ID: {_id}, 行程ID: {trip_id}")
         await sync_to_async(journey_record_longImg.save, thread_sensitive=True)()      
+
+        # 上传成功的话就看需不需要打包音频文件
+        if upload_status == settings.RECORD_UPLOAD_TOS_SUCCESS:
+            logger.info(f"音频状态上传。检查是否可以进行音频文件打包: 用户ID: {_id}, 行程ID: {journey_record_longImg.journey_id}")
+            process_record_zip_async(journey_record_longImg.journey_id)
 
         return JsonResponse({
             'code':200,
@@ -1639,32 +1651,72 @@ async def get_notUploadTosRecord(request):
                                                                     defaults['hardware_version'], 
                                                                     defaults['software_version'], 
                                                                     num_minutes_ago)
-        trips_data = [ {"trip_id": trip_id, "file_name": file_name}
-                        for trip_id, file_name in zip(abnormal_trips, file_names)]
-        # 从trip表中获取未上传成功的行程音频文件
-        # 过滤条件为 record_upload_tos_status='上传失败'或者 record_upload_tos_status='上传中'
-        # 使用sync_to_async来异步执行数据库查询 
-        
-        trips = await sync_to_async(
+        # 异常行程中已完成上传或文件丢失行程
+        # abnormal_trips_upload_success = await sync_to_async(
+        #     lambda: list(
+        #         JourneyRecordLongImg.objects.using("core_user").filter(
+        #             user_id=_id
+        #         ).filter(
+        #             Q(record_upload_tos_status= settings.RECORD_UPLOAD_TOS_SUCCESS) | Q(record_upload_tos_status=settings.RECORD_UPLOAD_TOS_FILE_MISSING),
+        #             **defaults  # 解包defaults字典作为过滤条件
+        #         )
+        #     ),
+        #     thread_sensitive=True
+        # )()
+
+        abnormal_trips_upload_success = await sync_to_async(
             lambda: list(
                 JourneyRecordLongImg.objects.using("core_user").filter(
-                    user_id=_id
-                ).filter(
-                    Q(record_upload_tos_status='上传中') | Q(record_upload_tos_status='上传失败'),
+                    Q(record_upload_tos_status= settings.RECORD_UPLOAD_TOS_SUCCESS) | Q(record_upload_tos_status=settings.RECORD_UPLOAD_TOS_FILE_MISSING),
                     **defaults  # 解包defaults字典作为过滤条件
                 )
             ),
             thread_sensitive=True
         )()
 
+        # 异常行程中已完成上传或文件丢失行程
+        abnormal_trips_upload_success_list = [trip.journey_id for trip in abnormal_trips_upload_success]
+
+        trips_data = [ {"trip_id": trip_id, "file_name": file_name}
+                        for trip_id, file_name in zip(abnormal_trips, file_names)
+                        if trip_id not in abnormal_trips_upload_success_list]
+        # 从trip表中获取未上传成功的行程音频文件
+        # 过滤条件为 record_upload_tos_status='上传失败'或者 record_upload_tos_status='上传中'
+        # 使用sync_to_async来异步执行数据库查询 
+        
+        # trips = await sync_to_async(
+        #     lambda: list(
+        #         JourneyRecordLongImg.objects.using("core_user").filter(
+        #             user_id=_id
+        #         ).filter(
+        #             Q(record_upload_tos_status= settings.RECORD_UPLOAD_TOS_ING) | Q(record_upload_tos_status=settings.RECORD_UPLOAD_TOS_FAILED),
+        #             **defaults  # 解包defaults字典作为过滤条件
+        #         )
+        #     ),
+        #     thread_sensitive=True
+        # )()
+
+        trips = await sync_to_async(
+            lambda: list(
+                JourneyRecordLongImg.objects.using("core_user").filter(
+                    Q(record_upload_tos_status= settings.RECORD_UPLOAD_TOS_ING) | Q(record_upload_tos_status=settings.RECORD_UPLOAD_TOS_FAILED),
+                    **defaults  # 解包defaults字典作为过滤条件
+                )
+            ),
+            thread_sensitive=True
+        )()
+
+
         if not trips:
-            return JsonResponse({'code':200,'success': False, 'message': '没有未上传成功的行程音频文件', 'data':{}})
+            logger.info(f"没有未上传成功的行程音频文件")
+            return JsonResponse({'code':200,'success': False, 'message': '没有未上传成功的行程音频文件', 'data':{'trips': []}})
 
         # 构建返回数据
         not_upload_trips_data = [{"trip_id": trip.journey_id, "file_name": trip.file_name}
                                 for trip in trips]
 
         all_trips_data = trips_data + not_upload_trips_data
+        logger.info(f"notUploadTosRecord list: {all_trips_data}")
 
         return JsonResponse({
             'code':200,
@@ -1676,7 +1728,7 @@ async def get_notUploadTosRecord(request):
         })
 
     except Exception as e:
-        logger.error(f"获取未上传成功的行程音频文件失败: {str(e)}")
+        logger.error(f"获取未上传成功的行程音频文件失败: {str(e)}", exc_info=True)
         return JsonResponse({'code':500,'success': False, 'message': f'请求处理失败: {str(e)}', 'data':{}}) 
 
 
@@ -1721,3 +1773,110 @@ async def update_journey_image(request):
         return JsonResponse({'code':500,'success': False, 'message': f'请求处理失败: {str(e)}', 'data':{}})
 
 
+@extend_schema(
+    # 指定请求体的参数和类型
+    # request=InferenceDetialDetDataSerializer,
+    # 指定响应的信息
+    responses={
+        200: OpenApiResponse(response=SuccessResponseSerializer, description="处理成功"),
+        500: OpenApiResponse(response=ErrorResponseSerializer, description="内部服务错误")
+    },
+    parameters=[
+        OpenApiParameter(name="Authorization", description="认证令牌，格式为：Bearer <token>", required=True, type=OpenApiTypes.STR, location=OpenApiParameter.HEADER)
+    ],
+    description="以trip_id设置行程音频文件落库",
+    summary="以trip_id设置行程音频文件落库",
+    tags=['行程数据']
+)
+@api_view(['POST'])
+# @permission_classes([IsAuthenticated])
+@authentication_classes([])  # 清空认证类
+@permission_classes([AllowAny])  # 允许任何人访问
+@monitor
+async def set_recordUploadTosStatusByTripId(request):
+    """以trip_id设置行程音频文件落库"""
+    user = request.user  # 获取当前登录用户
+    _id = user.id
+    try:
+
+        trip_id = None
+        upload_status = None
+
+        # 获取并解析 metadata JSON
+        metadata_str = request.POST.get('metadata')
+        if not metadata_str and request.data:
+            # 支持直接传递json对象
+            metadata = request.data
+        else:
+            try:
+                metadata = json.loads(metadata_str)
+            except Exception:
+                return JsonResponse({'code':500, 'success': False, 'message': 'metadata 格式错误', 'data':{}})
+
+        # 添加元数据
+        defaults = {}
+        if metadata:
+            if 'trip_id' in metadata:
+                trip_id = metadata['trip_id']
+            if 'upload_status' in metadata:
+                upload_status = metadata['upload_status']
+
+        if not trip_id:
+            logger.info(f"音频状态上传。trip_id为空, 用户ID: {_id}, 行程ID: {trip_id}")
+            return JsonResponse({'code':200,'success': False, 'message': 'trip_id: 为空.', 'data':{}})
+
+        trip_id = trip_id.replace("-","")
+
+        if not upload_status:
+            logger.info(f"音频状态上传。upload_status为空, 用户ID: {_id}, 行程ID: {trip_id}")
+            return JsonResponse({'code':200,'success': False, 'message': 'upload_status: 为空.', 'data':{}})
+
+        # 更新Trip的record_file_name和upload_status字段
+        # if upload_status not in ['上传中', '上传成功', '上传失败']:
+        if upload_status not in [settings.RECORD_UPLOAD_TOS_SUCCESS, 
+                                 settings.RECORD_UPLOAD_TOS_FAILED, 
+                                 settings.RECORD_UPLOAD_TOS_ING,
+                                 settings.RECORD_UPLOAD_TOS_FILE_MISSING]:
+            logger.info(f"通过tripId音频状态上传。upload_status: {upload_status} 不合法, 用户ID: {_id}, 行程ID: {trip_id}")
+            return JsonResponse({'code':200,'success': False, 'message': f'upload_status: {upload_status} 不合法', 'data':{}})
+        
+        try:
+            journey_record_longImg, created = await sync_to_async(
+                                                    JourneyRecordLongImg.objects.using("core_user").get_or_create,
+                                                    thread_sensitive=True
+                                                )(journey_id=trip_id)
+            logger.info(f"journey_record_longImg获取成功。journey_id: {trip_id} , 用户ID: {_id}, 行程ID: {trip_id}")
+        except Exception:
+            logger.info(f"journey_record_longImg获取失败。没有找到journey_id: {trip_id} , 用户ID: {_id}", exc_info=True)
+            return JsonResponse({'code':200,'success': False, 'message': f'journey_record_longImg获取失败', 'data':{}})
+
+        trip_journey = await sync_to_async(Trip.objects.filter(trip_id=trip_id).first, thread_sensitive=True)()
+
+        # if upload_status == '上传成功' and record_file_name:
+        journey_record_longImg.car_name = trip_journey.car_name
+        journey_record_longImg.hardware_version = trip_journey.hardware_version
+        journey_record_longImg.software_version = trip_journey.software_version
+        journey_record_longImg.device_id = trip_journey.device_id
+
+        if upload_status == settings.RECORD_UPLOAD_TOS_FILE_MISSING:
+            journey_record_longImg.record_upload_tos_status = upload_status
+            
+            logger.info(f"通过tripId音频状态上传。journey_record_longImg中音频上传状态设置: {upload_status} , 用户ID: {_id}, 行程ID: {trip_id}")
+        await sync_to_async(journey_record_longImg.save, thread_sensitive=True)()      
+
+        # 文件丢失的看是否已具备音频文件打包状态
+        if upload_status == settings.RECORD_UPLOAD_TOS_FILE_MISSING:
+            logger.info(f"音频状态上传。检查是否可以进行音频文件打包. 行程id: {journey_record_longImg.journey_id}")
+            process_record_zip_async(journey_record_longImg.journey_id)
+
+        return JsonResponse({
+            'code':200,
+            'success': True, 
+            'message': f"通过tripId更新journey_record_longImg 音频上传信息更新成功, trip id: {trip_id}",
+            'data': {
+            }
+        })
+    
+    except Exception as e:
+        logger.error(f"通过tripId更新journey_record_longImg 音频上传信息失败: {str(e)}")
+        return JsonResponse({'code':500,'success': False, 'message': f'请求处理失败: {str(e)}', 'data':{}})

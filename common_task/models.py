@@ -45,6 +45,8 @@ class tos_csv_app(models.Model):
 class Trip(models.Model):
     trip_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, verbose_name='行程id')
     user_id = models.CharField(max_length=50, blank=True, verbose_name='app用户id')
+    task_id = models.CharField(max_length=50, null=True,blank=True, verbose_name='之家任务id')
+    autohome_phone = models.CharField(max_length=11, null=True,blank=True, verbose_name='之家任务输入手机号')
     car_name = models.CharField(max_length=100, verbose_name='车型名')
     file_name = models.CharField(max_length=500, blank=True, verbose_name='行程文件名')
     is_completed = models.BooleanField(default=False, verbose_name='行程是否已完成合并')
@@ -69,6 +71,7 @@ class Trip(models.Model):
     csv_chunk_lose = models.IntegerField(default=0, verbose_name='行程csv分片丢失数量')
     det_chunk_count = models.IntegerField(default=0, verbose_name='行程det分片数量')
     det_chunk_lose = models.IntegerField(default=0, verbose_name='行程det分片丢失数量')
+    is_less_than_5min = models.BooleanField(default=False, verbose_name='行程是否小于5分钟')
 
 
     def __str__(self):
@@ -124,6 +127,8 @@ class Journey(models.Model):
     车辆行程评测数据模型
     """
     id = models.AutoField(primary_key=True)
+    task_id = models.CharField(max_length=50, null=True,blank=True, verbose_name='之家任务id')
+    autohome_phone = models.CharField(max_length=11, null=True,blank=True, verbose_name='之家任务输入手机号')
     brand = models.CharField(max_length=64, null=True, blank=True, verbose_name='车型')
     model = models.CharField(max_length=64, null=True, blank=True, verbose_name='车型名')
     hardware_config = models.CharField(max_length=64, null=False, verbose_name='车机硬件版本编码')
@@ -350,7 +355,7 @@ class JourneyGPSTracking(models.Model):
 
 
 class HotBrandVehicle(models.Model):
-    id = models.CharField(primary_key=True, max_length=36, verbose_name='ID')
+    _id = models.CharField(primary_key=True, max_length=36, verbose_name='ID')
     brand = models.CharField(max_length=100, blank=True, null=True, verbose_name='品牌')
     brand_type = models.CharField(max_length=50, blank=True, null=True, verbose_name='品牌类型')
     cover_image = models.CharField(max_length=255, blank=True, null=True, verbose_name='封面图片')
@@ -379,6 +384,7 @@ class JourneyRecordLongImg(models.Model):
     # 音频相关
     record_upload_tos_status = models.CharField(max_length=50, null=True, blank=True, verbose_name='行程音频文件落库状态')
     record_audio_file_path = models.CharField(max_length=500, null=True, blank=True, verbose_name='行程音频文件路径')
+    record_audio_zipfile_path = models.CharField(max_length=500, null=True, blank=True, verbose_name='行程音频文件打包路径，没有子行程的是包内只有父行程音频，有子行程的包内包含子行程音频')
 
     # 长图相关
     longimg_upload_tos_status = models.CharField(max_length=50, null=True, blank=True, verbose_name='行程音频文件落库状态')
