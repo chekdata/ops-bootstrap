@@ -23,23 +23,24 @@ def package_files(file_paths, output_zip):
                 if file_path.exists():
                     zipf.write(file_path, arcname=file_path.name)
                 else:
-                    print(f"文件不存在: {file_path}")
-                    logger.info(f"文件不存在: {file_path}")    
-        # 移动到目标路径（覆盖）
-        shutil.move(tmp_zip, output_zip)
-        print(f"已打包到: {output_zip}")
-        logger.info(f"已打包到: {output_zip}") 
+                    logger.info(f"文件不存在: {file_path}")  
+        if Path(tmp_zip).exists():   
+            # 移动到目标路径（覆盖）
+            shutil.move(tmp_zip, output_zip)
+            logger.info(f"已打包到: {output_zip}") 
+        else:
+            logger.info(f"缺少文件，没有打包完成！")
         return True
     except FileNotFoundError as e:
-        print(f"打包失败: 文件未找到 {e}", exc_info=True)
+        logger.error(f"打包失败: 文件未找到 {e}", exc_info=True) 
         return False
     except zipfile.BadZipFile as e:
-        print(f"打包失败: 无效的zip文件 {e}", exc_info=True)
+        logger.error(f"打包失败: 无效的zip文件 {e}", exc_info=True) 
         if os.path.exists(tmp_zip):
             os.remove(tmp_zip)
         return False
     except shutil.Error as e:
-        print(f"打包失败: shutil错误 {e}", exc_info=True)
+        logger.error(f"打包失败: shutil错误 {e}", exc_info=True) 
         if os.path.exists(tmp_zip):
             os.remove(tmp_zip)
         return False    

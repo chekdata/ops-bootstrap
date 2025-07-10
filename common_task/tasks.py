@@ -40,7 +40,7 @@ from common_task.models import Trip, ChunkFile, Journey, Reported_Journey
 from django.utils import timezone
 from data.models import model_config
 from accounts.models import CoreUser
-from common_task.models import analysis_data_app,tos_csv_app,Journey,JourneyGPS,JourneyInterventionGps,HotBrandVehicle
+from common_task.models import analysis_data_app,tos_csv_app,Journey,JourneyGPS,JourneyInterventionGps,HotBrandVehicle,JourneyRecordLongImg
 from common_task.handle_tos import TinderOS
 from common_task.handle_journey_message import *
 from multiprocessing import Pool, cpu_count
@@ -556,7 +556,6 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
             'is_completed': False,
             'last_update': get_current_timezone_time()  # 使用时区时间
         }
-
         # 添加元数据
         if metadata:
             # if 'device_id' in metadata:
@@ -577,6 +576,20 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
                 defaults['device_id'] = metadata['device_id']
             # if 'trip_status' in metadata:
             #     defaults['trip_status'] = metadata['trip_status']
+
+        # 增加音频和长图信息落库
+        journey_record_longImg_exists = await sync_to_async(JourneyRecordLongImg.objects.using("core_user").filter(journey_id=trip_id).exists, thread_sensitive=True)()
+
+        if not journey_record_longImg_exists:
+            keys_to_copy = ['car_name', 'file_name', 'hardware_version', 'software_version', 'device_id']
+            journey_record_longImg_defaults = {key: defaults[key] for key in keys_to_copy}
+            journey_record_longImg, created = await sync_to_async(JourneyRecordLongImg.objects.using("core_user").get_or_create, thread_sensitive=True)(
+                            user_id = user_id,
+                            journey_id=trip_id,
+                            record_upload_tos_status = settings.RECORD_UPLOAD_TOS_ING, 
+                            defaults=journey_record_longImg_defaults
+                        )
+            logger.info(f"=============创建新行程音频长图记录: {trip_id}====================")
 
         # 当第一次写入时，写入first_update
         trip_exists = await sync_to_async(Trip.objects.filter(trip_id=trip_id).exists, thread_sensitive=True)()
@@ -2859,7 +2872,7 @@ def ensure_db_connection_and_set_sub_journey_parent_id_sync(trip_id, parent_trip
                     # 如果没有提供parent_trip_id，则设置为None
                     trip.parent_trip_id = None
                     # 更新其他字段
-                    trip.save()
+                trip.save()
                 logger.info(f"已将行程 {trip_id} 的父行程设为 {parent_trip_id}")
             except Trip.DoesNotExist:
                 logger.error(f"行程 {trip_id} 不存在")
@@ -3078,7 +3091,10 @@ async def process_record_zip_async(journey_record_longimg_id):
                                 )(
                                     Trip.objects.filter(parent_trip_id=trip.parent_trip_id).values_list('trip_id', flat=True)
                                 )
+                    
                     journeyRecord_ids = [trip_id for trip_id in trip_ids]
+
+                    logger.info(f"所有子行程,  行程列表: {journeyRecord_ids}")
 
                     record_audio_file_paths = await sync_to_async(
                                                 list,
@@ -3099,26 +3115,26 @@ async def process_record_zip_async(journey_record_longimg_id):
                         and ((parement_journeyRecord.record_upload_tos_status == settings.RECORD_UPLOAD_TOS_SUCCESS)
                             or (parement_journeyRecord.record_upload_tos_status == settings.RECORD_UPLOAD_TOS_FILE_MISSING))):
                         # 查找父行程 journeyRecord
-                        
+                        logger.info(f"开始准备父行程和子行程路径,  准备打包")
                         file_paths = [settings.VIDEO_ON_DEMAND + audio_file_path
                                       for audio_file_path in record_audio_file_paths]
                         parement_record_path = settings.VIDEO_ON_DEMAND + parement_journeyRecord.record_audio_file_path
                         # 打包文件里增加父行程音频
                         file_paths.append(parement_record_path)
 
-                        output_zip += str(Path(parement_record_path).with_suffix(".zip"))
+                        output_zip = str(Path(parement_record_path).with_suffix(".zip"))
 
                         if(package_files(file_paths, output_zip)):
                             logger.info(f"当前行程完成打包, 行程ID: {trip_id}, zip包路径: {output_zip}")
-                            journeyRecord.record_audio_zipfile_path = output_zip
-                            journeyRecord.save()
+                            parement_journeyRecord.record_audio_zipfile_path = output_zip
+                            parement_journeyRecord.save()
                         else:
                             logger.info(f"当前行程打包未完成, 行程ID: {trip_id}")
                 
 
 
         
-        return True, results
+        return True
     except Exception as e:
         logger.error(f"处理和上传文件失败: {e}", exc_info=True)
         return False, []
