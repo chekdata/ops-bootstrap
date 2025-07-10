@@ -2974,7 +2974,7 @@ async def clear_less_5min_journey(_id, trip_id_list, is_last_chunk=False):
                         # 数据库里删除
                         try:
                             # 查找行程
-                            trip_journey = Trip.objects.filter(
+                            trip_journey = Trip.objects.get(
                                 trip_id=trip,
                             ).order_by('-last_update')  # 降序排列，从最新到最旧
 

@@ -1506,7 +1506,7 @@ async def set_recordUploadTosStatus(request):
 
         trip_id = record_file_name.split('_')[0] if record_file_name else None
 
-        # journey_id = trip_id if trip_id else None
+        journey_id = trip_id if trip_id else None
         trip_id = trip_id.replace('-','') if trip_id else None
 
         if not record_file_name:
@@ -1536,7 +1536,7 @@ async def set_recordUploadTosStatus(request):
             journey_record_longImg, created = await sync_to_async(
                                                     JourneyRecordLongImg.objects.using("core_user").get_or_create,
                                                     thread_sensitive=True
-                                                )(journey_id=trip_id)
+                                                )(journey_id=journey_id)
             logger.info(f"journey_record_longImg获取成功。journey_id: {trip_id} , 用户ID: {_id}, 行程ID: {trip_id}")
         except Exception:
             logger.info(f"journey_record_longImg获取失败。没有找到或成功创建journey_id: {trip_id} , 用户ID: {_id}", exc_info=True)
@@ -1679,7 +1679,7 @@ async def get_notUploadTosRecord(request):
 
         trips_data = [ {"trip_id": trip_id, "file_name": file_name}
                         for trip_id, file_name in zip(abnormal_trips, file_names)
-                        if trip_id not in abnormal_trips_upload_success_list]
+                        if str(trip_id) not in abnormal_trips_upload_success_list]
         # 从trip表中获取未上传成功的行程音频文件
         # 过滤条件为 record_upload_tos_status='上传失败'或者 record_upload_tos_status='上传中'
         # 使用sync_to_async来异步执行数据库查询 
@@ -1707,15 +1707,16 @@ async def get_notUploadTosRecord(request):
         )()
 
 
-        if not trips:
-            logger.info(f"没有未上传成功的行程音频文件")
-            return JsonResponse({'code':200,'success': False, 'message': '没有未上传成功的行程音频文件', 'data':{'trips': []}})
-
         # 构建返回数据
         not_upload_trips_data = [{"trip_id": trip.journey_id, "file_name": trip.file_name}
                                 for trip in trips]
 
         all_trips_data = trips_data + not_upload_trips_data
+
+        if len(all_trips_data) == 0:
+            logger.info(f"没有未上传成功的行程音频文件")
+            return JsonResponse({'code':200,'success': False, 'message': '没有未上传成功的行程音频文件', 'data':{'trips': []}})
+
         logger.info(f"notUploadTosRecord list: {all_trips_data}")
 
         return JsonResponse({
@@ -1824,7 +1825,7 @@ async def set_recordUploadTosStatusByTripId(request):
         if not trip_id:
             logger.info(f"音频状态上传。trip_id为空, 用户ID: {_id}, 行程ID: {trip_id}")
             return JsonResponse({'code':200,'success': False, 'message': 'trip_id: 为空.', 'data':{}})
-
+        journey_id = trip_id
         trip_id = trip_id.replace("-","")
 
         if not upload_status:
@@ -1844,7 +1845,7 @@ async def set_recordUploadTosStatusByTripId(request):
             journey_record_longImg, created = await sync_to_async(
                                                     JourneyRecordLongImg.objects.using("core_user").get_or_create,
                                                     thread_sensitive=True
-                                                )(journey_id=trip_id)
+                                                )(journey_id=journey_id)
             logger.info(f"journey_record_longImg获取成功。journey_id: {trip_id} , 用户ID: {_id}, 行程ID: {trip_id}")
         except Exception:
             logger.info(f"journey_record_longImg获取失败。没有找到journey_id: {trip_id} , 用户ID: {_id}", exc_info=True)
