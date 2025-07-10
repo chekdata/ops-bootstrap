@@ -2140,20 +2140,20 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
             gpt_res = get_chat_response(car_dict)
             
             
-            if gpt_res :
-                core_Journey_profile.gpt_comment =gpt_res 
-            core_Journey_profile.save()
+            # if gpt_res :
+            #     core_Journey_profile.gpt_comment =gpt_res 
+            # core_Journey_profile.save()
 
-            trip = Trip.objects.get(trip_id=trip_id)
-            file_name = trip.file_name.split('_')[-1].replace('.csv','')
-            file_path = f'video-on-demand/app_project/{trip.user_id}/inference_data/{trip.car_name}/{file_name[0:10]}/{file_name}/'
-            user_id = trip.user_id
-            profile = User.objects.get(id=user.id)
-            pic = profile.pic
-            name = profile.name
-            longimg_file_path = real_test()
-            core_Journey_profile.longimg_file_path = longimg_file_path
-            core_Journey_profile.save()
+            # trip = Trip.objects.get(trip_id=trip_id)
+            # file_name = trip.file_name.split('_')[-1].replace('.csv','')
+            # file_path = f'video-on-demand/app_project/{trip.user_id}/inference_data/{trip.car_name}/{file_name[0:10]}/{file_name}/'
+            # user_id = trip.user_id
+            # profile = User.objects.get(id=user.id)
+            # pic = profile.pic
+            # name = profile.name
+            # longimg_file_path = real_test()
+            # core_Journey_profile.longimg_file_path = longimg_file_path
+            # core_Journey_profile.save()
 
             if data.get('intervention_gps'):
                 # core_Journey_intervention_gps = Journey.objects.using('core_user').get(journey_id=trip_id)
@@ -2175,7 +2175,7 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
             logger.info(f"未找到 journey_id 为 {trip_id} 的行程记录。")
     except Exception as e:
         # print(e)
-        logger.info(f"报错 {e} ")
+        logger.info(f"报错 {e} ", exc_info=True)
 
 def convert_gps_time(csv_file_path,trip_id):
     """

@@ -1534,7 +1534,7 @@ async def set_recordUploadTosStatus(request):
         
         try:
             journey_record_longImg, created = await sync_to_async(
-                                                    JourneyRecordLongImg.objects.using("core_user").get_or_create,
+                                                    JourneyRecordLongImg.objects.using("core_user").update_or_create,
                                                     thread_sensitive=True
                                                 )(journey_id=journey_id)
             logger.info(f"journey_record_longImg获取成功。journey_id: {trip_id} , 用户ID: {_id}, 行程ID: {trip_id}")
@@ -1843,7 +1843,7 @@ async def set_recordUploadTosStatusByTripId(request):
         
         try:
             journey_record_longImg, created = await sync_to_async(
-                                                    JourneyRecordLongImg.objects.using("core_user").get_or_create,
+                                                    JourneyRecordLongImg.objects.using("core_user").update_or_create,
                                                     thread_sensitive=True
                                                 )(journey_id=journey_id)
             logger.info(f"journey_record_longImg获取成功。journey_id: {trip_id} , 用户ID: {_id}, 行程ID: {trip_id}")
