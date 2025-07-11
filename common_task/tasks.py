@@ -3113,6 +3113,10 @@ async def process_record_zip_async(journey_record_longimg_id):
                             logger.info(f"当前行程完成打包, 行程ID: {trip_id}, zip包路径: {output_zip}")
                             parement_journeyRecord.record_audio_zipfile_path = output_zip
                             parement_journeyRecord.save()
+                            # TODO:
+                            # 请求数据分发通知
+                            # 本行程音频处理完成
+                            
                         else:
                             logger.info(f"当前行程打包未完成, 行程ID: {trip_id}")
                 

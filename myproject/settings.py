@@ -271,3 +271,6 @@ RECORD_UPLOAD_TOS_FILE_MISSING = "文件丢失"
 JOURNEY_STATUS_ING = "行程生成中"
 JOURNEY_STATUS_FAILED = "异常退出待确认"
 JOURNEY_STATUS_SUCCESS = "正常"
+
+# 之家数据分发域名
+DATA_DISTRIBUTION = "autohome-report.chekkk.com"
