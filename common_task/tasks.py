@@ -2342,6 +2342,12 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
                         if os.path.exists(parent_dir):
                             shutil.rmtree(parent_dir)
                             print(f'已删除文件夹: {parent_dir}')
+                
+                # 检查一下音频打包是否完成，如果没有完成
+                # 将执行打包
+                # 使用当前id，这样如果是子行程会自动去打包其他
+                # 放到主行程下面
+                async_to_sync(process_record_zip_async)(current_trip.trip_id)
 
                 return True, f"数据处理成功. 用户名: {user.name}, 行程数据: {file_name}"
             else:
