@@ -56,6 +56,8 @@ from django.db import close_old_connections
 from tmp_tools.monitor import *
 from common_task.handle_chatgpt import get_chat_response
 from tmp_tools.zip import package_files
+from common_task.external_request import reports_successful_audio_generation
+from django.db.models import Max, Min
 
 # 创建进程池，数量为CPU核心数
 process_pool = Pool(processes=cpu_count())
@@ -2290,7 +2292,26 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
                                 car_hardware_version=hardware_version,
                                 car_software_version=software_version
                 )
-              
+
+                # 父行程认为是历史第一个行程
+                # 根据合并行程文件找到所有行程
+                current_trip = Trip.objects.get(trip_id=trip_id)
+                trips = Trip.objects.filter(
+                    user_id=user.id,
+                    device_id=current_trip.device_id,
+                    car_name=current_trip.car_name,
+                    hardware_version=current_trip.hardware_version,
+                    software_version=current_trip.software_version,
+                    merged_csv_path__in=file_path_list  # 添加 merged_csv_path 在列表中的筛选条件
+                ).order_by('-last_update')
+                # 获取父行程，更新父行程数据
+                trip = trips.last()
+
+                if not trip:
+                    logger.warning(f"没有找到该行程的父行程！")
+                    return False, "没有找到该行程的父行程！" 
+
+                trip_id = trip.trip_id
                 # trip_id = 'ee1a65b673504d13b9c4d5c7e39d8737'
                 # NOTE: gps处理     
           
@@ -2309,9 +2330,26 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
                 #                 car_model='', 
                 #                 car_version=software_version
                 # )
+
+
+
+
+                # 使用聚合函数获取 last_update 最晚时间和 first_update 最早时间
+                time_range = trips.aggregate(
+                    latest_last_update=Max('last_update'),  # 最晚的 last_update
+                    earliest_first_update=Min('first_update')  # 最早的 first_update
+                )
+
+                # 提取结果
+                latest_last_update = time_range['latest_last_update']
+                earliest_first_update = time_range['earliest_first_update']
                 # 行程状态更新
-                trip = Trip.objects.get(trip_id=trip_id)
-                async_to_sync(ensure_db_connection_and_set_journey_status)(trip_id, status=trip.trip_status)                
+
+                async_to_sync(ensure_db_connection_and_set_journey_status)(trip_id, status=trip.trip_status, 
+                                                                           total_journey_start = earliest_first_update, total_journey_end = latest_last_update)  
+
+
+
                 for file_path in file_path_list:
                     if Path(file_path).exists():
                         os.remove(str(file_path))
@@ -2324,6 +2362,12 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
                         if os.path.exists(parent_dir):
                             shutil.rmtree(parent_dir)
                             print(f'已删除文件夹: {parent_dir}')
+                
+                # 检查一下音频打包是否完成，如果没有完成
+                # 将执行打包
+                # 使用当前id，这样如果是子行程会自动去打包其他
+                # 放到主行程下面
+                async_to_sync(process_record_zip_async)(current_trip.trip_id)
 
                 return True, f"数据处理成功. 用户名: {user.name}, 行程数据: {file_name}"
             else:
@@ -2566,7 +2610,7 @@ async def ensure_db_connection_and_set_merge_abnormal_journey(trips):
 
 
 # 将嵌套函数移到外部作为独立函数
-async def ensure_db_connection_and_set_journey_status(trip_id, status="行程生成中"):
+async def ensure_db_connection_and_set_journey_status(trip_id, status="行程生成中", total_journey_start = None, total_journey_end = None):
     """确保数据库连接并执行合并操作"""
     # 最大重试次数
     max_retries = 3
@@ -2619,6 +2663,8 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程生
                             journey.journey_end_time = trip.last_update
                         elif not created:
                             # 如果是更新现有记录，保持原有的时间字段不变
+                            journey.journey_start_time = total_journey_start
+                            journey.journey_end_time = total_journey_end
                             pass
                         else:
                             # 如果是新创建的记录，时间字段保持为 None（默认值）
@@ -2633,8 +2679,8 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程生
                             log_journey_start_time = trip.first_update
                             log_journey_end_time = trip.last_update
                         elif not created:
-                            log_journey_start_time = journey.journey_start_time
-                            log_journey_end_time = journey.journey_end_time
+                            log_journey_start_time = total_journey_start
+                            log_journey_end_time = total_journey_end
                         else:
                             log_journey_start_time = None
                             log_journey_end_time = None
@@ -2657,7 +2703,6 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程生
                 # 最后一次尝试也失败
                 logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
                 return False
-
 
 
 # 将嵌套函数移到外部作为独立函数
@@ -3133,11 +3178,12 @@ async def process_record_zip_async(journey_record_longimg_id):
                             logger.info(f"当前行程完成打包, 行程ID: {trip_id}, zip包路径: {output_zip}")
                             parement_journeyRecord.record_audio_zipfile_path = output_zip
                             parement_journeyRecord.save()
+                            # TODO:
+                            # 请求数据分发通知
+                            # 本行程音频处理完成
+                            await reports_successful_audio_generation(parement_trip.trip_id, parement_trip.task_id)
                         else:
                             logger.info(f"当前行程打包未完成, 行程ID: {trip_id}")
-                
-
-
         
         return True
     except Exception as e:

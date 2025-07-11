@@ -771,7 +771,9 @@ async def set_merge_abnormal_journey(request):
         
         # #创建后台任务
         # 拿到最新的trip_id，进行合并任务
-        trip_id = trips[-1] if isinstance(trips, list) and trips else None
+        # 从拿到父行程改为拿到子行程
+        # 这样在退出跑分选项中，可以把之前所有的音频合并
+        trip_id = trips[0] if isinstance(trips, list) and trips else None
         if not trip_id:
             return JsonResponse({'code':200,'success': False, 'message': 'trips列表为空', 'data':{}})
         if is_less_5min: 
