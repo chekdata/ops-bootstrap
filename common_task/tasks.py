@@ -1,4 +1,25 @@
 import os
+####################################################################
+# # NOTE: python 文件调试增加内容
+# os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
+
+# # Django设置
+# os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'myproject.settings')
+
+# # 添加项目根目录到Python路径
+# import sys
+# project_root = '/chekkk/code/chekappbackendnew'
+# if project_root not in sys.path:
+#     sys.path.insert(0, project_root)
+
+# # 初始化Django
+# import django
+# from django.conf import settings as django_settings
+# if not django_settings.configured:
+#     django.setup()
+######################################################################
+
+
 import re
 import pandas as pd
 import logging
@@ -13,7 +34,7 @@ from concurrent.futures import ThreadPoolExecutor
 from django.conf import settings
 from django.db import transaction
 from asgiref.sync import sync_to_async, async_to_sync
-from .models import Trip, ChunkFile, Journey, Reported_Journey
+from common_task.models import Trip, ChunkFile, Journey, Reported_Journey
 from django.utils import timezone
 from data.models import model_config
 from accounts.models import CoreUser
@@ -27,8 +48,8 @@ from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor
 import multiprocessing
 from accounts.models import User,CoreUser
-from .db_utils import db_retry, ensure_connection
-from .chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
+from common_task.db_utils import db_retry, ensure_connection
+from common_task.chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
 from django.db import close_old_connections
 from tmp_tools.monitor import *
 from common_task.handle_chatgpt import get_chat_response
@@ -2520,16 +2541,20 @@ async def clear_less_5min_journey(_id, trip_id, is_last_chunk=False):
 
 
 if __name__ == '__main__':
-    file_path_list = ['tos://chek/temp/for 汽车之家/25.5.15-成都重庆测试/阿维塔06/det_csv/2025-05-16/2025-05-16 10-11-23/阿维塔12_2023款 700 三激光后驱奢享版_AVATR.OS 4.0.0_spcialPoint_2025-05-16 10-11-23.csv','tos://chek/temp/for 汽车之家/25.5.15-成都重庆测试/阿维塔06/det_csv/2025-05-16/2025-05-16 10-11-23/阿维塔12_2023款 700 三激光后驱奢享版_AVATR.OS 4.0.0_spcialPoint_2025-05-16 10-11-23.det']
-    trip_id = '82ef3322-8aa9-4cd2-81aa-3ef1499eca3d'
+    # file_path_list = ['tos://chek/temp/for 汽车之家/25.5.15-成都重庆测试/阿维塔06/det_csv/2025-05-16/2025-05-16 10-11-23/阿维塔12_2023款 700 三激光后驱奢享版_AVATR.OS 4.0.0_spcialPoint_2025-05-16 10-11-23.csv','tos://chek/temp/for 汽车之家/25.5.15-成都重庆测试/阿维塔06/det_csv/2025-05-16/2025-05-16 10-11-23/阿维塔12_2023款 700 三激光后驱奢享版_AVATR.OS 4.0.0_spcialPoint_2025-05-16 10-11-23.det']
+    # trip_id = '82ef3322-8aa9-4cd2-81aa-3ef1499eca3d'
+
+    file_path_list = ['/tos/chek-app/app_project/4039928a-6a1e-4377-a5f8-27b277906dcf/inference_data/上汽智己/智己LS6/2025-07-11/2025-07-11 15-24-01/智己LS6_2023款 Max 超强性能版_IMOS 2.6.5_2025-07-11 15-24-01.csv']
+    trip_id = '3aef363f-a78c-422a-9def-db26c5c0bca8'
+
     total_message = process_journey(file_path_list, 
                                     user_id=100000, 
-                                    user_name='念书人', 
-                                    phone='18847801997', 
-                                    car_brand ='理想', 
+                                    user_name='名狌', 
+                                    phone='17349063987', 
+                                    car_brand ='智己LS6', 
                                     car_model='', 
-                                    car_hardware_version='2024款 Pro',
-                                    car_software_version='OTA7.0'
+                                    car_hardware_version='2023款 Max 超强性能版',
+                                    car_software_version='IMOS 2.6.5'
                     )
               
     # trip_id = 'ee1a65b673504d13b9c4d5c7e39d8737'
