@@ -1,8 +1,8 @@
 import requests
 import json
 
-def generate_journey_report(journey_id, user_avatar, user_nickname, target_path, user_id 
-                           base_url="http://localhost:8090/api"):
+def generate_journey_report(journey_id, user_avatar, user_nickname, target_path, user_id ,
+                           base_url="https://report-staging.chekkk.com/api"):
     """
     调用生成旅程报告的API
     
@@ -27,17 +27,19 @@ def generate_journey_report(journey_id, user_avatar, user_nickname, target_path,
     payload = {
         "journeyId": journey_id,
         "userInfo": {
-            "user_id":user_id,
             "avatar": user_avatar,
             "nickName": user_nickname
         },
         "targetPath": target_path
     }
     
+    # headers = {
+    #     "Content-Type": "application/json"
+    # }
     headers = {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "x-api-key": '30e844532fb0016cc362c5decff868620c05af726055db44584d31077c2f34e7'  # 添加API密钥头
     }
-    
     try:
         # 发送请求并获取响应
         response = requests.post(url, headers=headers, data=json.dumps(payload))
@@ -67,11 +69,13 @@ if __name__ == "__main__":
         journey_id="2f2b3a7b-c262-47d0-830c-408c12dd06b5",
         user_avatar="https://example.com/avatar.png",
         user_nickname="张三",
-        target_path="chek-app/app_project/00952fc9-aadd-46c6-82b6-15004e4efb30/inference_data/智己/智己L6/2025-01-26/2025-01-26 08-49-45/"
+        user_id ='1111',
+        target_path="00952fc9-aadd-46c6-82b6-15004e4efb30/inference_data/智己/智己L6/2025-01-26/2025-01-26 08-49-45/"
     )
     
     if result:
         print("API调用成功")
+        print(result.get('data',{}).get('url'))
         print(json.dumps(result, indent=2, ensure_ascii=False))
     else:
         print("API调用失败")

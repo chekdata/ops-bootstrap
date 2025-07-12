@@ -28,7 +28,8 @@ def send_message_info(trip_id: str, task_id: str, url: str = "http://14.103.114.
     # 请求体
     payload = {
         "trip_id": trip_id,
-        "task_id": task_id
+        "task_id": task_id,
+        'message_type':'image'
     }
     
     try:
@@ -160,27 +161,27 @@ def call_report_succeeded(task_id, brand_name, trip_id,is_test_env=False):
 # 示例调用
 if __name__ == "__main__":
     # 测试长图生成成功接口
-    long_image_result = call_long_image_succeeded(
-        task_id="33332",
-        brand_name="奥迪",
-        trip_id = '333',
-        is_test_env=False  # 生产环境设为False，测试环境设为True
-    )
-    print("长图接口返回:", long_image_result)
+    # long_image_result = call_long_image_succeeded(
+    #     task_id="33332",
+    #     brand_name="奥迪",
+    #     trip_id = '333',
+    #     is_test_env=False  # 生产环境设为False，测试环境设为True
+    # )
+    # print("长图接口返回:", long_image_result)
 
-    # 测试报告生成成功接口
-    report_result = call_report_succeeded(
-        task_id="33332",
-        brand_name="奥迪",
-        trip_id='333',
-        is_test_env=False  # 生产环境设为False，测试环境设为True
-    )
-    print("报告接口返回:", report_result)
+    # # 测试报告生成成功接口
+    # report_result = call_report_succeeded(
+    #     task_id="33332",
+    #     brand_name="奥迪",
+    #     trip_id='333',
+    #     is_test_env=False  # 生产环境设为False，测试环境设为True
+    # )
+    # print("报告接口返回:", report_result)
 
 # 示例调用
 # if __name__ == "__main__":
-#     result = send_message_info(
-#         trip_id="111111",
-#         task_id="111111"
-#     )
-#     print("API响应:", result)
+    result = send_message_info(
+        trip_id="111111",
+        task_id="111111",
+    )
+    print("API响应:", result)
