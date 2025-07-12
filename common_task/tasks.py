@@ -58,7 +58,8 @@ from common_task.handle_chatgpt import get_chat_response
 from tmp_tools.zip import package_files
 from common_task.external_request import reports_successful_audio_generation
 from django.db.models import Max, Min
-
+from common_task.handle_qczj_api import *
+from common_task.handle_datadistribution import *
 # 创建进程池，数量为CPU核心数
 process_pool = Pool(processes=cpu_count())
 
@@ -1899,257 +1900,257 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
             cover_image = ''
             cover_image_profile = HotBrandVehicle.objects.filter(model=model).first()
             if cover_image_profile:
-                print(cover_image_profile.cover_image)
+                # print(cover_image_profile.cover_image)
                 cover_image = cover_image_profile.cover_image
-            # 如果存在，可以进一步获取对象
-            core_Journey_profile = Journey.objects.using('core_user').get(journey_id=trip_id)
-            # journey_update(parsed_data,trip_id,model,hardware_version,software_version,core_Journey_profile)
-            # if model:
-            #     core_Journey_profile.model = model
-            
-            # if hardware_version:
-            #     core_Journey_profile.hardware_version = hardware_version
+            with transaction.atomic():
+                # 如果存在，可以进一步获取对象
+                core_Journey_profile = Journey.objects.using('core_user').get(journey_id=trip_id)
+                # journey_update(parsed_data,trip_id,model,hardware_version,software_version,core_Journey_profile)
+                # if model:
+                #     core_Journey_profile.model = model
+                
+                # if hardware_version:
+                #     core_Journey_profile.hardware_version = hardware_version
 
-            # if software_version:
-            #     core_Journey_profile.software_version = software_version
-            
-            # if parsed_data:
-            #     for key,value in parsed_data.items():
-            #         # print(key,value)
-            #         # if type(value) != 'str' or value:
-            #         core_Journey_profile.key = value
-            #         print(key,core_Journey_profile.key)
-            if data.get('auto_safe_duration') or type(data.get('auto_safe_duration')) != 'str':
-                core_Journey_profile.auto_safe_duration = data.get('auto_safe_duration')
-            
-            if data.get('lcc_safe_duration') or type(data.get('lcc_safe_duration')) != 'str':
-                core_Journey_profile.lcc_safe_duration = data.get('lcc_safe_duration')
+                # if software_version:
+                #     core_Journey_profile.software_version = software_version
+                
+                # if parsed_data:
+                #     for key,value in parsed_data.items():
+                #         # print(key,value)
+                #         # if type(value) != 'str' or value:
+                #         core_Journey_profile.key = value
+                #         print(key,core_Journey_profile.key)
+                if data.get('auto_safe_duration') or type(data.get('auto_safe_duration')) != 'str':
+                    core_Journey_profile.auto_safe_duration = data.get('auto_safe_duration')
+                
+                if data.get('lcc_safe_duration') or type(data.get('lcc_safe_duration')) != 'str':
+                    core_Journey_profile.lcc_safe_duration = data.get('lcc_safe_duration')
 
-            if data.get('noa_safe_duration') or type(data.get('noa_safe_duration')) != 'str':
-                core_Journey_profile.noa_safe_duration = data.get('noa_safe_duration')
-               
-            if data.get('duration') or type(data.get('duration')) != 'str':
-                core_Journey_profile.duration = data.get('duration')
+                if data.get('noa_safe_duration') or type(data.get('noa_safe_duration')) != 'str':
+                    core_Journey_profile.noa_safe_duration = data.get('noa_safe_duration')
+                
+                if data.get('duration') or type(data.get('duration')) != 'str':
+                    core_Journey_profile.duration = data.get('duration')
 
-            if data.get('driver_acc_average') or type(data.get('duration')) != 'str':
-                core_Journey_profile.driver_acc_average = data.get('driver_acc_average')
+                if data.get('driver_acc_average') or type(data.get('duration')) != 'str':
+                    core_Journey_profile.driver_acc_average = data.get('driver_acc_average')
 
-            if data.get('driver_dcc_average') or type(data.get('driver_dcc_average')) != 'str':
-                core_Journey_profile.driver_dcc_average = data.get('driver_dcc_average')
+                if data.get('driver_dcc_average') or type(data.get('driver_dcc_average')) != 'str':
+                    core_Journey_profile.driver_dcc_average = data.get('driver_dcc_average')
 
-            if data.get('auto_mileages') or type(data.get('auto_mileages')) != 'str':
-                core_Journey_profile.auto_mileages = data.get('auto_mileages')
+                if data.get('auto_mileages') or type(data.get('auto_mileages')) != 'str':
+                    core_Journey_profile.auto_mileages = data.get('auto_mileages')
 
-            if data.get('total_mileages') or type(data.get('total_mileages')) != 'str':
-                core_Journey_profile.total_mileages = data.get('total_mileages')
+                if data.get('total_mileages') or type(data.get('total_mileages')) != 'str':
+                    core_Journey_profile.total_mileages = data.get('total_mileages')
 
-            if data.get('frames') or type(data.get('frames')) != 'str':
-                core_Journey_profile.frames = data.get('frames')
+                if data.get('frames') or type(data.get('frames')) != 'str':
+                    core_Journey_profile.frames = data.get('frames')
 
-            if data.get('auto_frames') or type(data.get('auto_frames')) != 'str':
-                core_Journey_profile.auto_frames = data.get('auto_frames')
+                if data.get('auto_frames') or type(data.get('auto_frames')) != 'str':
+                    core_Journey_profile.auto_frames = data.get('auto_frames')
 
-            if data.get('noa_frames') or type(data.get('noa_frames')) != 'str':
-                core_Journey_profile.noa_frames = data.get('noa_frames')
+                if data.get('noa_frames') or type(data.get('noa_frames')) != 'str':
+                    core_Journey_profile.noa_frames = data.get('noa_frames')
 
-            if data.get('lcc_frames') or type(data.get('lcc_frames')) != 'str':
-                core_Journey_profile.lcc_frames = data.get('lcc_frames')
+                if data.get('lcc_frames') or type(data.get('lcc_frames')) != 'str':
+                    core_Journey_profile.lcc_frames = data.get('lcc_frames')
 
-            if data.get('driver_frames') or type(data.get('driver_frames')) != 'str':
-                core_Journey_profile.driver_frames = data.get('driver_frames')
+                if data.get('driver_frames') or type(data.get('driver_frames')) != 'str':
+                    core_Journey_profile.driver_frames = data.get('driver_frames')
 
-            if data.get('auto_speed_average') or type(data.get('auto_speed_average')) != 'str':
-                core_Journey_profile.auto_speed_average = data.get('auto_speed_average')
+                if data.get('auto_speed_average') or type(data.get('auto_speed_average')) != 'str':
+                    core_Journey_profile.auto_speed_average = data.get('auto_speed_average')
 
-            if data.get('auto_max_speed') or type(data.get('auto_max_speed')) != 'str':
-                core_Journey_profile.auto_max_speed = data.get('auto_max_speed')
+                if data.get('auto_max_speed') or type(data.get('auto_max_speed')) != 'str':
+                    core_Journey_profile.auto_max_speed = data.get('auto_max_speed')
 
-            if data.get('invervention_risk_proportion') or type(data.get('invervention_risk_proportion')) != 'str':
-                core_Journey_profile.invervention_risk_proportion = data.get('invervention_risk_proportion')
+                if data.get('invervention_risk_proportion') or type(data.get('invervention_risk_proportion')) != 'str':
+                    core_Journey_profile.invervention_risk_proportion = data.get('invervention_risk_proportion')
 
-            if data.get('invervention_mpi') or type(data.get('invervention_mpi')) != 'str':
-                core_Journey_profile.invervention_mpi = data.get('invervention_mpi')
+                if data.get('invervention_mpi') or type(data.get('invervention_mpi')) != 'str':
+                    core_Journey_profile.invervention_mpi = data.get('invervention_mpi')
 
-            if data.get('invervention_risk_mpi') or type(data.get('invervention_risk_mpi')) != 'str':
-                core_Journey_profile.invervention_risk_mpi = data.get('invervention_risk_mpi')
+                if data.get('invervention_risk_mpi') or type(data.get('invervention_risk_mpi')) != 'str':
+                    core_Journey_profile.invervention_risk_mpi = data.get('invervention_risk_mpi')
 
-            if data.get('invervention_cnt') or type(data.get('invervention_cnt')) != 'str':
-                core_Journey_profile.invervention_cnt = data.get('invervention_cnt')
+                if data.get('invervention_cnt') or type(data.get('invervention_cnt')) != 'str':
+                    core_Journey_profile.invervention_cnt = data.get('invervention_cnt')
 
-            if data.get('invervention_risk_cnt') or type(data.get('invervention_risk_cnt')) != 'str':
-                core_Journey_profile.invervention_risk_cnt = data.get('invervention_risk_cnt')
+                if data.get('invervention_risk_cnt') or type(data.get('invervention_risk_cnt')) != 'str':
+                    core_Journey_profile.invervention_risk_cnt = data.get('invervention_risk_cnt')
 
-            if data.get('noa_invervention_risk_mpi') or type(data.get('noa_invervention_risk_mpi')) != 'str':
-                core_Journey_profile.noa_invervention_risk_mpi = data.get('noa_invervention_risk_mpi')
+                if data.get('noa_invervention_risk_mpi') or type(data.get('noa_invervention_risk_mpi')) != 'str':
+                    core_Journey_profile.noa_invervention_risk_mpi = data.get('noa_invervention_risk_mpi')
 
-            if data.get('noa_invervention_mpi') or type(data.get('noa_invervention_mpi')) != 'str':
-                core_Journey_profile.noa_invervention_mpi = data.get('noa_invervention_mpi')
+                if data.get('noa_invervention_mpi') or type(data.get('noa_invervention_mpi')) != 'str':
+                    core_Journey_profile.noa_invervention_mpi = data.get('noa_invervention_mpi')
 
-            if data.get('noa_invervention_risk_cnt') or type(data.get('noa_invervention_risk_cnt')) != 'str':
-                core_Journey_profile.noa_invervention_risk_cnt = data.get('noa_invervention_risk_cnt')
+                if data.get('noa_invervention_risk_cnt') or type(data.get('noa_invervention_risk_cnt')) != 'str':
+                    core_Journey_profile.noa_invervention_risk_cnt = data.get('noa_invervention_risk_cnt')
 
-            if data.get('noa_auto_mileages') or type(data.get('noa_auto_mileages')) != 'str':
-                core_Journey_profile.noa_auto_mileages = data.get('noa_auto_mileages')
+                if data.get('noa_auto_mileages') or type(data.get('noa_auto_mileages')) != 'str':
+                    core_Journey_profile.noa_auto_mileages = data.get('noa_auto_mileages')
 
-            if data.get('noa_auto_mileages_proportion') or type(data.get('noa_auto_mileages_proportion')) != 'str':
-                core_Journey_profile.noa_auto_mileages_proportion = data.get('noa_auto_mileages_proportion')
+                if data.get('noa_auto_mileages_proportion') or type(data.get('noa_auto_mileages_proportion')) != 'str':
+                    core_Journey_profile.noa_auto_mileages_proportion = data.get('noa_auto_mileages_proportion')
 
-            if data.get('noa_invervention_cnt') or type(data.get('noa_invervention_cnt')) != 'str':
-                core_Journey_profile.noa_invervention_cnt = data.get('noa_invervention_cnt')
+                if data.get('noa_invervention_cnt') or type(data.get('noa_invervention_cnt')) != 'str':
+                    core_Journey_profile.noa_invervention_cnt = data.get('noa_invervention_cnt')
 
-            if data.get('lcc_invervention_risk_mpi') or type(data.get('lcc_invervention_risk_mpi')) != 'str':
-                core_Journey_profile.lcc_invervention_risk_mpi = data.get('lcc_invervention_risk_mpi')
+                if data.get('lcc_invervention_risk_mpi') or type(data.get('lcc_invervention_risk_mpi')) != 'str':
+                    core_Journey_profile.lcc_invervention_risk_mpi = data.get('lcc_invervention_risk_mpi')
 
-            if data.get('lcc_invervention_mpi') or type(data.get('lcc_invervention_mpi')) != 'str':
-                core_Journey_profile.lcc_invervention_mpi = data.get('lcc_invervention_mpi')
+                if data.get('lcc_invervention_mpi') or type(data.get('lcc_invervention_mpi')) != 'str':
+                    core_Journey_profile.lcc_invervention_mpi = data.get('lcc_invervention_mpi')
 
-            if data.get('lcc_invervention_risk_cnt') or type(data.get('lcc_invervention_risk_cnt')) != 'str':
-                core_Journey_profile.lcc_invervention_risk_cnt = data.get('lcc_invervention_risk_cnt')
+                if data.get('lcc_invervention_risk_cnt') or type(data.get('lcc_invervention_risk_cnt')) != 'str':
+                    core_Journey_profile.lcc_invervention_risk_cnt = data.get('lcc_invervention_risk_cnt')
 
-            if data.get('lcc_auto_mileages') or type(data.get('lcc_auto_mileages')) != 'str':
-                core_Journey_profile.lcc_auto_mileages = data.get('lcc_auto_mileages')
+                if data.get('lcc_auto_mileages') or type(data.get('lcc_auto_mileages')) != 'str':
+                    core_Journey_profile.lcc_auto_mileages = data.get('lcc_auto_mileages')
 
-            if data.get('lcc_auto_mileages_proportion') or type(data.get('lcc_auto_mileages_proportion')) != 'str':
-                core_Journey_profile.lcc_auto_mileages_proportion = data.get('lcc_auto_mileages_proportion')
+                if data.get('lcc_auto_mileages_proportion') or type(data.get('lcc_auto_mileages_proportion')) != 'str':
+                    core_Journey_profile.lcc_auto_mileages_proportion = data.get('lcc_auto_mileages_proportion')
 
-            if data.get('lcc_invervention_cnt') or type(data.get('lcc_invervention_cnt')) != 'str':
-                core_Journey_profile.lcc_invervention_cnt = data.get('lcc_invervention_cnt')
+                if data.get('lcc_invervention_cnt') or type(data.get('lcc_invervention_cnt')) != 'str':
+                    core_Journey_profile.lcc_invervention_cnt = data.get('lcc_invervention_cnt')
 
-            if data.get('auto_dcc_max') or type(data.get('auto_dcc_max')) != 'str':
-                core_Journey_profile.auto_dcc_max = data.get('auto_dcc_max')
+                if data.get('auto_dcc_max') or type(data.get('auto_dcc_max')) != 'str':
+                    core_Journey_profile.auto_dcc_max = data.get('auto_dcc_max')
 
-            if data.get('auto_dcc_frequency') or type(data.get('auto_dcc_frequency')) != 'str':
-                core_Journey_profile.auto_dcc_frequency = data.get('auto_dcc_frequency')
+                if data.get('auto_dcc_frequency') or type(data.get('auto_dcc_frequency')) != 'str':
+                    core_Journey_profile.auto_dcc_frequency = data.get('auto_dcc_frequency')
 
-            if data.get('auto_dcc_cnt') or type(data.get('auto_dcc_cnt')) != 'str':
-                core_Journey_profile.auto_dcc_cnt = data.get('auto_dcc_cnt')
+                if data.get('auto_dcc_cnt') or type(data.get('auto_dcc_cnt')) != 'str':
+                    core_Journey_profile.auto_dcc_cnt = data.get('auto_dcc_cnt')
 
-            if data.get('auto_dcc_duration') or type(data.get('auto_dcc_duration')) != 'str':
-                core_Journey_profile.auto_dcc_duration = data.get('auto_dcc_duration')
+                if data.get('auto_dcc_duration') or type(data.get('auto_dcc_duration')) != 'str':
+                    core_Journey_profile.auto_dcc_duration = data.get('auto_dcc_duration')
 
-            if data.get('auto_dcc_average_duration') or type(data.get('auto_dcc_average_duration')) != 'str':
-                core_Journey_profile.auto_dcc_average_duration = data.get('auto_dcc_average_duration')
+                if data.get('auto_dcc_average_duration') or type(data.get('auto_dcc_average_duration')) != 'str':
+                    core_Journey_profile.auto_dcc_average_duration = data.get('auto_dcc_average_duration')
 
-            if data.get('auto_dcc_average') or type(data.get('auto_dcc_average')) != 'str':
-                core_Journey_profile.auto_dcc_average = data.get('auto_dcc_average')
+                if data.get('auto_dcc_average') or type(data.get('auto_dcc_average')) != 'str':
+                    core_Journey_profile.auto_dcc_average = data.get('auto_dcc_average')
 
-            if data.get('auto_acc_max') or type(data.get('auto_acc_max')) != 'str':
-                core_Journey_profile.auto_acc_max = data.get('auto_acc_max')
+                if data.get('auto_acc_max') or type(data.get('auto_acc_max')) != 'str':
+                    core_Journey_profile.auto_acc_max = data.get('auto_acc_max')
 
-            if data.get('auto_acc_frequency') or type(data.get('auto_acc_frequency')) != 'str':
-                core_Journey_profile.auto_acc_frequency = data.get('auto_acc_frequency')
+                if data.get('auto_acc_frequency') or type(data.get('auto_acc_frequency')) != 'str':
+                    core_Journey_profile.auto_acc_frequency = data.get('auto_acc_frequency')
 
-            if data.get('auto_acc_cnt') or type(data.get('auto_acc_cnt')) != 'str':
-                core_Journey_profile.auto_acc_cnt = data.get('auto_acc_cnt')
+                if data.get('auto_acc_cnt') or type(data.get('auto_acc_cnt')) != 'str':
+                    core_Journey_profile.auto_acc_cnt = data.get('auto_acc_cnt')
 
-            if data.get('auto_acc_duration') or type(data.get('auto_acc_duration')) != 'str':
-                core_Journey_profile.auto_acc_duration = data.get('auto_acc_duration')
+                if data.get('auto_acc_duration') or type(data.get('auto_acc_duration')) != 'str':
+                    core_Journey_profile.auto_acc_duration = data.get('auto_acc_duration')
 
-            if data.get('auto_acc_average_duration') or type(data.get('auto_acc_average_duration')) != 'str':
-                core_Journey_profile.auto_acc_average_duration = data.get('auto_acc_average_duration')
+                if data.get('auto_acc_average_duration') or type(data.get('auto_acc_average_duration')) != 'str':
+                    core_Journey_profile.auto_acc_average_duration = data.get('auto_acc_average_duration')
 
-            if data.get('auto_acc_average') or type(data.get('auto_acc_average')) != 'str':
-                core_Journey_profile.auto_acc_average = data.get('auto_acc_average')
+                if data.get('auto_acc_average') or type(data.get('auto_acc_average')) != 'str':
+                    core_Journey_profile.auto_acc_average = data.get('auto_acc_average')
 
-            if data.get('driver_mileages') or type(data.get('driver_mileages')) != 'str':
-                core_Journey_profile.driver_mileages = data.get('driver_mileages')
+                if data.get('driver_mileages') or type(data.get('driver_mileages')) != 'str':
+                    core_Journey_profile.driver_mileages = data.get('driver_mileages')
 
-            if data.get('driver_dcc_max') or type(data.get('driver_dcc_max')) != 'str':
-                core_Journey_profile.driver_dcc_max = data.get('driver_dcc_max')
+                if data.get('driver_dcc_max') or type(data.get('driver_dcc_max')) != 'str':
+                    core_Journey_profile.driver_dcc_max = data.get('driver_dcc_max')
 
-            if data.get('driver_dcc_frequency') or type(data.get('driver_dcc_frequency')) != 'str':
-                core_Journey_profile.driver_dcc_frequency = data.get('driver_dcc_frequency')
+                if data.get('driver_dcc_frequency') or type(data.get('driver_dcc_frequency')) != 'str':
+                    core_Journey_profile.driver_dcc_frequency = data.get('driver_dcc_frequency')
 
-            if data.get('driver_acc_max') or type(data.get('driver_acc_max')) != 'str':
-                core_Journey_profile.driver_acc_max = data.get('driver_acc_max')
+                if data.get('driver_acc_max') or type(data.get('driver_acc_max')) != 'str':
+                    core_Journey_profile.driver_acc_max = data.get('driver_acc_max')
 
-            if data.get('driver_acc_frequency') or type(data.get('driver_acc_frequency')) != 'str':
-                core_Journey_profile.driver_acc_frequency = data.get('driver_acc_frequency')
+                if data.get('driver_acc_frequency') or type(data.get('driver_acc_frequency')) != 'str':
+                    core_Journey_profile.driver_acc_frequency = data.get('driver_acc_frequency')
 
-            if data.get('driver_speed_average') or type(data.get('driver_speed_average')) != 'str':
-                core_Journey_profile.driver_speed_average = data.get('driver_speed_average')
+                if data.get('driver_speed_average') or type(data.get('driver_speed_average')) != 'str':
+                    core_Journey_profile.driver_speed_average = data.get('driver_speed_average')
 
-            if data.get('driver_speed_max') or type(data.get('driver_speed_max')) != 'str':
-                core_Journey_profile.driver_speed_max = data.get('driver_speed_max')
+                if data.get('driver_speed_max') or type(data.get('driver_speed_max')) != 'str':
+                    core_Journey_profile.driver_speed_max = data.get('driver_speed_max')
 
-            if data.get('driver_dcc_cnt') or type(data.get('driver_dcc_cnt')) != 'str':
-                core_Journey_profile.driver_dcc_cnt = data.get('driver_dcc_cnt')
+                if data.get('driver_dcc_cnt') or type(data.get('driver_dcc_cnt')) != 'str':
+                    core_Journey_profile.driver_dcc_cnt = data.get('driver_dcc_cnt')
 
-            if data.get('driver_acc_cnt') or type(data.get('driver_acc_cnt')) != 'str':
-                core_Journey_profile.driver_acc_cnt = data.get('driver_acc_cnt')
-            if cover_image:
-                core_Journey_profile.cover_image = cover_image
-            car_MBTI_text,human_MBTI_text = mbti_judge(core_Journey_profile.auto_speed_average,core_Journey_profile.auto_acc_average,
-                                                    core_Journey_profile.auto_dcc_average,core_Journey_profile.driver_speed_average,
-                                                    core_Journey_profile.driver_acc_average,core_Journey_profile.driver_dcc_average)
-            car_dict = {
-            "user_style": human_MBTI_text,
-            "user_features": {
-                "avg_speed_kmh": core_Journey_profile.driver_speed_average,
-                "max_speed_kmh": core_Journey_profile.driver_speed_max,
-                "accel_mps2": core_Journey_profile.driver_acc_average,
-                "turn_mps2": None
-            },
-            "car_style": car_MBTI_text,
-            "car_features": {
-                "accel_100_kmh_sec": 8.8,
-                "torque_nm": None,
-                "accel_mps2": core_Journey_profile.auto_acc_average,
-                "turn_mps2": None
-            }
-            }
-            gpt_res = get_chat_response(car_dict)
-            
-            
-            # if gpt_res :
-            #     core_Journey_profile.gpt_comment =gpt_res 
-            core_Journey_profile.save()
+                if data.get('driver_acc_cnt') or type(data.get('driver_acc_cnt')) != 'str':
+                    core_Journey_profile.driver_acc_cnt = data.get('driver_acc_cnt')
+                if cover_image:
+                    core_Journey_profile.cover_image = cover_image
+                car_MBTI_text,human_MBTI_text = mbti_judge(core_Journey_profile.auto_speed_average,core_Journey_profile.auto_acc_average,
+                                                        core_Journey_profile.auto_dcc_average,core_Journey_profile.driver_speed_average,
+                                                        core_Journey_profile.driver_acc_average,core_Journey_profile.driver_dcc_average)
+                car_dict = {
+                "user_style": human_MBTI_text,
+                "user_features": {
+                    "avg_speed_kmh": core_Journey_profile.driver_speed_average,
+                    "max_speed_kmh": core_Journey_profile.driver_speed_max,
+                    "accel_mps2": core_Journey_profile.driver_acc_average,
+                    "turn_mps2": None
+                },
+                "car_style": car_MBTI_text,
+                "car_features": {
+                    "accel_100_kmh_sec": 8.8,
+                    "torque_nm": None,
+                    "accel_mps2": core_Journey_profile.auto_acc_average,
+                    "turn_mps2": None
+                }
+                }
+                gpt_res = get_chat_response(car_dict)
+                
+                
+                if gpt_res :
+                    core_Journey_profile.gpt_comment =gpt_res 
+                core_Journey_profile.save()
 
           
-            # trip = Trip.objects.filter(trip_id=trip_id).first()
-            # if trip:
-            #     file_name = trip.file_name.split('_')[-1].replace('.csv','')
-            #     file_path = f'video-on-demand/app_project/{trip.user_id}/inference_data/{trip.car_name}/{file_name[0:10]}/{file_name}/'
-            #     user_id = trip.user_id
-            #     print(user_id,trip_id,file_path)
-            # profile = User.objects.filter(id=user_id).first()
-            # if profile:
-            #     pic = profile.pic
-            #     name = profile.name
-            #     print(pic,name)
-            # print('after_test')
-            # longimg_file_path = real_test()
-
-        #     result = generate_journey_report(
-        #     journey_id=trip_id,
-        #     user_avatar=pic,
-        #     user_nickname=name,
-        #     target_path=file_path,
-        #     user_id = user_id
-        # )
-    
-            # core_Journey_profile.longimg_file_path = longimg_file_path
-            # core_Journey_profile.save()
-            # result = send_message_info(
-            #         trip_id=trip_id,
-            #         task_id="111111"
-            #     )
-
-            if data.get('intervention_gps'):
-                # core_Journey_intervention_gps = Journey.objects.using('core_user').get(journey_id=trip_id)
-                for _ in data.get('intervention_gps'):
-                    # core_Journey_intervention_gps = JourneyInterventionGps.objects.using('core_user').get(journey_id=trip_id)
-                    # 直接创建并保存对象
-                    core_Journey_intervention_gps = JourneyInterventionGps.objects.using('core_user').create(
-                        journey_id=trip_id,
-                        frame_id = _.get('frame_id'),
-                        gps_lon = _.get('gps_lon'),
-                        gps_lat = _.get('gps_lat'),
-                        gps_datetime = _.get('gps_datetime'),
-                        is_risk = _.get('is_risk'),
-                        identification_type = '自动识别',
-                        type = '识别接管'
+                trip = Trip.objects.filter(trip_id=trip_id).first()
+                if trip:
+                    file_name = trip.file_name.split('_')[-1].replace('.csv','')
+                    file_path = f'{trip.user_id}/inference_data/{trip.car_name}/{file_name[0:10]}/{file_name}/'
+                    user_id = trip.user_id
+                    
+                    profile = User.objects.filter(id=user_id).first()
+                    if profile:
+                        pic = profile.pic
+                        name = profile.name
+                
+                    
+                    result = generate_journey_report(
+                    journey_id=trip_id,
+                    user_avatar=pic,
+                    user_nickname=name,
+                    target_path=file_path,
+                    user_id = user_id
                     )
+                    if result:
+        
+                        core_Journey_profile.longimg_file_path = result.get('data',{}).get('url')
+                        core_Journey_profile.save()
+                        result = send_message_info(
+                                trip_id=trip_id,
+                                task_id="111111"
+                            )
+
+                if data.get('intervention_gps'):
+                    # core_Journey_intervention_gps = Journey.objects.using('core_user').get(journey_id=trip_id)
+                    for _ in data.get('intervention_gps'):
+                        # core_Journey_intervention_gps = JourneyInterventionGps.objects.using('core_user').get(journey_id=trip_id)
+                        # 直接创建并保存对象
+                        core_Journey_intervention_gps = JourneyInterventionGps.objects.using('core_user').create(
+                            journey_id=trip_id,
+                            frame_id = _.get('frame_id'),
+                            gps_lon = _.get('gps_lon'),
+                            gps_lat = _.get('gps_lat'),
+                            gps_datetime = _.get('gps_datetime'),
+                            is_risk = _.get('is_risk'),
+                            identification_type = '自动识别',
+                            type = '识别接管'
+                        )
         else:
             # print(f"未找到 journey_id 为 {trip_id} 的行程记录。")
             logger.info(f"未找到 journey_id 为 {trip_id} 的行程记录。")
@@ -2247,12 +2248,13 @@ def handle_message_gps_data(file_path_list,trip_id):
     journey_exists = Journey.objects.using('core_user').filter(journey_id=trip_id).exists()
     if journey_exists:
         # 如果存在，可以进一步获取对象
-        core_Journey_profile = Journey.objects.using('core_user').get(journey_id=trip_id)
-        _id = core_Journey_profile.id
-        initial_time,end_time = convert_gps_time(file_path_list[0],trip_id)
-        core_Journey_profile.journey_start_time = initial_time
-        core_Journey_profile.journey_end_time = end_time
-        core_Journey_profile.save()
+        with transaction.atomic():
+            core_Journey_profile = Journey.objects.using('core_user').get(journey_id=trip_id)
+            _id = core_Journey_profile.id
+            initial_time,end_time = convert_gps_time(file_path_list[0],trip_id)
+            core_Journey_profile.journey_start_time = initial_time
+            core_Journey_profile.journey_end_time = end_time
+            core_Journey_profile.save()
     else:
         # print(f"未找到 journey_id 为 {trip_id} 的行程记录。")
         logger.info(f"未找到 journey_id 为 {trip_id} 的行程记录。")

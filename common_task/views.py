@@ -854,6 +854,7 @@ def get_journey_data(user_uuid=None, start_date=None, end_date=None, city=None, 
         query_conditions &= Q(created_date__lt=created_date)
     query_conditions &= Q(is_sub_journey=False) 
     # 执行查询并按created_date倒序排列，取前page_size条
+    print('test_condition',query_conditions)
     if page_size:
         journeys = Journey.objects.using('core_user') \
             .filter(query_conditions) \

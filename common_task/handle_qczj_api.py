@@ -1,6 +1,68 @@
 import requests
 import json
 
+import requests
+import json
+
+def send_message_info(trip_id: str, task_id: str, url: str = "http://14.103.114.175:8008/send_message_info") -> dict:
+    """
+    调用发送消息信息的API
+    
+    参数:
+        trip_id (str): 行程ID
+        task_id (str): 任务ID
+        url (str, optional): API地址，默认为生产环境地址
+    
+    返回:
+        dict: API响应结果（包含success、message等字段）
+        
+    异常:
+        requests.exceptions.RequestException: 网络请求异常
+        ValueError: 响应内容非JSON格式
+    """
+    # 请求头
+    headers = {
+        "Content-Type": "application/json"
+    }
+    
+    # 请求体
+    payload = {
+        "trip_id": trip_id,
+        "task_id": task_id,
+        'message_type':'image'
+    }
+    
+    try:
+        # 发送POST请求，设置5秒超时
+        response = requests.post(
+            url=url,
+            headers=headers,
+            data=json.dumps(payload),
+            timeout=5
+        )
+        
+        # 检查HTTP状态码
+        response.raise_for_status()  # 非200状态码会抛出异常
+        
+        # 解析JSON响应
+        return response.json()
+        
+    except requests.exceptions.RequestException as e:
+        # 网络异常处理
+        return {
+            "success": False,
+            "message": f"网络请求失败: {str(e)}",
+            "status_code": e.response.status_code if hasattr(e, 'response') else None
+        }
+    except (json.JSONDecodeError, ValueError) as e:
+        # 响应解析异常
+        return {
+            "success": False,
+            "message": f"响应解析失败: {str(e)}",
+            "raw_response": response.text if 'response' in locals() else None
+        }
+
+
 
 def call_long_image_succeeded(task_id, brand_name, trip_id,is_test_env=False):
     """
@@ -99,19 +161,27 @@ def call_report_succeeded(task_id, brand_name, trip_id,is_test_env=False):
 # 示例调用
 if __name__ == "__main__":
     # 测试长图生成成功接口
-    long_image_result = call_long_image_succeeded(
-        task_id="33332",
-        brand_name="奥迪",
-        trip_id = '333',
-        is_test_env=False  # 生产环境设为False，测试环境设为True
-    )
-    print("长图接口返回:", long_image_result)
+    # long_image_result = call_long_image_succeeded(
+    #     task_id="33332",
+    #     brand_name="奥迪",
+    #     trip_id = '333',
+    #     is_test_env=False  # 生产环境设为False，测试环境设为True
+    # )
+    # print("长图接口返回:", long_image_result)
 
-    # 测试报告生成成功接口
-    report_result = call_report_succeeded(
-        task_id="33332",
-        brand_name="奥迪",
-        trip_id='333',
-        is_test_env=False  # 生产环境设为False，测试环境设为True
+    # # 测试报告生成成功接口
+    # report_result = call_report_succeeded(
+    #     task_id="33332",
+    #     brand_name="奥迪",
+    #     trip_id='333',
+    #     is_test_env=False  # 生产环境设为False，测试环境设为True
+    # )
+    # print("报告接口返回:", report_result)
+
+# 示例调用
+# if __name__ == "__main__":
+    result = send_message_info(
+        trip_id="111111",
+        task_id="111111",
     )
-    print("报告接口返回:", report_result)
+    print("API响应:", result)
