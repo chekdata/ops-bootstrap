@@ -2115,6 +2115,7 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
 
           
                 trip = Trip.objects.filter(trip_id=trip_id).first()
+
                 if trip:
                     file_name = trip.file_name.split('_')[-1].replace('.csv','')
                     file_path = f'{trip.user_id}/inference_data/{trip.car_name}/{file_name[0:10]}/{file_name}/'
@@ -2127,20 +2128,22 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
                 
                     
                     result = generate_journey_report(
-                    journey_id=trip_id,
+                    journey_id=str(trip_id),
                     user_avatar=pic,
                     user_nickname=name,
                     target_path=file_path,
                     user_id = user_id
                     )
+
                     if result:
         
                         core_Journey_profile.longimg_file_path = result.get('data',{}).get('url')
                         core_Journey_profile.save()
                         result = send_message_info(
-                                trip_id=trip_id,
+                                trip_id=str(trip_id),
                                 task_id="111111"
                             )
+                        logger.info(f"数据分发完成,{result}")
 
                 if data.get('intervention_gps'):
                     # core_Journey_intervention_gps = Journey.objects.using('core_user').get(journey_id=trip_id)
