@@ -3114,16 +3114,30 @@ async def process_record_zip_async(journey_record_longimg_id):
                 journeyRecord = await sync_to_async(JourneyRecordLongImg.objects.using("core_user").get,
                                                     thread_sensitive=True
                                                 )(journey_id=journey_record_longimg_id)
+                # 当前行程已完成
+                # 音频合并并通知分发接口
+                if journeyRecord.record_audio_zipfile_path is not None:
+                    logger.info(f"当前行程已完成音频合并打包, 行程ID: {trip_id}")
+                    return
 
-                file_paths.append(settings.VIDEO_ON_DEMAND+journeyRecord.record_audio_file_path)
-                output_zip += str(Path(journeyRecord.record_audio_file_path).with_suffix(".zip"))
+                if (journeyRecord.record_upload_tos_status == settings.RECORD_UPLOAD_TOS_SUCCESS):
+                    file_paths.append(settings.VIDEO_ON_DEMAND+journeyRecord.record_audio_file_path)
+                    output_zip += str(Path(journeyRecord.record_audio_file_path).with_suffix(".zip"))
 
-                if (journeyRecord.record_upload_tos_status == settings.RECORD_UPLOAD_TOS_SUCCESS) and (package_files(file_paths, output_zip)):
-                    logger.info(f"当前行程完成打包, 行程ID: {trip_id}, zip包路径: {output_zip}")
-                    journeyRecord.record_audio_zipfile_path = output_zip
-                    journeyRecord.save()
+                    if (package_files(file_paths, output_zip)):
+                        logger.info(f"当前行程完成打包, 行程ID: {trip_id}, zip包路径: {output_zip}")
+                        journeyRecord.record_audio_zipfile_path = output_zip
+                        journeyRecord.save()
+                        # TODO:
+                        # 请求数据分发通知
+                        # 本行程音频处理完成
+                        await reports_successful_audio_generation(trip.trip_id, trip.task_id)
+                    else:
+                        logger.info(f"当前行程打包未完成, 行程ID: {trip_id}")
+                elif (journeyRecord.record_upload_tos_status == settings.RECORD_UPLOAD_TOS_FILE_MISSING):
+                    logger.info(f"或者音频文件丢失, 行程ID: {trip_id}")
                 else:
-                    logger.info(f"当前行程打包未完成或者音频文件丢失, 行程ID: {trip_id}")
+                    logger.info(f"当前行程文件还未上传成功, 行程ID: {trip_id}")
             else:
                 # 自己是子行程
                 logger.info(f"当前行程是子行程,  行程ID: {trip_id}")
@@ -3136,6 +3150,11 @@ async def process_record_zip_async(journey_record_longimg_id):
                     # 父行程处理结束
                     # 查找父行程
                     parement_journeyRecord = await sync_to_async(JourneyRecordLongImg.objects.using("core_user").filter(journey_id=trip.parent_trip_id).first, thread_sensitive=True)()
+                    # 当前行程已完成
+                    # 音频合并并通知分发接口
+                    if parement_journeyRecord.record_audio_zipfile_path is not None:
+                        logger.info(f"当前行程已完成音频合并打包, 行程ID: {trip.parent_trip_id}")
+                        return
                     # 查找所有子行程
                     trip_ids = await sync_to_async(
                                     list,
@@ -3169,12 +3188,26 @@ async def process_record_zip_async(journey_record_longimg_id):
                         # 查找父行程 journeyRecord
                         logger.info(f"开始准备父行程和子行程路径,  准备打包")
                         file_paths = [settings.VIDEO_ON_DEMAND + audio_file_path
-                                      for audio_file_path in record_audio_file_paths]
-                        parement_record_path = settings.VIDEO_ON_DEMAND + parement_journeyRecord.record_audio_file_path
-                        # 打包文件里增加父行程音频
-                        file_paths.append(parement_record_path)
+                                      for audio_file_path in record_audio_file_paths
+                                      if audio_file_path is not None]
+                        # 如果parement_record_path中音频文件未丢失
+                        parement_record_path = ""
+                        if parement_journeyRecord.record_upload_tos_status == settings.RECORD_UPLOAD_TOS_SUCCESS:
+                            parement_record_path = settings.VIDEO_ON_DEMAND + parement_journeyRecord.record_audio_file_path
+                            # 打包文件里增加父行程音频
+                            file_paths.append(parement_record_path)
 
-                        output_zip = str(Path(parement_record_path).with_suffix(".zip"))
+                            output_zip = str(Path(parement_record_path).with_suffix(".zip"))
+
+                        else:
+                            # 构建父行程打包音频存储路径
+                            file_name = parement_trip.file_name.split("/")[-1]
+                            date = file_name.split("_")[-1][:-4]
+                            day = date.split(" ")[0]
+
+                            parement_record_path = settings.VIDEO_ON_DEMAND + str(parement_trip.user_id) + "/inference_data/" + str(parement_trip.car_name) + "/" + day + "/" + date + "/" + "all.zip"
+                            output_zip = parement_record_path
+
 
                         if(package_files(file_paths, output_zip)):
                             logger.info(f"当前行程完成打包, 行程ID: {trip_id}, zip包路径: {output_zip}")
@@ -3191,6 +3224,7 @@ async def process_record_zip_async(journey_record_longimg_id):
     except Exception as e:
         logger.error(f"处理和上传文件失败: {e}", exc_info=True)
         return False, []
+
 
 
 if __name__ == '__main__':
