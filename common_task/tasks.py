@@ -580,6 +580,12 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
             # if 'trip_status' in metadata:
             #     defaults['trip_status'] = metadata['trip_status']
 
+            # 汽车之家任务相关
+            if 'task_id' in metadata:
+                defaults['task_id'] = metadata['task_id']
+            if 'phone' in metadata:
+                defaults['autohome_phone'] = metadata['phone']
+
         # 增加音频和长图信息落库
         journey_record_longImg_exists = await sync_to_async(JourneyRecordLongImg.objects.using("core_user").filter(journey_id=trip_id).exists, thread_sensitive=True)()
 
@@ -3114,6 +3120,10 @@ async def process_record_zip_async(journey_record_longimg_id):
                 journeyRecord = await sync_to_async(JourneyRecordLongImg.objects.using("core_user").get,
                                                     thread_sensitive=True
                                                 )(journey_id=journey_record_longimg_id)
+
+                journey_all_ele = await sync_to_async(Journey.objects.using("core_user").get,
+                                                    thread_sensitive=True
+                                                )(journey_id=journey_record_longimg_id)
                 # 当前行程已完成
                 # 音频合并并通知分发接口
                 if journeyRecord.record_audio_zipfile_path is not None:
@@ -3128,6 +3138,12 @@ async def process_record_zip_async(journey_record_longimg_id):
                         logger.info(f"当前行程完成打包, 行程ID: {trip_id}, zip包路径: {output_zip}")
                         journeyRecord.record_audio_zipfile_path = output_zip
                         journeyRecord.save()
+
+                        # 所有报告数据元素表落库音频打包数据和成功状态
+                        journey_all_ele.record_audio_file_path = output_zip
+                        journey_all_ele.record_upload_tos_status = settings.RECORD_UPLOAD_TOS_SUCCESS
+                        journey_all_ele.save()
+
                         # TODO:
                         # 请求数据分发通知
                         # 本行程音频处理完成
@@ -3150,6 +3166,11 @@ async def process_record_zip_async(journey_record_longimg_id):
                     # 父行程处理结束
                     # 查找父行程
                     parement_journeyRecord = await sync_to_async(JourneyRecordLongImg.objects.using("core_user").filter(journey_id=trip.parent_trip_id).first, thread_sensitive=True)()
+
+                    journey_all_ele = await sync_to_async(Journey.objects.using("core_user").get,
+                                                        thread_sensitive=True
+                                                    )(journey_id=journey_record_longimg_id)
+
                     # 当前行程已完成
                     # 音频合并并通知分发接口
                     if parement_journeyRecord.record_audio_zipfile_path is not None:
@@ -3213,6 +3234,12 @@ async def process_record_zip_async(journey_record_longimg_id):
                             logger.info(f"当前行程完成打包, 行程ID: {trip_id}, zip包路径: {output_zip}")
                             parement_journeyRecord.record_audio_zipfile_path = output_zip
                             parement_journeyRecord.save()
+
+                            # 所有报告数据元素表落库音频打包数据和成功状态
+                            journey_all_ele.record_audio_file_path = output_zip
+                            journey_all_ele.record_upload_tos_status = settings.RECORD_UPLOAD_TOS_SUCCESS
+                            journey_all_ele.save()
+
                             # TODO:
                             # 请求数据分发通知
                             # 本行程音频处理完成
