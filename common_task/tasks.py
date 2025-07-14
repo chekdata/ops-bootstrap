@@ -53,6 +53,7 @@ from accounts.models import User,CoreUser
 from common_task.db_utils import db_retry, ensure_connection
 from common_task.chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
 from django.db import close_old_connections
+from django.core.exceptions import ObjectDoesNotExist
 from tmp_tools.monitor import *
 from common_task.handle_chatgpt import get_chat_response
 from tmp_tools.zip import package_files
@@ -60,6 +61,7 @@ from common_task.external_request import reports_successful_audio_generation
 from django.db.models import Max, Min
 from common_task.handle_qczj_api import *
 from common_task.handle_datadistribution import *
+
 # 创建进程池，数量为CPU核心数
 process_pool = Pool(processes=cpu_count())
 
@@ -3045,33 +3047,35 @@ async def clear_less_5min_journey(_id, trip_id_list, is_last_chunk=False):
                         # 数据库里删除
                         try:
                             # 查找行程
-                            trip_journey = Trip.objects.get(
-                                trip_id=trip,
-                            ).order_by('-last_update')  # 降序排列，从最新到最旧
+                            with transaction.atomic():
+                                # 重新加锁获取最新状态（防止并发修改）
+                                trip_journey = Trip.objects.get(
+                                    trip_id=trip)  # 降序排列，从最新到最旧
 
-                            logger.info(f"行程 {trip} 开始删除")
-                            trip_id = trip
-                            trip_journey.is_less_than_5min = True
-                            trip_journey.is_completed = True
-                            trip_journey.save()
-                            logger.info(f"行程 {trip_id} 已成功删除")
+                                logger.info(f"行程 {trip} 开始删除")
+                                trip_id = trip
+                                trip_journey.is_less_than_5min = True
+                                trip_journey.is_completed = True
+                                trip_journey.save()
+                                logger.info(f"行程 {trip_id} 已成功删除")
+
                         except Exception as e:
                             logger.error(f"删除行程 {trip} 失败: {e}")
 
                         try:
                             # 查找行程
-                            journey = Journey.objects.using('core_user').filter(
-                                journey_id=trip)
-
-                            if not journey:
-                                logger.info(f"journey 行程 {trip} 开始删除")
-                                trip_id = trip
-                                journey.delete()
-                                logger.info(f"journey 行程 {trip_id} 已成功删除")
-                            else:
-                                logger.info(f"journey 行程 {trip} 不存在, 无需删除")
-                        except Exception as e:
-                            logger.error(f"删除journey行程 {trip} 失败: {e}")
+                            with transaction.atomic():
+                                journey = Journey.objects.using('core_user').get(journey_id=trip)
+                                
+                                # 找到了行程，执行更新操作
+                                logger.info(f"journey 行程 {trip} 存在，设置 is_less_than_5min 为 True")
+                                journey.is_less_than_5min = True
+                                journey.save()
+                                logger.info(f"journey 行程 {trip} is_less_than_5min 设置为 True 成功")
+                            
+                        except ObjectDoesNotExist:
+                            # 未找到行程，记录日志
+                            logger.info(f"journey 行程 {trip} 不存在，无法设置 is_less_than_5min")
 
                 except DatabaseError as e:
                     # 如果无法获取锁（其他进程正在处理），记录并跳过
@@ -3120,10 +3124,13 @@ async def process_record_zip_async(journey_record_longimg_id):
                 journeyRecord = await sync_to_async(JourneyRecordLongImg.objects.using("core_user").get,
                                                     thread_sensitive=True
                                                 )(journey_id=journey_record_longimg_id)
-
-                journey_all_ele = await sync_to_async(Journey.objects.using("core_user").get,
-                                                    thread_sensitive=True
-                                                )(journey_id=journey_record_longimg_id)
+                try:
+                    journey_all_ele = await sync_to_async(Journey.objects.using("core_user").get,
+                                                        thread_sensitive=True
+                                                    )(journey_id=journey_record_longimg_id)
+                except ObjectDoesNotExist:
+                    logger(f"total journey has no item. trip_id: {trip.parent_trip_id}")
+                    return 
                 # 当前行程已完成
                 # 音频合并并通知分发接口
                 if journeyRecord.record_audio_zipfile_path is not None:
@@ -3167,10 +3174,13 @@ async def process_record_zip_async(journey_record_longimg_id):
                     # 查找父行程
                     parement_journeyRecord = await sync_to_async(JourneyRecordLongImg.objects.using("core_user").filter(journey_id=trip.parent_trip_id).first, thread_sensitive=True)()
 
-                    journey_all_ele = await sync_to_async(Journey.objects.using("core_user").get,
-                                                        thread_sensitive=True
-                                                    )(journey_id=trip.parent_trip_id)
-
+                    try: 
+                        journey_all_ele = await sync_to_async(Journey.objects.using("core_user").get,
+                                                            thread_sensitive=True
+                                                        )(journey_id=trip.parent_trip_id)
+                    except ObjectDoesNotExist:
+                        logger(f"total journey has no item. trip_id: {trip.parent_trip_id}")
+                        return 
                     # 当前行程已完成
                     # 音频合并并通知分发接口
                     if parement_journeyRecord.record_audio_zipfile_path is not None:
