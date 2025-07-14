@@ -1903,6 +1903,10 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
         journey_exists = Journey.objects.using('core_user').filter(journey_id=trip_id).exists()
         
         if journey_exists:
+
+            logger.info(f"开始进行报告结果数据落库处理！")
+            logger.info(f"开始进行落库处理 trip_id : {trip_id} ！")
+
             cover_image = ''
             cover_image_profile = HotBrandVehicle.objects.filter(model=model).first()
             if cover_image_profile:
@@ -2257,6 +2261,8 @@ def handle_message_gps_data(file_path_list,trip_id):
     journey_exists = Journey.objects.using('core_user').filter(journey_id=trip_id).exists()
     if journey_exists:
         # 如果存在，可以进一步获取对象
+        logger.info(f"开始进行gps数据落库处理！")
+        logger.info(f"开始进行落库处理 trip_id : {trip_id} ！")
         with transaction.atomic():
             core_Journey_profile = Journey.objects.using('core_user').get(journey_id=trip_id)
             _id = core_Journey_profile.id
