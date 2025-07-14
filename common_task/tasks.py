@@ -3169,7 +3169,7 @@ async def process_record_zip_async(journey_record_longimg_id):
 
                     journey_all_ele = await sync_to_async(Journey.objects.using("core_user").get,
                                                         thread_sensitive=True
-                                                    )(journey_id=journey_record_longimg_id)
+                                                    )(journey_id=trip.parent_trip_id)
 
                     # 当前行程已完成
                     # 音频合并并通知分发接口
