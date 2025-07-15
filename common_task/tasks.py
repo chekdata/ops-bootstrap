@@ -1347,17 +1347,6 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
         # --------------------------
         # 2. 查询需要合并的行程（非锁定查询，事务外执行）
         # --------------------------
-        # all_similar_trips = Trip.objects.filter(
-        #     is_completed=False,
-        #     user_id=user_id,
-        #     device_id=main_trip.device_id,
-        #     car_name=main_trip.car_name,
-        #     hardware_version=main_trip.hardware_version,
-        #     software_version=main_trip.software_version,
-        #     merge_into_current=True,
-        #     trip_status=main_trip.trip_status,
-        # ).order_by('last_update')  # 升序：从旧到新
-
         all_similar_trips = Trip.objects.filter(
             is_completed=False,
             user_id=user_id,
@@ -1367,7 +1356,7 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
             software_version=main_trip.software_version,
             merge_into_current=True,
             trip_status=main_trip.trip_status,
-        ).order_by('first_update')  # 升序：从旧到新
+        ).order_by('first_update')  # 升序：从旧到新， 对行程按分片首次落库时间排序先后，防止last_update更新异常导致父行程认定错误
 
         trips_to_merge = []
         parent_trip = None
