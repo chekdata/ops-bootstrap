@@ -1356,7 +1356,7 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
             software_version=main_trip.software_version,
             merge_into_current=True,
             trip_status=main_trip.trip_status,
-        ).order_by('last_update')  # 升序：从旧到新
+        ).order_by('first_update')  # 升序：从旧到新， 对行程按分片首次落库时间排序先后，防止last_update更新异常导致父行程认定错误
 
         trips_to_merge = []
         parent_trip = None
@@ -2322,7 +2322,7 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
                     hardware_version=current_trip.hardware_version,
                     software_version=current_trip.software_version,
                     merged_csv_path__in=file_path_list  # 添加 merged_csv_path 在列表中的筛选条件
-                ).order_by('-last_update')
+                ).order_by('-first_update')             # 第一次落库时间排序，这样能完全确定行程排序，使用last_update容易由于分片时间更新延迟导致出问题
                 # 获取父行程，更新父行程数据
                 trip = trips.last()
 
@@ -2537,7 +2537,7 @@ async def ensure_db_connection_and_get_abnormal_journey(user_id,
                                     software_version=software_version,
                                     trip_status='正常',
                                     last_update__lt=time
-                                    ).order_by('-last_update').values_list('trip_id',flat=True)
+                                    ).order_by('-first_update').values_list('trip_id',flat=True) #找出分片最后一次更新时间满足阈值异常行程，根据首次分片落库时间确定行程历史排序
             )
 
             file_names = await sync_to_async(
@@ -2553,7 +2553,7 @@ async def ensure_db_connection_and_get_abnormal_journey(user_id,
                     software_version=software_version,
                     trip_status='正常',
                     last_update__lt=time
-                ).order_by('-last_update').values_list('file_name', flat=True)
+                ).order_by('-first_update').values_list('file_name', flat=True) #找出分片最后一次更新时间满足阈值异常行程，根据首次分片落库时间确定行程历史排序
             )
 
             # 获取trips列表中last_update - first_update的时间差和
