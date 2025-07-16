@@ -3138,7 +3138,7 @@ async def process_record_zip_async(journey_record_longimg_id):
                                                         thread_sensitive=True
                                                     )(journey_id=journey_record_longimg_id)
                 except ObjectDoesNotExist:
-                    logger(f"total journey has no item. trip_id: {trip.parent_trip_id}")
+                    logger.info(f"total journey has no item. trip_id: {trip.parent_trip_id}")
                     return 
                 # 当前行程已完成
                 # 音频合并并通知分发接口
@@ -3188,7 +3188,7 @@ async def process_record_zip_async(journey_record_longimg_id):
                                                             thread_sensitive=True
                                                         )(journey_id=trip.parent_trip_id)
                     except ObjectDoesNotExist:
-                        logger(f"total journey has no item. trip_id: {trip.parent_trip_id}")
+                        logger.info(f"total journey has no item. trip_id: {trip.parent_trip_id}")
                         return 
                     # 当前行程已完成
                     # 音频合并并通知分发接口
