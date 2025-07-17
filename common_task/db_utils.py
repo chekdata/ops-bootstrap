@@ -1,5 +1,6 @@
 import time
 import logging
+import asyncio
 from functools import wraps
 from django.db import connections, OperationalError, InterfaceError, connection
 from django.conf import settings
@@ -34,6 +35,34 @@ def db_retry(max_attempts=3, retry_delay=0.5):
                             # 关闭所有连接并等待重试
                             connections.close_all()
                             time.sleep(retry_delay * (attempt + 1))  # 指数退避
+                        else:
+                            logger.error(f"数据库连接重试失败 ({max_attempts}/{max_attempts}): {e}")
+                            raise
+                    else:
+                        # 其他数据库错误，直接抛出
+                        raise
+        return wrapper
+    return decorator
+
+def async_db_retry(max_attempts=3, retry_delay=0.5):
+    """
+    异步数据库操作重试装饰器
+    用于处理数据库连接断开的情况
+    """
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            for attempt in range(max_attempts):
+                try:
+                    return await func(*args, **kwargs)
+                except (OperationalError, InterfaceError) as e:
+                    # 检查是否是连接断开错误
+                    if any(err in str(e) for err in ["2006", "MySQL server has gone away", "Connection reset by peer"]):
+                        if attempt < max_attempts - 1:  # 如果不是最后一次尝试
+                            logger.warning(f"数据库连接断开，正在重试 ({attempt+1}/{max_attempts}): {e}")
+                            # 关闭所有连接并等待重试
+                            connections.close_all()
+                            await asyncio.sleep(retry_delay * (attempt + 1))  # 指数退避
                         else:
                             logger.error(f"数据库连接重试失败 ({max_attempts}/{max_attempts}): {e}")
                             raise
