@@ -2138,7 +2138,8 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
                     user_avatar=pic,
                     user_nickname=name,
                     target_path=file_path,
-                    user_id = user_id
+                    user_id = user_id,
+                    base_url = settings.GENERATE_JOURNEY_REPORT
                     )
 
                     if result:
@@ -2194,8 +2195,8 @@ def convert_gps_time(csv_file_path,trip_id):
 
         # 将时间戳转换为 datetime 对象
         dt = datetime.fromtimestamp(timestamp_s)
-        lon = df.loc[_,'lon']
-        lat = df.loc[_,'lat']
+        lon = float(df.loc[_,'lon'])
+        lat = float(df.loc[_,'lat'])
         if df.loc[_,'road_scene']:
             road_scene = df.loc[_,'road_scene']
 
