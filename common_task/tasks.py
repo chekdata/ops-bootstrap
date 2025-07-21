@@ -50,7 +50,7 @@ from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor
 import multiprocessing
 from accounts.models import User,CoreUser
-from common_task.db_utils import db_retry, ensure_connection
+from common_task.db_utils import db_retry, ensure_connection, async_db_retry
 from common_task.chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
 from django.db import close_old_connections
 from django.core.exceptions import ObjectDoesNotExist
@@ -3017,7 +3017,7 @@ def ensure_db_connection_and_set_journey_less_than_timethre_sync(trip_id):
 
 
 @async_db_retry(max_attempts=3, retry_delay=0.5)
-async def clear_less_5min_journey(_id, trip_id, is_last_chunk=False):
+async def clear_less_5min_journey(_id, trip_id_list, is_last_chunk=False):
     """处理行程低于5分钟正常退出行程数据"""
     try:
         if is_last_chunk:
