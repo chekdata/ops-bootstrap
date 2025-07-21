@@ -38,6 +38,8 @@ from django.core.cache import cache
 #
 #     def perform_create(self, serializer):
 #         serializer.save(user=self.request.user)
+
+jieba.initialize()
 class DataListCreateView(generics.ListCreateAPIView):
     queryset = Data.objects.all()
     serializer_class = DataSerializer
@@ -131,14 +133,24 @@ async def search_model_fuzzy(request):
             return Response({'code': 200, 'message': '成功', 'data':data })
 
         elif model:
+            pre_model = []
             words = list(jieba.cut(model))
             # pattern = '|'.join(map(re.escape, words))
             # pre_model =  model_config.objects.filter(model__iregex=pattern)[:20]
 
-            query = Q()
-            for word in words:
-                query |= Q(model__icontains=word)
-            pre_model = model_config.objects.filter(query).distinct()[:10]
+            #key 20250721弃用
+            # query = Q()
+            # for word in words:
+            #     query |= Q(model__icontains=word)
+            # pre_model = model_config.objects.filter(query).distinct()[:10]
+
+            all_data = model_config.objects.all()
+            for single_model in all_data:
+                if  contains_any_keyword(single_model.model,words):
+                    pre_model.append(single_model)
+                    if len(pre_model)>=10:
+                        break
+            pre_model = pre_model[:10]
         else:
             pre_model =   model_config.objects.all()[:20]
 
