@@ -2599,21 +2599,25 @@ async def ensure_db_connection_and_set_merge_abnormal_journey(trips):
             
             logger.info(f"数据库连接正常，开始执行设置合并到当前行程操作")
             @sync_to_async(thread_sensitive=True)
+            @db_retry()
             def update_trips():
                 with transaction.atomic():
                     for trip_id in trips:
-                        try:
-                            trip = Trip.objects.select_for_update().get(trip_id=trip_id)
-                            trip.merge_into_current = False
-                            trip.save()
-                            logger.info(f"已将行程 {trip_id} 的 Merge_into_current 字段设置为 0")
-                        except Trip.DoesNotExist:
-                            logger.error(f"行程 {trip_id} 不存在")
-                        except Exception as e:
-                            logger.error(f"更新行程 {trip_id} merge_into_current 失败: {e}",exc_info=True)
-            # 执行更新操作
-            await update_trips()
-            return True
+                        trip = Trip.objects.select_for_update().get(trip_id=trip_id)
+                        trip.merge_into_current = False
+                        trip.save()
+                        logger.info(f"已将行程 {trip_id} 的 Merge_into_current 字段设置为 0")
+            
+            try:
+                # 执行更新操作
+                await update_trips()
+                return True
+            except Trip.DoesNotExist as e:
+                logger.error(f"行程不存在: {e}")
+                return False
+            except Exception as e:
+                logger.error(f"更新行程 merge_into_current 失败: {e}", exc_info=True)
+                return False
         except Exception as e:
             logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}", exc_info=True)
             if attempt < max_retries - 1:
@@ -2647,52 +2651,52 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程生
             
             logger.info(f"数据库连接正常，开始执行设置操作totol_journey表中行程状态操作")
             @sync_to_async(thread_sensitive=True)
+            @db_retry()
             def update_trips():
                 with transaction.atomic():
-                    try:
-                        trip = Trip.objects.get(trip_id=trip_id)
-                        user_id = trip.user_id
-                        trip.set_journey_status = True
-                        # 处理用户ID
-                        # if hasattr(trip.user_id, 'hex'):
-                        #     user_id = trip.user_id.hex
-                        # elif isinstance(trip.user_id, str):
-                        #     # 如果是字符串,去掉横线
-                        #     user_id = trip.user_id.replace('-', '')
-                        logger.info(f" set_journey_status: 的 user_id: {user_id}")
-                        core_user_profile = CoreUser.objects.using("core_user").get(app_id=user_id)
-                        journey, created = Journey.objects.using("core_user").update_or_create(
-                            # 查询条件（用于定位对象）
-                            journey_id=trip.trip_id,
-                            # 默认值或更新值
-                            defaults={
-                                'brand': trip.car_name,
-                                'model': trip.car_name,
-                                'hardware_config': trip.hardware_version,
-                                'software_config': trip.software_version,
-                                'user_uuid': core_user_profile.id,
-                                'journey_status': status,
-                            }
-                        ) 
-                        # "异常退出待确认"行程状态更新journey_start_time，journey_end_time
-                        # 确保行程筛选时正常
-                        # 然后根据状态和是否新创建来更新时间字段
-                        if status == "异常退出待确认" or status == "行程生成中":
-                            journey.journey_start_time = trip.first_update
-                            journey.journey_end_time = trip.last_update
-                        elif not created:
-                            # 如果是更新现有记录，保持原有的时间字段不变
-                            journey.journey_start_time = total_journey_start
-                            journey.journey_end_time = total_journey_end
-                            pass
-                        else:
-                            # 如果是新创建的记录，时间字段保持为 None（默认值）
-                            journey.journey_start_time = None
-                            journey.journey_end_time = None
-                        trip.save()                      
-                        journey.save(using="core_user")
-                        logger.info(f"已将行程 {trip_id} 的 jouney_status 字段设置为: {status}")
-                        logger.info(f"已将行程 {trip_id} 的 默认字段设置为: brand: {trip.car_name}, model: {trip.car_name}, hardware_config: {trip.hardware_version}, software_config: {trip.software_version}, user_uuid: {core_user_profile.id}")
+                    trip = Trip.objects.get(trip_id=trip_id)
+                    user_id = trip.user_id
+                    trip.set_journey_status = True
+                    # 处理用户ID
+                    # if hasattr(trip.user_id, 'hex'):
+                    #     user_id = trip.user_id.hex
+                    # elif isinstance(trip.user_id, str):
+                    #     # 如果是字符串,去掉横线
+                    #     user_id = trip.user_id.replace('-', '')
+                    logger.info(f" set_journey_status: 的 user_id: {user_id}")
+                    core_user_profile = CoreUser.objects.using("core_user").get(app_id=user_id)
+                    journey, created = Journey.objects.using("core_user").update_or_create(
+                        # 查询条件（用于定位对象）
+                        journey_id=trip.trip_id,
+                        # 默认值或更新值
+                        defaults={
+                            'brand': trip.car_name,
+                            'model': trip.car_name,
+                            'hardware_config': trip.hardware_version,
+                            'software_config': trip.software_version,
+                            'user_uuid': core_user_profile.id,
+                            'journey_status': status,
+                        }
+                    ) 
+                    # "异常退出待确认"行程状态更新journey_start_time，journey_end_time
+                    # 确保行程筛选时正常
+                    # 然后根据状态和是否新创建来更新时间字段
+                    if status == "异常退出待确认" or status == "行程生成中":
+                        journey.journey_start_time = trip.first_update
+                        journey.journey_end_time = trip.last_update
+                    elif not created:
+                        # 如果是更新现有记录，保持原有的时间字段不变
+                        journey.journey_start_time = total_journey_start
+                        journey.journey_end_time = total_journey_end
+                        pass
+                    else:
+                        # 如果是新创建的记录，时间字段保持为 None（默认值）
+                        journey.journey_start_time = None
+                        journey.journey_end_time = None
+                    trip.save()                      
+                    journey.save(using="core_user")
+                    logger.info(f"已将行程 {trip_id} 的 jouney_status 字段设置为: {status}")
+                    logger.info(f"已将行程 {trip_id} 的 默认字段设置为: brand: {trip.car_name}, model: {trip.car_name}, hardware_config: {trip.hardware_version}, software_config: {trip.software_version}, user_uuid: {core_user_profile.id}")
 
                         if status == "异常退出待确认" or status == "行程生成中":
                             log_journey_start_time = trip.first_update
@@ -2704,13 +2708,17 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程生
                             log_journey_start_time = None
                             log_journey_end_time = None
                         logger.info(f"已将行程 {trip_id} 的 默认字段设置为: journey_start_time: {log_journey_start_time}, journey_end_time: {log_journey_end_time}")
-                    except Trip.DoesNotExist:
-                        logger.error(f"行程 {trip_id} 不存在")
-                    except Exception as e:
-                        logger.error(f"更新行程 {trip_id} jouney_status, brand, journey_start_time 失败: {e}", exc_info=True)
-            # 执行更新操作
-            await update_trips()
-            return True
+            
+            try:
+                # 执行更新操作
+                await update_trips()
+                return True
+            except Trip.DoesNotExist:
+                logger.error(f"行程 {trip_id} 不存在")
+                return False
+            except Exception as e:
+                logger.error(f"更新行程 {trip_id} jouney_status, brand, journey_start_time 失败: {e}", exc_info=True)
+                return False
         except Exception as e:
             logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}", exc_info=True)
             if attempt < max_retries - 1:
@@ -3008,7 +3016,8 @@ def ensure_db_connection_and_set_journey_less_than_timethre_sync(trip_id):
                 return False
 
 
-async def clear_less_5min_journey(_id, trip_id_list, is_last_chunk=False):
+@async_db_retry(max_attempts=3, retry_delay=0.5)
+async def clear_less_5min_journey(_id, trip_id, is_last_chunk=False):
     """处理行程低于5分钟正常退出行程数据"""
     try:
         if is_last_chunk:
@@ -3282,12 +3291,12 @@ if __name__ == '__main__':
 
     total_message = process_journey(file_path_list, 
                                     user_id=100000, 
-                                    user_name='念书人', 
-                                    phone='18847801997', 
-                                    car_brand ='理想', 
+                                    user_name='名狌', 
+                                    phone='17349063987', 
+                                    car_brand ='智己LS6', 
                                     car_model='', 
-                                    car_hardware_version='2024款 Pro',
-                                    car_software_version='OTA7.0'
+                                    car_hardware_version='2023款 Max 超强性能版',
+                                    car_software_version='IMOS 2.6.5'
                     )
               
     # trip_id = 'ee1a65b673504d13b9c4d5c7e39d8737'
