@@ -101,11 +101,13 @@ async def custom_token_obtain_pair_view(request):
 
     if not await sync_to_async(User.objects.filter(unionid=unionid).exists, thread_sensitive=True)():
         user_wechat_info = get_user_info(access_token, openid)
-        if  user_wechat_info.get('nickname'):
-            username = user_wechat_info.get('nickname')
-        else:
-            username = '这是一个名字'
+        # if  user_wechat_info.get('nickname'):
+        #     username = user_wechat_info.get('nickname')
+        # else:
+        #     username = '这是一个名字'
 
+        random_code = generate_random_code()
+        username =  f"车控星人#{random_code}"
         user = await sync_to_async(User.objects.create_user, thread_sensitive=True)(
             username=username,
             unionid=unionid
@@ -824,7 +826,7 @@ async def send_sms_process_login(request):
     vericode=str(generate_verification_code())
 
     #测试环境
-    vericode = '888888'
+    # vericode = '888888'
 
     if not is_valid_phone_number(phone):
         return Response({'code': 500, 'message': '手机号格式不准确' ,'data':{}})
@@ -838,7 +840,7 @@ async def send_sms_process_login(request):
         await sync_to_async(user_SMS_verification.save, thread_sensitive=True)()
 
         #生产环境
-        # send_sms(phone, vericode)
+        send_sms(phone, vericode)
         return Response({'code': 200, 'message': 'sms 发送成功','data':{}})
     
 
@@ -855,7 +857,7 @@ async def send_sms_process_login(request):
         await sync_to_async(smsverification.save, thread_sensitive=True)()
 
         #生产环境
-        # send_sms(phone, vericode)
+        send_sms(phone, vericode)
         return Response({'code': 200, 'message': 'sms 发送成功','data':{}})
 
 
