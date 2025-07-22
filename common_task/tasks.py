@@ -2699,16 +2699,16 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程生
                     logger.info(f"已将行程 {trip_id} 的 jouney_status 字段设置为: {status}")
                     logger.info(f"已将行程 {trip_id} 的 默认字段设置为: brand: {trip.car_name}, model: {trip.car_name}, hardware_config: {trip.hardware_version}, software_config: {trip.software_version}, user_uuid: {core_user_profile.id}")
 
-                        if status == "异常退出待确认" or status == "行程生成中":
-                            log_journey_start_time = trip.first_update
-                            log_journey_end_time = trip.last_update
-                        elif not created:
-                            log_journey_start_time = total_journey_start
-                            log_journey_end_time = total_journey_end
-                        else:
-                            log_journey_start_time = None
-                            log_journey_end_time = None
-                        logger.info(f"已将行程 {trip_id} 的 默认字段设置为: journey_start_time: {log_journey_start_time}, journey_end_time: {log_journey_end_time}")
+                    if status == "异常退出待确认" or status == "行程生成中":
+                        log_journey_start_time = trip.first_update
+                        log_journey_end_time = trip.last_update
+                    elif not created:
+                        log_journey_start_time = total_journey_start
+                        log_journey_end_time = total_journey_end
+                    else:
+                        log_journey_start_time = None
+                        log_journey_end_time = None
+                    logger.info(f"已将行程 {trip_id} 的 默认字段设置为: journey_start_time: {log_journey_start_time}, journey_end_time: {log_journey_end_time}")
             
             try:
                 # 执行更新操作
