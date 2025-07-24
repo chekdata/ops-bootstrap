@@ -276,3 +276,9 @@ JOURNEY_STATUS_SUCCESS = "正常"
 
 # 之家数据分发域名
 DATA_DISTRIBUTION = "autohome-report.chekkk.com"
+
+# 生成长图域名
+# 测试环境
+# GENERATE_JOURNEY_REPORT = "https://report-staging.chekkk.com/api"
+# 生产环境
+GENERATE_JOURNEY_REPORT = "https://report.chekkk.com/api"
