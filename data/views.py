@@ -39,6 +39,30 @@ from django.core.cache import cache
 #     def perform_create(self, serializer):
 #         serializer.save(user=self.request.user)
 
+def contains_any_keyword(text, keywords):
+    import re
+    """
+    使用正则表达式判断文本是否包含任意一个关键词
+    
+    参数:
+    text (str): 需要检查的文本
+    keywords (list): 关键词列表，建议按长度从长到短排序
+    
+    返回:
+    bool: 如果包含任意关键词返回True，否则返回False
+    """
+    # 对关键词进行转义处理，防止正则元字符干扰
+    escaped_keywords = [re.escape(keyword) for keyword in keywords]
+    
+    # 构建正则表达式模式，使用竖线连接多个关键词
+    pattern = '|'.join(escaped_keywords)
+    
+    # 编译正则表达式
+    regex = re.compile(pattern)
+    
+    # 执行匹配
+    return bool(regex.search(text))
+
 jieba.initialize()
 class DataListCreateView(generics.ListCreateAPIView):
     queryset = Data.objects.all()
