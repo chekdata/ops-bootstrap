@@ -107,7 +107,7 @@ async def custom_token_obtain_pair_view(request):
             username = '这是一个名字'
 
         # random_code = generate_random_code()
-        username =  f"车控星人#{random_code}"
+        # username =  f"车控星人#{random_code}"
         user = await sync_to_async(User.objects.create_user, thread_sensitive=True)(
             username=username,
             unionid=unionid
