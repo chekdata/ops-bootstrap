@@ -101,12 +101,12 @@ async def custom_token_obtain_pair_view(request):
 
     if not await sync_to_async(User.objects.filter(unionid=unionid).exists, thread_sensitive=True)():
         user_wechat_info = get_user_info(access_token, openid)
-        # if  user_wechat_info.get('nickname'):
-        #     username = user_wechat_info.get('nickname')
-        # else:
-        #     username = '这是一个名字'
+        if  user_wechat_info.get('nickname'):
+            username = user_wechat_info.get('nickname')
+        else:
+            username = '这是一个名字'
 
-        random_code = generate_random_code()
+        # random_code = generate_random_code()
         username =  f"车控星人#{random_code}"
         user = await sync_to_async(User.objects.create_user, thread_sensitive=True)(
             username=username,
