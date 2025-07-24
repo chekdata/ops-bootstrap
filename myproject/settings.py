@@ -112,6 +112,7 @@ DATABASES = {
         'PORT': '3306',
          'OPTIONS': {
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES', time_zone='-8:00'",  # 设置时区为东八区
+            'charset': 'utf8mb4',  # 添加字符集配置，支持4字节emoji等特殊字符
         },
     },
     'core_user': {
@@ -125,6 +126,7 @@ DATABASES = {
         'PORT': '3306',
          'OPTIONS': {
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES', time_zone='-8:00'",  # 设置时区为东八区
+            'charset': 'utf8mb4',  # 添加字符集配置，支持4字节emoji等特殊字符
         },
     }
 }
