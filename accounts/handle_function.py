@@ -24,4 +24,7 @@ def handle_user_info(profile):
     if profile.model_config:
         item['model_config'] = profile.model_config
 
+    if profile.nickname:
+        item['nickname'] = profile.nickname
+
     return item

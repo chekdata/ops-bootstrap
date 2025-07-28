@@ -112,6 +112,7 @@ DATABASES = {
         'PORT': '3306',
          'OPTIONS': {
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES', time_zone='-8:00'",  # 设置时区为东八区
+            'charset': 'utf8mb4',  # 添加字符集配置，支持4字节emoji等特殊字符
         },
     },
     'core_user': {
@@ -125,6 +126,7 @@ DATABASES = {
         'PORT': '3306',
          'OPTIONS': {
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES', time_zone='-8:00'",  # 设置时区为东八区
+            'charset': 'utf8mb4',  # 添加字符集配置，支持4字节emoji等特殊字符
         },
     }
 }
@@ -274,3 +276,9 @@ JOURNEY_STATUS_SUCCESS = "正常"
 
 # 之家数据分发域名
 DATA_DISTRIBUTION = "autohome-report.chekkk.com"
+
+# 生成长图域名
+# 测试环境
+# GENERATE_JOURNEY_REPORT = "https://report-staging.chekkk.com/api"
+# 生产环境
+GENERATE_JOURNEY_REPORT = "https://report.chekkk.com/api"

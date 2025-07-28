@@ -66,6 +66,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     # password = models.CharField(max_length=128, null=True, verbose_name='账号密码')  # 加密后的密码通常需要更多的存储空间
     model_config = JSONField(blank=True, null=True, verbose_name='车型配置数据')
     project_version = JSONField(blank=True, null=True, verbose_name='硬件信息')
+
+
+    nickname = models.CharField(max_length=255, blank=True, null=True, verbose_name='微信昵称')
+
     USERNAME_FIELD = 'id'
     REQUIRED_FIELDS = ['unionid']
 

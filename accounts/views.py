@@ -101,16 +101,17 @@ async def custom_token_obtain_pair_view(request):
 
     if not await sync_to_async(User.objects.filter(unionid=unionid).exists, thread_sensitive=True)():
         user_wechat_info = get_user_info(access_token, openid)
-        # if  user_wechat_info.get('nickname'):
-        #     username = user_wechat_info.get('nickname')
-        # else:
-        #     username = '这是一个名字'
+        if  user_wechat_info.get('nickname'):
+            nickname = user_wechat_info.get('nickname')
+        else:
+            nickname = '这是一个名字'
 
         random_code = generate_random_code()
         username =  f"车控星人#{random_code}"
         user = await sync_to_async(User.objects.create_user, thread_sensitive=True)(
             username=username,
-            unionid=unionid
+            unionid=unionid,
+            nickname=nickname,
         )
         user.pic ='https://app.chekkk.com/assets/imgs/app_project/default/default_car.png'
         await sync_to_async(user.save, thread_sensitive=True)()
@@ -338,41 +339,54 @@ async def send_sms_process(request):
             except Exception as e:
                 # print(e)
                 pass
+        elif user_profile.phone:
+              return Response({'code': 500, 'message': '该微信已绑定手机号', 'data': {}})
+        #20250722 暂停使用
+        # user_profile.phone = phone
+        # # user_profile.save()
+        # await sync_to_async(user_profile.save, thread_sensitive=True)()
 
-        user_profile.phone = phone
-        # user_profile.save()
-        await sync_to_async(user_profile.save, thread_sensitive=True)()
 
-
-        if not await sync_to_async(CoreUser.objects.using('core_user').filter(app_phone=phone).exists, thread_sensitive=True)():
-            if await sync_to_async(CoreUser.objects.using('core_user').filter(Q(saas_phone=phone) | Q(mini_phone=phone)).exists, thread_sensitive=True)():
-                # core_user = await sync_to_async(CoreUser.objects.using('core_user').filter(Q(saas_phone=phone) | Q(mini_phone=phone)).exists, thread_sensitive=True)()
-                #主数据库三端手机号必须一致 不然这个逻辑会出问题
-                core_user = await sync_to_async(CoreUser.objects.using('core_user').get, thread_sensitive=True)(
-                    Q(saas_phone=phone) | Q(mini_phone=phone)
-                )
-                if not core_user.app_id:
-                    core_user.app_phone = phone
-                    core_user.app_id = user_profile.id
-                    await sync_to_async(core_user.save, thread_sensitive=True)()
-            else:
-                core_user =await sync_to_async(CoreUser.objects.using('core_user').get_or_create, thread_sensitive=True)(
-                    app_phone=phone,
-                    app_id = user_profile.id
-                )
+        # if not await sync_to_async(CoreUser.objects.using('core_user').filter(app_phone=phone).exists, thread_sensitive=True)():
+        #     if await sync_to_async(CoreUser.objects.using('core_user').filter(Q(saas_phone=phone) | Q(mini_phone=phone)).exists, thread_sensitive=True)():
+        #         # core_user = await sync_to_async(CoreUser.objects.using('core_user').filter(Q(saas_phone=phone) | Q(mini_phone=phone)).exists, thread_sensitive=True)()
+        #         #主数据库三端手机号必须一致 不然这个逻辑会出问题
+        #         core_user = await sync_to_async(CoreUser.objects.using('core_user').get, thread_sensitive=True)(
+        #             Q(saas_phone=phone) | Q(mini_phone=phone)
+        #         )
+        #         if not core_user.app_id:
+        #             core_user.app_phone = phone
+        #             core_user.app_id = user_profile.id
+        #             await sync_to_async(core_user.save, thread_sensitive=True)()
+        #     else:
+        #         core_user =await sync_to_async(CoreUser.objects.using('core_user').get_or_create, thread_sensitive=True)(
+        #             app_phone=phone,
+        #             app_id = user_profile.id
+        #         )
 
 
         vericode=str(generate_verification_code())
-        # smsverification= SMSVerification.objects.get_or_create(user_id=user.id)
-        smsverification,creat =await sync_to_async(SMSVerification.objects.get_or_create, thread_sensitive=True)(user_id=user.id)
-        smsverification.phone = phone
-        smsverification.code = vericode
-        smsverification.user_id = user.id
-        # smsverification.save()
-        await sync_to_async(smsverification.save, thread_sensitive=True)()
+        # # smsverification= SMSVerification.objects.get_or_create(user_id=user.id)
+        # smsverification,creat =await sync_to_async(SMSVerification.objects.get_or_create, thread_sensitive=True)(user_id=user.id)
+        # smsverification.phone = phone
+        # smsverification.code = vericode
+        # smsverification.user_id = user.id
+        # # smsverification.save()
+        # await sync_to_async(smsverification.save, thread_sensitive=True)()
 
+            
+        # send_sms(phone, vericode)
+        # return Response({'code': 200, 'message': 'sms 发送成功','data':{}})
+
+        user_SMS_verification,creat =await sync_to_async(User_SMS_Verification.objects.get_or_create, thread_sensitive=True)(  
+            phone=phone)
+        user_SMS_verification.code = vericode
+        await sync_to_async(user_SMS_verification.save, thread_sensitive=True)()
+
+        #生产环境
         send_sms(phone, vericode)
         return Response({'code': 200, 'message': 'sms 发送成功','data':{}})
+
     except Exception as e:
     #     print(e)
         return Response({'code': 500, 'message': '内部服务报错','data':{}})
@@ -402,21 +416,56 @@ async def check_sms_process(request):
     user = request.user
     _id = user.id
     code = request.data.get('code')
+    phone = request.data.get('phone')
+   
     try:
+ 
         user_profile = await sync_to_async(User.objects.get, thread_sensitive=True)(id=user.id)
 
         item = handle_user_info(user_profile)
-        smsverification = await sync_to_async(SMSVerification.objects.get, thread_sensitive=True)(user_id=user.id)
 
-        if code == smsverification.code and check_time_difference(smsverification.created_at):
+        #20250722暂停使用
+        # smsverification = await sync_to_async(SMSVerification.objects.get, thread_sensitive=True)(user_id=user.id)
+
+        # if code == smsverification.code and check_time_difference(smsverification.created_at):
+        #     refresh = RefreshToken.for_user(user)
+        #     item['RefreshToken'] = str(refresh)
+        #     item['AccessToken'] = str(refresh.access_token)
+            
+        #     return Response( {'code': 200, 'message': '成功','data':item})
+        # else:
+        #     return Response({'code': 500, 'message': '验证码错误或验证码已超时','data':{}})
+
+        user_SMS_verification = await sync_to_async(User_SMS_Verification.objects.get, thread_sensitive=True)(phone=phone)
+        if int(code) == user_SMS_verification.code and check_time_difference(user_SMS_verification.created_at):
             refresh = RefreshToken.for_user(user)
             item['RefreshToken'] = str(refresh)
             item['AccessToken'] = str(refresh.access_token)
-            
+            user_profile.phone = phone
+            await sync_to_async(user_profile.save, thread_sensitive=True)()
+
+            if not await sync_to_async(CoreUser.objects.using('core_user').filter(app_phone=phone).exists, thread_sensitive=True)():
+                if await sync_to_async(CoreUser.objects.using('core_user').filter(Q(saas_phone=phone) | Q(mini_phone=phone)).exists, thread_sensitive=True)():
+                    # core_user = await sync_to_async(CoreUser.objects.using('core_user').filter(Q(saas_phone=phone) | Q(mini_phone=phone)).exists, thread_sensitive=True)()
+                    #主数据库三端手机号必须一致 不然这个逻辑会出问题
+                    core_user = await sync_to_async(CoreUser.objects.using('core_user').get, thread_sensitive=True)(
+                        Q(saas_phone=phone) | Q(mini_phone=phone)
+                    )
+                    if not core_user.app_id:
+                        core_user.app_phone = phone
+                        core_user.app_id = user_profile.id
+                        await sync_to_async(core_user.save, thread_sensitive=True)()
+                else:
+                    core_user =await sync_to_async(CoreUser.objects.using('core_user').get_or_create, thread_sensitive=True)(
+                        app_phone=phone,
+                        app_id = user_profile.id
+                    )
             return Response( {'code': 200, 'message': '成功','data':item})
         else:
             return Response({'code': 500, 'message': '验证码错误或验证码已超时','data':{}})
-    except:
+  
+    except Exception as e:
+        print(e)
         return Response({'code': 500, 'message': '内部服务报错','data':{}})
 
 
