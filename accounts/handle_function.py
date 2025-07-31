@@ -26,5 +26,7 @@ def handle_user_info(profile):
 
     if profile.nickname:
         item['nickname'] = profile.nickname
+    else:
+        item['nickname'] = ""
 
     return item
