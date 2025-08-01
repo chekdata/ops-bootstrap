@@ -1,7 +1,12 @@
 import requests
 
-SOCIAL_AUTH_WEIXIN_appid = 'wxe24cb2373dae28a1'
-SOCIAL_AUTH_WEIXIN_secret = 'e08ac201c7fa17bb812e406e0ddbf1f0'
+#chek环境环境
+# SOCIAL_AUTH_WEIXIN_appid = 'wxe24cb2373dae28a1'
+# SOCIAL_AUTH_WEIXIN_secret = 'e08ac201c7fa17bb812e406e0ddbf1f0'
+
+#汽车之家环境
+SOCIAL_AUTH_WEIXIN_appid = 'wxb0b8abc1fddea5f0'
+SOCIAL_AUTH_WEIXIN_secret =  'c28d31f34da8ef52532277d2b0be4418'
 
 def get_access_token(app_id, app_secret, code):
 
