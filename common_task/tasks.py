@@ -594,6 +594,12 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
         if not journey_record_longImg_exists:
             keys_to_copy = ['car_name', 'file_name', 'hardware_version', 'software_version', 'device_id']
             journey_record_longImg_defaults = {key: defaults[key] for key in keys_to_copy}
+            # 如果task_id和autohome_phone存在，则添加到journey_record_longImg_defaults
+            if 'task_id' in defaults:
+                journey_record_longImg_defaults['task_id'] = defaults['task_id']
+            if 'autohome_phone' in defaults:
+                journey_record_longImg_defaults['autohome_phone'] = defaults['autohome_phone']
+                
             journey_record_longImg, created = await sync_to_async(JourneyRecordLongImg.objects.using("core_user").get_or_create, thread_sensitive=True)(
                             user_id = user_id,
                             journey_id=trip_id,
@@ -1356,6 +1362,8 @@ def merge_files_sync(user_id, trip_id, is_timeout=False):
             software_version=main_trip.software_version,
             merge_into_current=True,
             trip_status=main_trip.trip_status,
+            task_id = main_trip.task_id,  # 确保同一任务下的行程
+            autohome_phone = main_trip.autohome_phone, # 确保同一任务下的行程
         ).order_by('first_update')  # 升序：从旧到新， 对行程按分片首次落库时间排序先后，防止last_update更新异常导致父行程认定错误
 
         trips_to_merge = []
@@ -2509,6 +2517,8 @@ async def ensure_db_connection_and_get_abnormal_journey(user_id,
                                                         car_name,
                                                         hardware_version, 
                                                         software_version, 
+                                                        task_id,                # 确保同一任务下的行程
+                                                        autohome_phone,         # 确保同一任务下的行程
                                                         time):
     """确保数据库连接并执行合并操作"""
     # 最大重试次数
@@ -2537,6 +2547,9 @@ async def ensure_db_connection_and_get_abnormal_journey(user_id,
                                     hardware_version=hardware_version,
                                     software_version=software_version,
                                     trip_status='正常',
+                                    # TODO: 获取task_id
+                                    task_id = task_id,  # 确保同一任务下的行程
+                                    autohome_phone = autohome_phone, # 确保同一任务下的行程
                                     last_update__lt=time
                                     ).order_by('-first_update').values_list('trip_id',flat=True) #找出分片最后一次更新时间满足阈值异常行程，根据首次分片落库时间确定行程历史排序
             )
@@ -2552,6 +2565,9 @@ async def ensure_db_connection_and_get_abnormal_journey(user_id,
                     car_name=car_name,
                     hardware_version=hardware_version,
                     software_version=software_version,
+                    # TODO: 获取task_id
+                    task_id = task_id,  # 确保同一任务下的行程
+                    autohome_phone = autohome_phone, # 确保同一任务下的行程
                     trip_status='正常',
                     last_update__lt=time
                 ).order_by('-first_update').values_list('file_name', flat=True) #找出分片最后一次更新时间满足阈值异常行程，根据首次分片落库时间确定行程历史排序
