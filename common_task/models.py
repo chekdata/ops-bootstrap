@@ -396,6 +396,9 @@ class JourneyRecordLongImg(models.Model):
     # 行程app存储路径
     file_name = models.CharField(max_length=255, null=True, blank=True, verbose_name='行程本地存储路径')
 
+    task_id = models.CharField(max_length=50, null=True,blank=True, verbose_name='之家任务id')
+    autohome_phone = models.CharField(max_length=11, null=True,blank=True, verbose_name='之家任务输入手机号')
+    
     # 创建信息
     # created_by = models.CharField(max_length=50, null=True, blank=True)
     created_date = models.DateTimeField(auto_now_add=True,null=True, blank=True)

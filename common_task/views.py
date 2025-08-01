@@ -703,6 +703,17 @@ async def get_abnormal_journey(request):
         car_name = request.data.get('car_name')
         hardware_version = request.data.get('hardware_version')
         software_version = request.data.get('software_version')
+        # 如果没有传入就使用默认值None
+        
+        task_id = request.data.get('task_id', None) # 确保在同一任务下的行程
+        autohome_phone = request.data.get('autohome_phone', None) # 确保在同一任务下的行程
+
+        if task_id == "" or task_id == 'None':
+            task_id = None
+
+        if autohome_phone == "" or autohome_phone == 'None':
+            autohome_phone = None            
+
 
         # 计算2分钟前时间点,查询2分钟前最后一次更新分片的行程
         num_minutes_ago = timezone.now() - timezone.timedelta(minutes=0.5)
@@ -711,6 +722,8 @@ async def get_abnormal_journey(request):
                                                                     car_name,
                                                                     hardware_version, 
                                                                     software_version, 
+                                                                    task_id,  # 确保同一任务下的行程
+                                                                    autohome_phone,  # 确保同一任务下的行程
                                                                     num_minutes_ago)
         logger.info(f"查询trip成功。 user_id: {_id}, 'trips': {trips}")
         logger.info(f"查询trip成功。 user_id: {_id}, '行程更新时间总和约为': {total_time}秒.")
