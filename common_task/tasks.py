@@ -599,7 +599,7 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
                 journey_record_longImg_defaults['task_id'] = defaults['task_id']
             if 'autohome_phone' in defaults:
                 journey_record_longImg_defaults['autohome_phone'] = defaults['autohome_phone']
-                
+
             journey_record_longImg, created = await sync_to_async(JourneyRecordLongImg.objects.using("core_user").get_or_create, thread_sensitive=True)(
                             user_id = user_id,
                             journey_id=trip_id,
@@ -607,6 +607,26 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
                             defaults=journey_record_longImg_defaults
                         )
             logger.info(f"=============创建新行程音频长图记录: {trip_id}====================")
+
+
+        # 增加total_journey信息落库
+        journey_exists = await sync_to_async(Journey.objects.using("core_user").filter(journey_id=trip_id).exists, thread_sensitive=True)()
+
+        if not journey_exists:
+            journey_defaults = {}
+            # 如果task_id和autohome_phone存在，则添加到journey_record_longImg_defaults
+            if 'task_id' in defaults:
+                journey_defaults['task_id'] = defaults['task_id']
+            if 'autohome_phone' in defaults:
+                journey_defaults['autohome_phone'] = defaults['autohome_phone']
+            journey_defaults['journey_status'] = settings.JOURNEY_STATUS_CREATE
+                
+            journey_record_longImg, created = await sync_to_async(Journey.objects.using("core_user").get_or_create, thread_sensitive=True)(
+                            journey_id=trip_id,
+                            defaults=journey_defaults
+                        )
+            logger.info(f"=============创建新行程结果记录: {trip_id}====================")
+
 
         # 当第一次写入时，写入first_update
         trip_exists = await sync_to_async(Trip.objects.filter(trip_id=trip_id).exists, thread_sensitive=True)()
