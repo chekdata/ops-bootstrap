@@ -8,6 +8,7 @@ import requests
 SOCIAL_AUTH_WEIXIN_appid = 'wxb0b8abc1fddea5f0'
 SOCIAL_AUTH_WEIXIN_secret =  'c28d31f34da8ef52532277d2b0be4418'
 
+
 def get_access_token(app_id, app_secret, code):
 
     url = f'https://api.weixin.qq.com/sns/oauth2/access_token?appid={app_id}&secret={app_secret}&code={code}&grant_type=authorization_code'
