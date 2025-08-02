@@ -558,7 +558,6 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
     try:
         # 获取或创建Trip
         defaults = {
-            'is_completed': False,
             'last_update': get_current_timezone_time()  # 使用时区时间
         }
         # 添加元数据
@@ -2195,6 +2194,7 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
                             identification_type = '自动识别',
                             type = '识别接管'
                         )
+            logger.info(f"已将行程 {trip_id} 的 jouney_status 字段落库！")
         else:
             # print(f"未找到 journey_id 为 {trip_id} 的行程记录。")
             logger.info(f"未找到 journey_id 为 {trip_id} 的行程记录。")
