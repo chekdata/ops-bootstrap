@@ -2173,9 +2173,10 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
         
                         core_Journey_profile.longimg_file_path = result.get('data',{}).get('url')
                         core_Journey_profile.save()
+                        task_id = core_Journey_profile.task_id
                         result = send_message_info(
                                 trip_id=str(trip_id),
-                                task_id="111111"
+                                task_id=task_id
                             )
                         logger.info(f"数据分发完成,{result}")
 
