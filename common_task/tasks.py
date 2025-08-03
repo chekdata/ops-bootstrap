@@ -29,6 +29,7 @@ import time
 import shutil
 from pathlib import Path
 from django.db import transaction, DatabaseError
+from django.db.models import Q
 from functools import partial
 from django.db import connections
 from concurrent.futures import ThreadPoolExecutor
@@ -39,7 +40,7 @@ from common_task.models import Trip, ChunkFile, Journey, Reported_Journey
 from django.utils import timezone
 from data.models import model_config
 from accounts.models import CoreUser
-from common_task.models import analysis_data_app,tos_csv_app,Journey,JourneyGPS,JourneyInterventionGps,HotBrandVehicle
+from common_task.models import analysis_data_app,tos_csv_app,Journey,JourneyGPS,JourneyInterventionGps,HotBrandVehicle,JourneyRecordLongImg
 from common_task.handle_tos import TinderOS
 from common_task.handle_journey_message import *
 from multiprocessing import Pool, cpu_count
@@ -49,12 +50,17 @@ from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor
 import multiprocessing
 from accounts.models import User,CoreUser
-from common_task.db_utils import db_retry, ensure_connection
+from common_task.db_utils import db_retry, ensure_connection, async_db_retry
 from common_task.chek_dataprocess.cloud_process_csv.saas_csv_process import process_journey, async_process_journey
 from django.db import close_old_connections
+from django.core.exceptions import ObjectDoesNotExist
 from tmp_tools.monitor import *
 from common_task.handle_chatgpt import get_chat_response
 from tmp_tools.zip import package_files
+from common_task.external_request import reports_successful_audio_generation
+from django.db.models import Max, Min
+from common_task.handle_qczj_api import *
+from common_task.handle_datadistribution import *
 
 # 创建进程池，数量为CPU核心数
 process_pool = Pool(processes=cpu_count())
@@ -552,10 +558,8 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
     try:
         # 获取或创建Trip
         defaults = {
-            'is_completed': False,
             'last_update': get_current_timezone_time()  # 使用时区时间
         }
-
         # 添加元数据
         if metadata:
             # if 'device_id' in metadata:
@@ -576,6 +580,52 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
                 defaults['device_id'] = metadata['device_id']
             # if 'trip_status' in metadata:
             #     defaults['trip_status'] = metadata['trip_status']
+
+            # 汽车之家任务相关
+            if 'task_id' in metadata:
+                defaults['task_id'] = metadata['task_id']
+            if 'phone' in metadata:
+                defaults['autohome_phone'] = metadata['phone']
+
+        # 增加音频和长图信息落库
+        journey_record_longImg_exists = await sync_to_async(JourneyRecordLongImg.objects.using("core_user").filter(journey_id=trip_id).exists, thread_sensitive=True)()
+
+        if not journey_record_longImg_exists:
+            keys_to_copy = ['car_name', 'file_name', 'hardware_version', 'software_version', 'device_id']
+            journey_record_longImg_defaults = {key: defaults[key] for key in keys_to_copy}
+            # 如果task_id和autohome_phone存在，则添加到journey_record_longImg_defaults
+            if 'task_id' in defaults:
+                journey_record_longImg_defaults['task_id'] = defaults['task_id']
+            if 'autohome_phone' in defaults:
+                journey_record_longImg_defaults['autohome_phone'] = defaults['autohome_phone']
+
+            journey_record_longImg, created = await sync_to_async(JourneyRecordLongImg.objects.using("core_user").get_or_create, thread_sensitive=True)(
+                            user_id = user_id,
+                            journey_id=trip_id,
+                            record_upload_tos_status = settings.RECORD_UPLOAD_TOS_ING, 
+                            defaults=journey_record_longImg_defaults
+                        )
+            logger.info(f"=============创建新行程音频长图记录: {trip_id}====================")
+
+
+        # 增加total_journey信息落库
+        journey_exists = await sync_to_async(Journey.objects.using("core_user").filter(journey_id=trip_id).exists, thread_sensitive=True)()
+
+        if not journey_exists:
+            journey_defaults = {}
+            # 如果task_id和autohome_phone存在，则添加到journey_record_longImg_defaults
+            if 'task_id' in defaults:
+                journey_defaults['task_id'] = defaults['task_id']
+            if 'autohome_phone' in defaults:
+                journey_defaults['autohome_phone'] = defaults['autohome_phone']
+            journey_defaults['journey_status'] = settings.JOURNEY_STATUS_CREATE
+                
+            journey_record_longImg, created = await sync_to_async(Journey.objects.using("core_user").get_or_create, thread_sensitive=True)(
+                            journey_id=trip_id,
+                            defaults=journey_defaults
+                        )
+            logger.info(f"=============创建新行程结果记录: {trip_id}====================")
+
 
         # 当第一次写入时，写入first_update
         trip_exists = await sync_to_async(Trip.objects.filter(trip_id=trip_id).exists, thread_sensitive=True)()
@@ -1285,402 +1335,280 @@ async def cleanup_resources():
 #         return None, None
 
 
-# NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
+# 调整数据库访问atomic使用时机
 def merge_files_sync(user_id, trip_id, is_timeout=False):
     """同步版本的合并文件函数，用于进程池执行"""
     normal_trip_status = "正常"
     time_interval_thre = 300
     try:
         logger.info(f"开始合并文件, 用户ID: {user_id}, 行程ID: {trip_id}")
+        
+        # --------------------------
+        # 1. 先获取主行程并加锁（关键数据库操作，需事务）
+        # --------------------------
+        main_trip = None
         with transaction.atomic():
-            # trip = Trip.objects.select_for_update().get(trip_id=trip_id)
-            
             try:
+                # 锁定主行程，防止并发修改
                 main_trip = Trip.objects.select_for_update(nowait=True).get(trip_id=trip_id)
-
-                # 检查是否正在合并或已完成
+                
+                # 检查状态，避免重复处理
                 if main_trip.is_completed:
                     logger.info(f"行程 {main_trip.trip_id} 已完成合并，跳过处理")
-                    return None, None, None
-                
+                    return None, None
                 if getattr(main_trip, 'is_merging', False):
                     logger.info(f"行程 {main_trip.trip_id} 正在合并中，跳过处理")
-                    return None, None, None
-                
-
+                    return None, None
             except DatabaseError:
-                logger.info(f"行程 {main_trip.trip_id} 正在被其他进程处理，跳过")
-                return None, None, None
+                logger.info(f"行程 {trip_id} 正在被其他进程处理，跳过")
+                return None, None
 
-            logger.info(f"用户ID: {user_id}, 行程ID: {main_trip.trip_id} 未完成合并，开始进行合并处理！")
-            # 找到所有和trip相同的carname hardware_version software_version device_id相同的trip,确保数据不会在进程间产生竞争
-            try: 
-                # 记录合并行程音频路径列表
-                record_audio_paths = []
-                # # 正常退出
-                # 首先获取所有符合基本条件的行程，按照last_update排序（降序，从新到旧）
-                all_similar_trips = Trip.objects.filter(
-                    is_completed=False,
-                    user_id=user_id,
-                    device_id=main_trip.device_id,
-                    car_name=main_trip.car_name,
-                    hardware_version=main_trip.hardware_version,
-                    software_version=main_trip.software_version,
-                    merge_into_current=True,
-                    trip_status = main_trip.trip_status,
-                ).order_by('last_update')  # 升序排列，从历史到当前最新
+        if not main_trip:
+            logger.error(f"未找到主行程 {trip_id}")
+            return None, None
 
-                # 筛选出需要合并的行程
-                trips_to_merge = []
-                prev_trip = None
-                parent_trip = None
-                if all_similar_trips.exists():
-                    # 历史事件最早的行程为父行程
-                    parent_trip = all_similar_trips.first()
-                    # 记录父行程的时间范围
-                    logger.info(f"找到父行程: {parent_trip.trip_id}, 时间范围: {parent_trip.first_update} 到 {parent_trip.last_update}")
-                    logger.info(f"找到 {all_similar_trips.count()} 个符合条件的行程")
-                else:
-                    logger.info("没有找到符合条件的行程，直接返回")
-                    return None, None, None
+        logger.info(f"用户ID: {user_id}, 行程ID: {main_trip.trip_id} 开始合并处理！")
 
-                for trip in all_similar_trips:
-                    # 记录音频路径列表
-                    if hasattr(trip, 'recorded_audio_file_path'):
-                        if trip.recorded_audio_file_path:
-                            # 记录音频路径
-                            logger.info(f"行程 {trip.trip_id} 记录音频路径: {trip.recorded_audio_file_path}")
-                            # 记录音频路径
-                            record_audio_paths.extend(trip.recorded_audio_file_path)
+        # --------------------------
+        # 2. 查询需要合并的行程（非锁定查询，事务外执行）
+        # --------------------------
+        all_similar_trips = Trip.objects.filter(
+            is_completed=False,
+            user_id=user_id,
+            device_id=main_trip.device_id,
+            car_name=main_trip.car_name,
+            hardware_version=main_trip.hardware_version,
+            software_version=main_trip.software_version,
+            merge_into_current=True,
+            trip_status=main_trip.trip_status,
+            task_id = main_trip.task_id,  # 确保同一任务下的行程
+            autohome_phone = main_trip.autohome_phone, # 确保同一任务下的行程
+        ).order_by('first_update')  # 升序：从旧到新， 对行程按分片首次落库时间排序先后，防止last_update更新异常导致父行程认定错误
 
-                    if not prev_trip:  # 第一个行程（最新的行程）
-                        trips_to_merge.append(trip)
-                        prev_trip = trip
+        trips_to_merge = []
+        parent_trip = None
+        if all_similar_trips.exists():
+            parent_trip = all_similar_trips.first()  # 最早的行程作为父行程
+            logger.info(f"父行程: {parent_trip.trip_id}, 时间范围: {parent_trip.first_update} 到 {parent_trip.last_update}")
+            trips_to_merge = list(all_similar_trips)  # 所有符合条件的行程
+        else:
+            logger.info("没有找到符合条件的行程，直接返回")
+            return None, None
+
+        trips_to_merge.sort(key=lambda x: x.last_update)  # 确保顺序
+        logger.info(f"找到 {len(trips_to_merge)} 个需要合并的行程")
+
+        csv_merged_results = []
+        det_merged_results = []
+
+        # --------------------------
+        # 3. 循环处理每个行程（分离数据库和IO操作）
+        # --------------------------
+        for trip in trips_to_merge:
+            # 跳过已完成或正在合并的行程
+            if trip.is_completed or getattr(trip, 'is_merging', False):
+                logger.info(f"行程 {trip.trip_id} 已完成或正在合并，跳过")
+                continue
+
+            logger.info(f"行程 {trip.trip_id} 开始处理！")
+
+            # --------------------------
+            # 3.1 标记“正在合并”（数据库操作，需事务）
+            # --------------------------
+            try:
+                with transaction.atomic():
+                    # 重新加锁获取最新状态（防止并发修改）
+                    trip_locked = Trip.objects.select_for_update().get(trip_id=trip.trip_id)
+                    if trip_locked.is_completed or trip_locked.is_merging:
+                        logger.info(f"行程 {trip.trip_id} 已被其他进程处理，跳过")
                         continue
-                    
-                    # 计算当前行程与前一个行程的时间间隔（秒）
-                    # 注意：由于是降序排列，所以是prev_trip.first_update - trip.last_update
-                    # time_diff = (prev_trip.first_update - trip.last_update).total_seconds()
+                    trip_locked.is_merging = True
+                    trip_locked.save(update_fields=['is_merging'])
+                    trip = trip_locked  # 用锁定后的对象后续操作
+            except Exception as e:
+                logger.error(f"标记行程 {trip.trip_id} 为合并中失败: {e}")
+                continue  # 处理下一个行程，不影响整体
 
-                    # 正常退出
-                    # if not is_timeout:                    
-                    #     if time_diff <= time_interval_thre:  # 5分钟 = 300秒
-                    #         # 如果间隔小于等于5分钟，则添加到合并行程列表
-                    #         trips_to_merge.append(trip)
-                    #         prev_trip = trip
-                    #     else:
-                    #         # 找到了间隔超过5分钟的行程，停止查找
-                    #         logger.info(f"找到间隔超过5分钟的行程，停止查找。行程ID: {trip.trip_id}, 时间间隔: {time_diff}秒")
-                    #         break
-                    # else:
-                    #         # 如果正常退出，选择所有之前没处理的数据进行合并，不区分间隔小于等于5分钟，则添加到合并行程列表
-                    #         trips_to_merge.append(trip)
-
-                    # NOTE: 无论是异常行程单独合并还是正常行程合并上一次异常行程
-                    # 最多只有两个行程合并，因为app在每一次跑分前必须让行程上一次异常行程合并
-                    # 所以这里当前行程合并上一次行程不用考虑时间间隔
-                    trips_to_merge.append(trip)
-
-                # 按照时间升序排序（从旧到新），便于处理
-                trips_to_merge.sort(key=lambda x: x.last_update)
-
-                logger.info(f"找到 {len(trips_to_merge)} 个需要合并的行程，时间范围: {trips_to_merge[0].first_update} 到 {trips_to_merge[-1].last_update}")
-                trips = trips_to_merge
-
-
-                # 记录锁定的行程数量
-                trips_count = len(trips) if isinstance(trips, list) else trips.count()
-                logger.info(f"已锁定 {trips_count} 个相关行程记录")
-
-                csv_merged_results = []
-                det_merged_results = []
-
-                for trip in trips:
-                    try:
-                        # 检查是否正在合并或生成
-                        if trip.is_completed:
-                            logger.info(f"行程 {trip.trip_id} 已完成合并，跳过处理")
-                            continue
-                        
-                        if getattr(trip, 'is_merging', False):
-                            logger.info(f"行程 {trip.trip_id} 正在合并中，跳过处理")
-                            continue
-                        
-                        logger.info(f"行程 {trip.trip_id} 马上开始合并处理！")
-                        # 标记正在合并
-                        trip.is_merging = True
-                        # trip.save()
-                        trip.save(update_fields=['is_merging'])
-
-
-                        logger.info(f"用户Id {user_id}, 行程 {trip.trip_id}  正在合并中...")
-                        # 获取所有分片
-                        chunks = ChunkFile.objects.filter(trip=trip).order_by('chunk_index')
-                        merged_results = {'csv': None, 'det': None}
-
-                        # 合并CSV文件
-                        csv_chunks = chunks.filter(file_type='csv')
-                        
+            # --------------------------
+            # 3.2 合并文件（IO操作，事务外执行）
+            # --------------------------
+            merged_results = {'csv': None, 'det': None}
+            try:
+                # 合并CSV
+                csv_chunks = ChunkFile.objects.filter(trip=trip, file_type='csv').order_by('chunk_index')
+                logger.info(f"行程 {trip.trip_id} CSV分片数量: {csv_chunks.count()}")
+                if csv_chunks.exists():
+                    # 统计分片数量和缺失情况（数据库操作，单独事务）
+                    with transaction.atomic():
+                        trip.csv_chunk_count = csv_chunks.count()
                         logger.info(f"行程 {trip.trip_id} CSV分片数量: {csv_chunks.count()} !")
-                        if csv_chunks.exists():
-                            # 统计csv_chunks数量
-                            trip.csv_chunk_count = csv_chunks.count()
-                            logger.info(f"行程 {trip.trip_id} CSV分片数量: {csv_chunks.count()} !")
-                            csv_indexes = list(csv_chunks.values_list('chunk_index', flat=True))
-                            if csv_indexes:
-                                min_index = min(csv_indexes)
-                                max_index = max(csv_indexes)
-                                # 生成完整的索引集合
-                                full_indexes = set(range(min_index, max_index + 1))
-                                # 找出缺失的索引
-                                missing_indexes = full_indexes - set(csv_indexes)
-                                missing_count = len(missing_indexes)
-                            else:
-                                missing_count = 0
-                            trip.csv_chunk_lose = missing_count
-                            logger.info(f"行程 {trip.trip_id} 中间缺少CSV分片数量: {missing_count}")
-                            update_fields = ['csv_chunk_count']
-                            update_fields.append('csv_chunk_lose')
-                            trip.save(update_fields=update_fields)
+                        csv_indexes = list(csv_chunks.values_list('chunk_index', flat=True))
+                        missing_count = len(set(range(min(csv_indexes), max(csv_indexes)+1)) - set(csv_indexes)) if csv_indexes else 0
+                        trip.csv_chunk_lose = missing_count
+                        logger.info(f"行程 {trip.trip_id} 中间缺少CSV分片数量: {missing_count}")
+                        trip.save(update_fields=['csv_chunk_count', 'csv_chunk_lose'])
 
-                            merged_csv = pd.DataFrame()
-                            for chunk in csv_chunks:
-                                try:
-                                    df = pd.read_csv(chunk.file_path)
-                                    merged_csv = pd.concat([merged_csv, df])
-                                except Exception as e:
-                                    logger.error(f"读取CSV分片失败 {chunk.chunk_index}: {e}")
+                    # 合并CSV（IO操作）
+                    merged_csv = pd.DataFrame()
+                    for chunk in csv_chunks:
+                        try:
+                            df = pd.read_csv(chunk.file_path)
+                            merged_csv = pd.concat([merged_csv, df])
+                        except Exception as e:
+                            logger.error(f"读取CSV分片 {chunk.chunk_index} 失败: {e}")
 
-                            if not merged_csv.empty:
-                                # 处理文件名
-                                merged_csv_filename = None
-                                for chunk in csv_chunks:
-                                    if hasattr(chunk, 'file_name') and chunk.file_name and 'spcialPoint' in chunk.file_name:
-                                        merged_csv_filename = chunk.file_name.split('/')[-1]
-                                        break
-                                if not merged_csv_filename:
-                                    merged_csv_filename = trip.file_name.split('/')[-1] if trip.file_name else f"merged_{trip.trip_id}.csv"
+                    if not merged_csv.empty:
+                        # 保存合并后的CSV
 
-                                # 创建合并目录
-                                merged_dir = os.path.join(settings.MEDIA_ROOT, 'merged', str(trip.trip_id))
-                                os.makedirs(merged_dir, exist_ok=True)
+                        # 处理文件名
+                        merged_csv_filename = None
+                        for chunk in csv_chunks:
+                            if hasattr(chunk, 'file_name') and chunk.file_name and 'spcialPoint' in chunk.file_name:
+                                merged_csv_filename = chunk.file_name.split('/')[-1]
+                                break
+                        if not merged_csv_filename:
+                            merged_csv_filename = trip.file_name.split('/')[-1] if trip.file_name else f"merged_{trip.trip_id}.csv"
 
-                                # 保存合并文件
-                                merged_path = os.path.join(merged_dir, merged_csv_filename)
-                                merged_csv.to_csv(merged_path, index=False)
-                                trip.merged_csv_path = merged_path
-                                merged_results['csv'] = merged_path
-                                logger.info(f"合并CSV文件成功.保存到 {merged_path}")
+                        merged_dir = os.path.join(settings.MEDIA_ROOT, 'merged', str(trip.trip_id))
+                        os.makedirs(merged_dir, exist_ok=True)
+                        # 保存合并文件
+                        merged_path = os.path.join(merged_dir, merged_csv_filename)
+                        merged_csv.to_csv(merged_path, index=False)
+                        # trip.merged_csv_path = merged_path
+                        merged_results['csv'] = merged_path
+                        logger.info(f"合并CSV文件成功.保存到 {merged_path}")
 
-                        # 合并DET文件
-                        det_chunks = chunks.filter(file_type='det')
+                # 合并DET（类似CSV处理）
+                det_chunks = ChunkFile.objects.filter(trip=trip, file_type='det').order_by('chunk_index')
+                logger.info(f"行程 {trip.trip_id} DET分片数量: {det_chunks.count()}")
+                if det_chunks.exists():
+                    # 统计分片信息（数据库操作）
+                    with transaction.atomic():
+                        trip.det_chunk_count = det_chunks.count()
                         logger.info(f"行程 {trip.trip_id} DET分片数量: {det_chunks.count()} !")
-                        if det_chunks.exists():
+                        det_indexes = list(det_chunks.values_list('chunk_index', flat=True))
+                        missing_count = len(set(range(min(det_indexes), max(det_indexes)+1)) - set(det_indexes)) if det_indexes else 0
+                        trip.det_chunk_lose = missing_count
+                        logger.info(f"行程 {trip.trip_id} 中间缺少det分片数量: {missing_count}")
+                        trip.save(update_fields=['det_chunk_count', 'det_chunk_lose'])
 
-                            # 统计csv_chunks数量
-                            trip.det_chunk_count = det_chunks.count()
-                            logger.info(f"行程 {trip.trip_id} DET分片数量: {det_chunks.count()} !")
-                            det_indexes = list(det_chunks.values_list('chunk_index', flat=True))
-                            if det_indexes:
-                                min_index = min(det_indexes)
-                                max_index = max(det_indexes)
-                                # 生成完整的索引集合
-                                full_indexes = set(range(min_index, max_index + 1))
-                                # 找出缺失的索引
-                                missing_indexes = full_indexes - set(det_indexes)
-                                missing_count = len(missing_indexes)
-                            else:
-                                missing_count = 0
-                            trip.det_chunk_lose = missing_count
-                            logger.info(f"行程 {trip.trip_id} 中间缺少det分片数量: {missing_count}")
-                            update_fields = ['det_chunk_count']
-                            update_fields.append('det_chunk_lose')
-                            trip.save(update_fields=update_fields)
-
-
-                            merged_dir = os.path.join(settings.MEDIA_ROOT, 'merged', str(trip.trip_id))
-                            os.makedirs(merged_dir, exist_ok=True)
-
-                            # 处理文件名
-                            merged_det_filename = None
-                            for chunk in det_chunks:
-                                if hasattr(chunk, 'file_name') and chunk.file_name and 'spcialPoint' in chunk.file_name:
-                                    merged_det_filename = chunk.file_name.split('/')[-1]
-                                    break
-                            if not merged_det_filename:
-                                merged_det_filename = trip.file_name.split('/')[-1][:-4] + '.det' if trip.file_name else f"merged_{trip.trip_id}.det"
-
-                            det_merged_path = os.path.join(merged_dir, merged_det_filename)
-                            with open(det_merged_path, 'wb') as outfile:
-                                for chunk in det_chunks:
-                                    try:
-                                        with open(chunk.file_path, 'rb') as infile:
-                                            outfile.write(infile.read())
-                                    except Exception as e:
-                                        logger.error(f"读取DET分片失败 {chunk.chunk_index}: {e}")
-
-                            trip.merged_det_path = det_merged_path
-                            merged_results['det'] = det_merged_path
-                            logger.info(f"合并DET文件成功.保存到 {det_merged_path}")
-
-                        if merged_results['csv'] is not None and Path(merged_results['csv']).exists():
-                            csv_merged_results.append(merged_results['csv'])
-                        if merged_results['det'] is not None and Path(merged_results['det']).exists():
-                            det_merged_results.append(merged_results['det'])
-
-
-                        chunks = ChunkFile.objects.filter(trip=trip).order_by('chunk_index')
-                        trip_chunk_dir = ''
-                        if chunks:
-                            # 分片文件夹路径
-                            trip_chunk_dir = os.path.dirname(chunks[0].file_path)
-                            logger.info(f"行程 {trip.trip_id} 的分片文件夹: {trip_chunk_dir}")
-
-                        # 清理分片文件
-                        for chunk in chunks:
+                    # 合并DET（IO操作）
+                    merged_dir = os.path.join(settings.MEDIA_ROOT, 'merged', str(trip.trip_id))
+                    os.makedirs(merged_dir, exist_ok=True)
+                    # 处理文件名
+                    merged_det_filename = None
+                    for chunk in det_chunks:
+                        if hasattr(chunk, 'file_name') and chunk.file_name and 'spcialPoint' in chunk.file_name:
+                            merged_det_filename = chunk.file_name.split('/')[-1]
+                            break
+                    if not merged_det_filename:
+                        merged_det_filename = trip.file_name.split('/')[-1][:-4] + '.det' if trip.file_name else f"merged_{trip.trip_id}.det"
+                    det_merged_path = os.path.join(merged_dir, merged_det_filename)
+                    with open(det_merged_path, 'wb') as outfile:
+                        for chunk in det_chunks:
                             try:
-                                if os.path.exists(chunk.file_path):
-                                    os.remove(chunk.file_path)
-                                chunk.delete()
+                                with open(chunk.file_path, 'rb') as infile:
+                                    outfile.write(infile.read())
                             except Exception as e:
-                                logger.error(f"清理分片文件失败 {chunk.chunk_index}: {e}")
-                        # 清理分片文件夹
-                        if os.path.exists(trip_chunk_dir):
-                            try:
-                                shutil.rmtree(trip_chunk_dir)
-                                logger.info(f"清理行程 {trip.trip_id} 的分片文件夹: {trip_chunk_dir}")
-                            except Exception as e:
-                                logger.error(f"清理行程 {trip.trip_id} 的分片文件夹失败: {e}")
-                        logger.info(f"完成清理行程 {trip.trip_id} 的分片文件")
+                                logger.error(f"读取DET分片 {chunk.chunk_index} 失败: {e}")
+                    # trip.merged_det_path = det_merged_path
+                    merged_results['det'] = det_merged_path
+                    logger.info(f"行程 {trip.trip_id} DET合并完成: {det_merged_path}")
+
+            except Exception as e:
+                logger.error(f"合并行程 {trip.trip_id} 文件失败: {e}")
+                # 出错后重置“正在合并”状态（数据库操作）
+                with transaction.atomic():
+                    trip.is_merging = False
+                    trip.save(update_fields=['is_merging'])
+                continue  # 处理下一个行程
+
+            # --------------------------
+            # 3.3 清理分片文件（IO操作，事务外）
+            # --------------------------
+            try:
+                chunks = ChunkFile.objects.filter(trip=trip)
+                trip_chunk_dir = ''
+                if chunks:
+                    # 分片文件夹路径
+                    trip_chunk_dir = os.path.dirname(chunks[0].file_path)
+                    logger.info(f"行程 {trip.trip_id} 的分片文件夹: {trip_chunk_dir}")
+                # 删除分片文件和记录
+                for chunk in chunks:
+                    if os.path.exists(chunk.file_path):
+                        os.remove(chunk.file_path)
+                    chunk.delete()  # 数据库删除，单独事务（或批量删除）
+                # 删除文件夹
+                if trip_chunk_dir and os.path.exists(trip_chunk_dir):
+                    shutil.rmtree(trip_chunk_dir)
+                logger.info(f"行程 {trip.trip_id} 分片清理完成")
+            except Exception as e:
+                logger.error(f"清理行程 {trip.trip_id} 分片失败: {e}")
+                # 清理失败不影响合并结果，继续执行
+
+            # --------------------------
+            # 3.4 更新行程状态（数据库操作，事务）
+            # --------------------------
+            try:
+                with transaction.atomic():
+                    trip_locked = Trip.objects.select_for_update().get(trip_id=trip.trip_id)
+                    trip_locked.is_merging = False
+                    trip_locked.is_completed = True
+                    update_fields = ['is_merging', 'is_completed']
+                    if merged_results['csv']:
+                        trip_locked.merged_csv_path = merged_results['csv']
+                        update_fields.append('merged_csv_path')
+                    if merged_results['det']:
+                        trip_locked.merged_det_path = merged_results['det']
+                        update_fields.append('merged_det_path')
+                    trip_locked.save(update_fields=update_fields)
+                    logger.info(f"行程 {trip.trip_id} 处理完成")
 
 
-                        try:
-                            # 更新状态
-                            trip.refresh_from_db()
-                            if not trip.is_completed:
-                                trip.is_completed = True
-                                trip.is_merging = False
-                                # trip.save()
-                                update_fields = ['is_merging']
-                                update_fields.append('is_completed')
-                                if merged_results['csv']:
-                                    trip.merged_csv_path = merged_results['csv']
-                                    update_fields.append('merged_csv_path')
-                                if merged_results['det']:
-                                    trip.merged_det_path = merged_results['det']
-                                    update_fields.append('merged_det_path')
+                    logger.info(
+                        f"行程 {trip_locked.trip_id} 更新完成:\n"
+                        f"- 完成状态: {trip_locked.is_completed}\n"
+                        f"- 合并状态: {trip_locked.is_merging}\n"
+                        f"- CSV路径: {trip_locked.merged_csv_path}\n"
+                        f"- DET路径: {trip_locked.merged_det_path}"
+                    )
 
-                                trip.save(update_fields=update_fields)
+                # 记录结果
+                if merged_results['csv']:
+                    csv_merged_results.append(merged_results['csv'])
+                if merged_results['det']:
+                    det_merged_results.append(merged_results['det'])
+            except Exception as e:
+                logger.error(f"更新行程 {trip.trip_id} 状态失败: {e}")
 
-                                logger.info(
-                                    f"行程 {trip_id} 更新完成:\n"
-                                    f"- 完成状态: {trip.is_completed}\n"
-                                    f"- 合并状态: {trip.is_merging}\n"
-                                    f"- CSV路径: {trip.merged_csv_path}\n"
-                                    f"- DET路径: {trip.merged_det_path}"
-                                )
-                        except Exception as e:
-                            logger.error(f"更新行程状态失败: {e}",exc_info=True)
-                            # 发生错误时回滚事务
-                            transaction.set_rollback(True)
-                        
-                        # 更新行程的状态，对于已合并行程
-                        try:
-                            # if str(trip.trip_id) != trip_id:
-                            # 由最新的一个行程id为主行程id->
-                            # 历史最早的行程为主行程 因为第一个
-                            # 行程会关联task_id
-                            if parent_trip is not None and str(trip.trip_id) != str(parent_trip.trip_id):
-                                # 设置非主行程为子行程
-                                ensure_db_connection_and_set_sub_journey_sync(trip.trip_id, parent_trip.trip_id)
-                                # 设置当前行程的父行程id
-                                ensure_db_connection_and_set_sub_journey_parent_id_sync(trip.trip_id, parent_trip.trip_id)
-                        except Exception as e:
-                            logger.error(f"设置行程为子行程失败: {e}")
+            # --------------------------
+            # 3.5 设置父子关系（数据库操作，事务）
+            # --------------------------
+            if parent_trip and str(trip.trip_id) != str(parent_trip.trip_id):
+                try:
+                    with transaction.atomic():
+                        ensure_db_connection_and_set_sub_journey_sync(trip.trip_id, parent_trip.trip_id)
+                        ensure_db_connection_and_set_sub_journey_parent_id_sync(trip.trip_id, parent_trip.trip_id)
+                except Exception as e:
+                    logger.error(f"设置行程 {trip.trip_id} 父子关系失败: {e}")
 
-                    except Exception as e:
-                        # 发生错误时重置合并状态
-                        trip.is_merging = False
-                        trip.save()
-                        logger.error(f"合并文件失败: {e}")
-                        return None, None, None
-                return csv_merged_results, det_merged_results, record_audio_paths
+        # 更新父行程状态
+        if parent_trip:
+            try:
+                ensure_db_connection_and_update_parent_journey_status_sync(parent_trip.trip_id)
+            except Exception as e:
+                logger.error(f"更新父行程 {parent_trip.trip_id} 状态失败: {e}")
 
-            except DatabaseError as e:
-                # 如果无法获取锁（其他进程正在处理），记录并跳过
-                logger.warning(f"无法锁定相关行程记录，可能有其他进程正在处理: {e}")
-                # 可以选择稍后重试或跳过
-                return None, None, None
-            
+        return csv_merged_results, det_merged_results
+
     except Exception as e:
-        logger.error(f"合并文件失败: {e}", exc_info=True)
-        return None, None, None
-
-
-
-# # NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
-# def process_and_upload_files_sync(user_id, csv_path_list, det_path_list):
-#     """同步版本的文件处理和上传函数"""
-#     try:
-#         tinder_os = TinderOS()
-#         results = []
-        
-#         files_to_process = []
-#         if csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0:
-#             for csv_path in csv_path_list:
-#                 if csv_path and Path(csv_path).exists():
-#                     files_to_process.append((csv_path, 'csv'))
-
-#         if det_path_list and isinstance(det_path_list, list) and len(det_path_list) > 0:   
-#             for det_path in det_path_list:                 
-#                 if det_path and Path(det_path).exists():
-#                     files_to_process.append((det_path, 'det'))        
-
-#         # for file_path, file_type in [(csv_path, 'csv'), (det_path, 'det')]:
-#         for file_path, file_type in files_to_process:
-#             if not file_path:
-#                 continue
-                
-#             file_name = Path(file_path)
-#             model = file_name.name.split('_')[0]
-#             time_line = file_name.name.split('_')[-1].split('.')[0]
-            
-#             # 获取品牌信息
-#             middle_model = model_config.objects.filter(model=model).first()
-#             if middle_model:
-#                 brand = middle_model.brand
-#                 upload_path = f"app_project/{user_id}/inference_data/{brand}/{model}/{time_line.split(' ')[0]}/{time_line}/{file_name.name}"
-                
-#                 # 上传文件
-#                 tinder_os.upload_file('chek-app', upload_path, file_path)
-                
-#                 # 记录到数据库
-#                 data_tos_model = tos_csv_app.objects.create(
-#                     user_id=user_id,
-#                     tos_file_path=upload_path,
-#                     tos_file_type='inference'
-#                 )
-
-#                 data_tos_model.user_id = user_id
-#                 data_tos_model.tos_file_path =upload_path
-#                 data_tos_model.tos_file_type = 'inference'
-#                 data_tos_model.save()
-
-#                 results.append((file_type, upload_path))
-                
-#                 # # 可以选择删除本地文件
-#                 # os.remove(file_path)
-        
-#         return True, results
-#     except Exception as e:
-#         logger.error(f"处理和上传文件失败: {e}")
-#         return False, []
+        logger.error(f"合并文件总失败: {e}", exc_info=True)
+        return None, None
 
 
 
 # NOTE: 同一用户&同一车机版本&同一设备5分钟间隔行程结果合并，csv det相互独立
-# 增加音频处理
-def process_and_upload_files_sync(user_id, csv_path_list, det_path_list, record_audio_paths):
+def process_and_upload_files_sync(user_id, csv_path_list, det_path_list):
     """同步版本的文件处理和上传函数"""
     try:
         tinder_os = TinderOS()
@@ -1697,7 +1625,6 @@ def process_and_upload_files_sync(user_id, csv_path_list, det_path_list, record_
                 if det_path and Path(det_path).exists():
                     files_to_process.append((det_path, 'det'))        
 
-        # NOTE: 待改造成本地挂载tos
         # for file_path, file_type in [(csv_path, 'csv'), (det_path, 'det')]:
         for file_path, file_type in files_to_process:
             if not file_path:
@@ -1733,136 +1660,13 @@ def process_and_upload_files_sync(user_id, csv_path_list, det_path_list, record_
                 # # 可以选择删除本地文件
                 # os.remove(file_path)
         
-        # 处理音频文件
-        record_audio_zip = None
-        if record_audio_paths and isinstance(record_audio_paths, list) and len(record_audio_paths) > 0:
-
-            file_name = Path(record_audio_paths[0])
-            model = file_name.name.split('_')[0]
-            time_line = file_name.name.split('_')[-1].split('.')[0]
-            file_name = file_name.with_suffix('.zip')  # 假设音频文件打包成zip格式
-
-            output_zip = f"/tos/video-on-demand/app_project/{user_id}/inference_data/{model}/{time_line.split(' ')[0]}/{time_line}/{file_name.name}"
-            package_result = package_files(file_paths, output_zip)
-            if not package_result:
-                logger.error(f"打包音频文件失败: {file_name}")
-            else:
-                record_audio_zip = output_zip
-                logger.info(f"音频文件打包成功: {output_zip}")
-
-        return True, results, record_audio_zip
+        return True, results
     except Exception as e:
         logger.error(f"处理和上传文件失败: {e}")
         return False, []
 
 
-
 # 
-# async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False):
-#     """处理合并任务"""
-#     try:
-       
-#         if is_last_chunk:
-#             # 检查进程池状态
-#             stats = get_process_pool_stats()
-#             if stats and stats['available_workers'] <= 1:
-#                 logger.warning(f"进程池资源紧张: 活跃进程{stats['active_processes']}/{stats['max_workers']}")
-#                 await asyncio.sleep(0.5)
-
-#             loop = asyncio.get_event_loop()
-
-
-#                 # 使用外部定义的函数，传递参数
-#             csv_path_list, det_path_list = await loop.run_in_executor(
-#                 process_executor,
-#                 ensure_db_connection_and_merge,
-#                 _id,
-#                 trip_id,
-#                 is_timeout
-#             )
-            
-#             is_valid_interval = False
-#             if csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0:
-#                 is_valid_interval = await loop.run_in_executor(
-#                         process_executor,
-#                         get_csv_time_interval,
-#                         csv_path_list
-#                 )
-
-#             if ((csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0) or \
-#                 (det_path_list and isinstance(det_path_list, list) and len(det_path_list) > 0)) :
-
-#                 # 在进程池中执行文件处理和上传
-#                 success, results = await loop.run_in_executor(
-#                     process_executor,
-#                     ensure_db_connection_and_process_and_upload_files_sync,
-#                     _id,
-#                     csv_path_list,
-#                     det_path_list
-#                 )
-
-#                 if success:
-#                     await loop.run_in_executor(
-#                         process_executor,
-#                         ensure_db_connection_and_set_tos_path_sync,
-#                         trip_id,
-#                         results
-#                     )
-#                     logger.info(f"文件处理和上传成功: {results}")
-#                 else:
-#                     logger.error("文件处理和上传失败")
-
-#             if (csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0):
-
-#                 user = await loop.run_in_executor(
-#                     process_executor,
-#                     ensure_db_connection_and_get_user,
-#                     _id
-#                 )
-
-#                 if user and is_valid_interval:
-#                     # 处理行程数据
-#                     success, message = await loop.run_in_executor(
-#                         process_executor,
-#                         process_wechat_data_sync,
-#                         trip_id,
-#                         user,
-#                         csv_path_list
-#                     )
-#                     if success:
-#                         logger.info(f"进程池处理行程数据成功，{message}")
-#                     else:
-#                         logger.error(f"进程池处理数据失败，用户: {user.name}, 错误信息: {message}")
-#                 else:
-#                     logger.error(f"用户 {_id} 不存在, 或行程持续时间小于240s. 无法处理行程数据 {csv_path_list}.")
-
-#                 if not is_valid_interval: 
-#                     ensure_db_connection_and_set_journey_less_than_timethre_sync(trip_id)
-#                     logger.warning(f"CSV文件 {csv_path_list} 时间间隔小于240秒，跳过处理")
-#                 else:
-#                     logger.info(f"CSV文件 {csv_path_list} 时间间隔大于240秒，正常处理")
-
-#             if csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0:
-#                 for csv_path in csv_path_list:
-#                     if Path(csv_path).exists():
-#                         os.remove(str(csv_path))
-#                         logger.info(f'删除合并csv文件: {csv_path}')
-
-#             if det_path_list and isinstance(det_path_list, list) and len(det_path_list) > 0:
-#                 for det_path in det_path_list:
-#                     if Path(det_path).exists():
-#                         os.remove(str(det_path))
-#                         logger.info(f'删除合并det文件: {det_path}')
-
-#         else:
-#             # 检查是否需要触发自动合并
-#             await check_timeout_trip(_id, trip_id)
-                
-#     except Exception as e:
-#         logger.error(f"合并任务处理失败: {e}")
-
-
-# 加入音频合并逻辑
 async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False):
     """处理合并任务"""
     try:
@@ -1878,7 +1682,7 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False)
 
 
                 # 使用外部定义的函数，传递参数
-            csv_path_list, det_path_list, record_audio_paths = await loop.run_in_executor(
+            csv_path_list, det_path_list = await loop.run_in_executor(
                 process_executor,
                 ensure_db_connection_and_merge,
                 _id,
@@ -1898,13 +1702,12 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False)
                 (det_path_list and isinstance(det_path_list, list) and len(det_path_list) > 0)) :
 
                 # 在进程池中执行文件处理和上传
-                success, results, record_audio_package_path = await loop.run_in_executor(
+                success, results = await loop.run_in_executor(
                     process_executor,
                     ensure_db_connection_and_process_and_upload_files_sync,
                     _id,
                     csv_path_list,
-                    det_path_list,
-                    record_audio_paths
+                    det_path_list
                 )
 
                 if success:
@@ -1915,19 +1718,8 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False)
                         results
                     )
                     logger.info(f"文件处理和上传成功: {results}")
-
                 else:
                     logger.error("文件处理和上传失败")
-                
-                if record_audio_package_path is not None:
-                    # 记录音频包路径到数据库
-                    await loop.run_in_executor(
-                        process_executor,
-                        ensure_db_connection_and_set_record_path_sync,
-                        trip_id,
-                        record_audio_package_path
-                    )
-                    logger.info(f"音频包处理和上传成功: {record_audio_package_path}")
 
             if (csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0):
 
@@ -1951,13 +1743,13 @@ async def handle_merge_task(_id, trip_id, is_last_chunk=False, is_timeout=False)
                     else:
                         logger.error(f"进程池处理数据失败，用户: {user.name}, 错误信息: {message}")
                 else:
-                    logger.error(f"用户 {_id} 不存在, 或行程持续时间小于240s. 无法处理行程数据 {csv_path_list}.")
+                    logger.error(f"用户 {_id} 不存在, 或行程持续时间小于{settings.TIME_THRE}s. 无法处理行程数据 {csv_path_list}.")
 
                 if not is_valid_interval: 
                     ensure_db_connection_and_set_journey_less_than_timethre_sync(trip_id)
-                    logger.warning(f"CSV文件 {csv_path_list} 时间间隔小于240秒，跳过处理")
+                    logger.warning(f"CSV文件 {csv_path_list} 时间间隔小于{settings.TIME_THRE}秒，跳过处理")
                 else:
-                    logger.info(f"CSV文件 {csv_path_list} 时间间隔大于240秒，正常处理")
+                    logger.info(f"CSV文件 {csv_path_list} 时间间隔大于{settings.TIME_THRE}秒，正常处理")
 
             if csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0:
                 for csv_path in csv_path_list:
@@ -2001,7 +1793,7 @@ def ensure_db_connection_and_merge(user_id, trip_id, is_timeout=False):
             # 连接正常，执行合并操作
             return merge_files_sync(user_id, trip_id, is_timeout)
         except Exception as e:
-            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}", exc_info=True)
             if attempt < max_retries - 1:
                 # 关闭所有连接并等待重试
                 from django.db import connections
@@ -2013,7 +1805,7 @@ def ensure_db_connection_and_merge(user_id, trip_id, is_timeout=False):
                 return None, None
 
 # 将嵌套函数移到外部作为独立函数
-def ensure_db_connection_and_process_and_upload_files_sync(user_id, csv_path_list, det_path_list, record_audio_paths):
+def ensure_db_connection_and_process_and_upload_files_sync(user_id, csv_path_list, det_path_list):
     """确保数据库连接并执行合并操作"""
     # 最大重试次数
     max_retries = 3
@@ -2031,9 +1823,9 @@ def ensure_db_connection_and_process_and_upload_files_sync(user_id, csv_path_lis
             
             logger.info(f"数据库连接正常，开始执行数据上传操作")
             # 连接正常，执行合并操作
-            return process_and_upload_files_sync(user_id, csv_path_list, det_path_list, record_audio_paths)
+            return process_and_upload_files_sync(user_id, csv_path_list, det_path_list)
         except Exception as e:
-            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}", exc_info=True)
             if attempt < max_retries - 1:
                 # 关闭所有连接并等待重试
                 from django.db import connections
@@ -2066,7 +1858,7 @@ def ensure_db_connection_and_get_user(user_id):
             # 连接正常，执行合并操作
             return get_user_sync(user_id)
         except Exception as e:
-            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}", exc_info=True)
             if attempt < max_retries - 1:
                 # 关闭所有连接并等待重试
                 from django.db import connections
@@ -2138,246 +1930,277 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
         # 使用 filter 方法筛选符合条件的对象，再用 exists 方法检查是否存在
    
         journey_exists = Journey.objects.using('core_user').filter(journey_id=trip_id).exists()
-
+        
         if journey_exists:
+
+            logger.info(f"开始进行报告结果数据落库处理！")
+            logger.info(f"开始进行落库处理 trip_id : {trip_id} ！")
+
             cover_image = ''
-            # if HotBrandVehicle.objects.using('core_user').filter(model=model).exists():
-            #     cover_image = HotBrandVehicle.objects.using('core_user').get(model=model)
-            # 如果存在，可以进一步获取对象
-            core_Journey_profile = Journey.objects.using('core_user').get(journey_id=trip_id)
-            # journey_update(parsed_data,trip_id,model,hardware_version,software_version,core_Journey_profile)
-            # if model:
-            #     core_Journey_profile.model = model
-            
-            # if hardware_version:
-            #     core_Journey_profile.hardware_version = hardware_version
+            cover_image_profile = HotBrandVehicle.objects.filter(model=model).first()
+            if cover_image_profile:
+                # print(cover_image_profile.cover_image)
+                cover_image = cover_image_profile.cover_image
+            with transaction.atomic():
+                # 如果存在，可以进一步获取对象
+                core_Journey_profile = Journey.objects.using('core_user').get(journey_id=trip_id)
+                # journey_update(parsed_data,trip_id,model,hardware_version,software_version,core_Journey_profile)
+                # if model:
+                #     core_Journey_profile.model = model
+                
+                # if hardware_version:
+                #     core_Journey_profile.hardware_version = hardware_version
 
-            # if software_version:
-            #     core_Journey_profile.software_version = software_version
-            
-            # if parsed_data:
-            #     for key,value in parsed_data.items():
-            #         # print(key,value)
-            #         # if type(value) != 'str' or value:
-            #         core_Journey_profile.key = value
-            #         print(key,core_Journey_profile.key)
-            if data.get('auto_safe_duration') or type(data.get('auto_safe_duration')) != 'str':
-                core_Journey_profile.auto_safe_duration = data.get('auto_safe_duration')
-            
-            if data.get('lcc_safe_duration') or type(data.get('lcc_safe_duration')) != 'str':
-                core_Journey_profile.lcc_safe_duration = data.get('lcc_safe_duration')
+                # if software_version:
+                #     core_Journey_profile.software_version = software_version
+                
+                # if parsed_data:
+                #     for key,value in parsed_data.items():
+                #         # print(key,value)
+                #         # if type(value) != 'str' or value:
+                #         core_Journey_profile.key = value
+                #         print(key,core_Journey_profile.key)
+                if data.get('auto_safe_duration') or type(data.get('auto_safe_duration')) != 'str':
+                    core_Journey_profile.auto_safe_duration = data.get('auto_safe_duration')
+                
+                if data.get('lcc_safe_duration') or type(data.get('lcc_safe_duration')) != 'str':
+                    core_Journey_profile.lcc_safe_duration = data.get('lcc_safe_duration')
 
-            if data.get('noa_safe_duration') or type(data.get('noa_safe_duration')) != 'str':
-                core_Journey_profile.noa_safe_duration = data.get('noa_safe_duration')
-               
-            if data.get('duration') or type(data.get('duration')) != 'str':
-                core_Journey_profile.duration = data.get('duration')
+                if data.get('noa_safe_duration') or type(data.get('noa_safe_duration')) != 'str':
+                    core_Journey_profile.noa_safe_duration = data.get('noa_safe_duration')
+                
+                if data.get('duration') or type(data.get('duration')) != 'str':
+                    core_Journey_profile.duration = data.get('duration')
 
-            if data.get('driver_acc_average') or type(data.get('duration')) != 'str':
-                core_Journey_profile.driver_acc_average = data.get('driver_acc_average')
+                if data.get('driver_acc_average') or type(data.get('duration')) != 'str':
+                    core_Journey_profile.driver_acc_average = data.get('driver_acc_average')
 
-            if data.get('driver_dcc_average') or type(data.get('driver_dcc_average')) != 'str':
-                core_Journey_profile.driver_dcc_average = data.get('driver_dcc_average')
+                if data.get('driver_dcc_average') or type(data.get('driver_dcc_average')) != 'str':
+                    core_Journey_profile.driver_dcc_average = data.get('driver_dcc_average')
 
-            if data.get('auto_mileages') or type(data.get('auto_mileages')) != 'str':
-                core_Journey_profile.auto_mileages = data.get('auto_mileages')
+                if data.get('auto_mileages') or type(data.get('auto_mileages')) != 'str':
+                    core_Journey_profile.auto_mileages = data.get('auto_mileages')
 
-            if data.get('total_mileages') or type(data.get('total_mileages')) != 'str':
-                core_Journey_profile.total_mileages = data.get('total_mileages')
+                if data.get('total_mileages') or type(data.get('total_mileages')) != 'str':
+                    core_Journey_profile.total_mileages = data.get('total_mileages')
 
-            if data.get('frames') or type(data.get('frames')) != 'str':
-                core_Journey_profile.frames = data.get('frames')
+                if data.get('frames') or type(data.get('frames')) != 'str':
+                    core_Journey_profile.frames = data.get('frames')
 
-            if data.get('auto_frames') or type(data.get('auto_frames')) != 'str':
-                core_Journey_profile.auto_frames = data.get('auto_frames')
+                if data.get('auto_frames') or type(data.get('auto_frames')) != 'str':
+                    core_Journey_profile.auto_frames = data.get('auto_frames')
 
-            if data.get('noa_frames') or type(data.get('noa_frames')) != 'str':
-                core_Journey_profile.noa_frames = data.get('noa_frames')
+                if data.get('noa_frames') or type(data.get('noa_frames')) != 'str':
+                    core_Journey_profile.noa_frames = data.get('noa_frames')
 
-            if data.get('lcc_frames') or type(data.get('lcc_frames')) != 'str':
-                core_Journey_profile.lcc_frames = data.get('lcc_frames')
+                if data.get('lcc_frames') or type(data.get('lcc_frames')) != 'str':
+                    core_Journey_profile.lcc_frames = data.get('lcc_frames')
 
-            if data.get('driver_frames') or type(data.get('driver_frames')) != 'str':
-                core_Journey_profile.driver_frames = data.get('driver_frames')
+                if data.get('driver_frames') or type(data.get('driver_frames')) != 'str':
+                    core_Journey_profile.driver_frames = data.get('driver_frames')
 
-            if data.get('auto_speed_average') or type(data.get('auto_speed_average')) != 'str':
-                core_Journey_profile.auto_speed_average = data.get('auto_speed_average')
+                if data.get('auto_speed_average') or type(data.get('auto_speed_average')) != 'str':
+                    core_Journey_profile.auto_speed_average = data.get('auto_speed_average')
 
-            if data.get('auto_max_speed') or type(data.get('auto_max_speed')) != 'str':
-                core_Journey_profile.auto_max_speed = data.get('auto_max_speed')
+                if data.get('auto_max_speed') or type(data.get('auto_max_speed')) != 'str':
+                    core_Journey_profile.auto_max_speed = data.get('auto_max_speed')
 
-            if data.get('invervention_risk_proportion') or type(data.get('invervention_risk_proportion')) != 'str':
-                core_Journey_profile.invervention_risk_proportion = data.get('invervention_risk_proportion')
+                if data.get('invervention_risk_proportion') or type(data.get('invervention_risk_proportion')) != 'str':
+                    core_Journey_profile.invervention_risk_proportion = data.get('invervention_risk_proportion')
 
-            if data.get('invervention_mpi') or type(data.get('invervention_mpi')) != 'str':
-                core_Journey_profile.invervention_mpi = data.get('invervention_mpi')
+                if data.get('invervention_mpi') or type(data.get('invervention_mpi')) != 'str':
+                    core_Journey_profile.invervention_mpi = data.get('invervention_mpi')
 
-            if data.get('invervention_risk_mpi') or type(data.get('invervention_risk_mpi')) != 'str':
-                core_Journey_profile.invervention_risk_mpi = data.get('invervention_risk_mpi')
+                if data.get('invervention_risk_mpi') or type(data.get('invervention_risk_mpi')) != 'str':
+                    core_Journey_profile.invervention_risk_mpi = data.get('invervention_risk_mpi')
 
-            if data.get('invervention_cnt') or type(data.get('invervention_cnt')) != 'str':
-                core_Journey_profile.invervention_cnt = data.get('invervention_cnt')
+                if data.get('invervention_cnt') or type(data.get('invervention_cnt')) != 'str':
+                    core_Journey_profile.invervention_cnt = data.get('invervention_cnt')
 
-            if data.get('invervention_risk_cnt') or type(data.get('invervention_risk_cnt')) != 'str':
-                core_Journey_profile.invervention_risk_cnt = data.get('invervention_risk_cnt')
+                if data.get('invervention_risk_cnt') or type(data.get('invervention_risk_cnt')) != 'str':
+                    core_Journey_profile.invervention_risk_cnt = data.get('invervention_risk_cnt')
 
-            if data.get('noa_invervention_risk_mpi') or type(data.get('noa_invervention_risk_mpi')) != 'str':
-                core_Journey_profile.noa_invervention_risk_mpi = data.get('noa_invervention_risk_mpi')
+                if data.get('noa_invervention_risk_mpi') or type(data.get('noa_invervention_risk_mpi')) != 'str':
+                    core_Journey_profile.noa_invervention_risk_mpi = data.get('noa_invervention_risk_mpi')
 
-            if data.get('noa_invervention_mpi') or type(data.get('noa_invervention_mpi')) != 'str':
-                core_Journey_profile.noa_invervention_mpi = data.get('noa_invervention_mpi')
+                if data.get('noa_invervention_mpi') or type(data.get('noa_invervention_mpi')) != 'str':
+                    core_Journey_profile.noa_invervention_mpi = data.get('noa_invervention_mpi')
 
-            if data.get('noa_invervention_risk_cnt') or type(data.get('noa_invervention_risk_cnt')) != 'str':
-                core_Journey_profile.noa_invervention_risk_cnt = data.get('noa_invervention_risk_cnt')
+                if data.get('noa_invervention_risk_cnt') or type(data.get('noa_invervention_risk_cnt')) != 'str':
+                    core_Journey_profile.noa_invervention_risk_cnt = data.get('noa_invervention_risk_cnt')
 
-            if data.get('noa_auto_mileages') or type(data.get('noa_auto_mileages')) != 'str':
-                core_Journey_profile.noa_auto_mileages = data.get('noa_auto_mileages')
+                if data.get('noa_auto_mileages') or type(data.get('noa_auto_mileages')) != 'str':
+                    core_Journey_profile.noa_auto_mileages = data.get('noa_auto_mileages')
 
-            if data.get('noa_auto_mileages_proportion') or type(data.get('noa_auto_mileages_proportion')) != 'str':
-                core_Journey_profile.noa_auto_mileages_proportion = data.get('noa_auto_mileages_proportion')
+                if data.get('noa_auto_mileages_proportion') or type(data.get('noa_auto_mileages_proportion')) != 'str':
+                    core_Journey_profile.noa_auto_mileages_proportion = data.get('noa_auto_mileages_proportion')
 
-            if data.get('noa_invervention_cnt') or type(data.get('noa_invervention_cnt')) != 'str':
-                core_Journey_profile.noa_invervention_cnt = data.get('noa_invervention_cnt')
+                if data.get('noa_invervention_cnt') or type(data.get('noa_invervention_cnt')) != 'str':
+                    core_Journey_profile.noa_invervention_cnt = data.get('noa_invervention_cnt')
 
-            if data.get('lcc_invervention_risk_mpi') or type(data.get('lcc_invervention_risk_mpi')) != 'str':
-                core_Journey_profile.lcc_invervention_risk_mpi = data.get('lcc_invervention_risk_mpi')
+                if data.get('lcc_invervention_risk_mpi') or type(data.get('lcc_invervention_risk_mpi')) != 'str':
+                    core_Journey_profile.lcc_invervention_risk_mpi = data.get('lcc_invervention_risk_mpi')
 
-            if data.get('lcc_invervention_mpi') or type(data.get('lcc_invervention_mpi')) != 'str':
-                core_Journey_profile.lcc_invervention_mpi = data.get('lcc_invervention_mpi')
+                if data.get('lcc_invervention_mpi') or type(data.get('lcc_invervention_mpi')) != 'str':
+                    core_Journey_profile.lcc_invervention_mpi = data.get('lcc_invervention_mpi')
 
-            if data.get('lcc_invervention_risk_cnt') or type(data.get('lcc_invervention_risk_cnt')) != 'str':
-                core_Journey_profile.lcc_invervention_risk_cnt = data.get('lcc_invervention_risk_cnt')
+                if data.get('lcc_invervention_risk_cnt') or type(data.get('lcc_invervention_risk_cnt')) != 'str':
+                    core_Journey_profile.lcc_invervention_risk_cnt = data.get('lcc_invervention_risk_cnt')
 
-            if data.get('lcc_auto_mileages') or type(data.get('lcc_auto_mileages')) != 'str':
-                core_Journey_profile.lcc_auto_mileages = data.get('lcc_auto_mileages')
+                if data.get('lcc_auto_mileages') or type(data.get('lcc_auto_mileages')) != 'str':
+                    core_Journey_profile.lcc_auto_mileages = data.get('lcc_auto_mileages')
 
-            if data.get('lcc_auto_mileages_proportion') or type(data.get('lcc_auto_mileages_proportion')) != 'str':
-                core_Journey_profile.lcc_auto_mileages_proportion = data.get('lcc_auto_mileages_proportion')
+                if data.get('lcc_auto_mileages_proportion') or type(data.get('lcc_auto_mileages_proportion')) != 'str':
+                    core_Journey_profile.lcc_auto_mileages_proportion = data.get('lcc_auto_mileages_proportion')
 
-            if data.get('lcc_invervention_cnt') or type(data.get('lcc_invervention_cnt')) != 'str':
-                core_Journey_profile.lcc_invervention_cnt = data.get('lcc_invervention_cnt')
+                if data.get('lcc_invervention_cnt') or type(data.get('lcc_invervention_cnt')) != 'str':
+                    core_Journey_profile.lcc_invervention_cnt = data.get('lcc_invervention_cnt')
 
-            if data.get('auto_dcc_max') or type(data.get('auto_dcc_max')) != 'str':
-                core_Journey_profile.auto_dcc_max = data.get('auto_dcc_max')
+                if data.get('auto_dcc_max') or type(data.get('auto_dcc_max')) != 'str':
+                    core_Journey_profile.auto_dcc_max = data.get('auto_dcc_max')
 
-            if data.get('auto_dcc_frequency') or type(data.get('auto_dcc_frequency')) != 'str':
-                core_Journey_profile.auto_dcc_frequency = data.get('auto_dcc_frequency')
+                if data.get('auto_dcc_frequency') or type(data.get('auto_dcc_frequency')) != 'str':
+                    core_Journey_profile.auto_dcc_frequency = data.get('auto_dcc_frequency')
 
-            if data.get('auto_dcc_cnt') or type(data.get('auto_dcc_cnt')) != 'str':
-                core_Journey_profile.auto_dcc_cnt = data.get('auto_dcc_cnt')
+                if data.get('auto_dcc_cnt') or type(data.get('auto_dcc_cnt')) != 'str':
+                    core_Journey_profile.auto_dcc_cnt = data.get('auto_dcc_cnt')
 
-            if data.get('auto_dcc_duration') or type(data.get('auto_dcc_duration')) != 'str':
-                core_Journey_profile.auto_dcc_duration = data.get('auto_dcc_duration')
+                if data.get('auto_dcc_duration') or type(data.get('auto_dcc_duration')) != 'str':
+                    core_Journey_profile.auto_dcc_duration = data.get('auto_dcc_duration')
 
-            if data.get('auto_dcc_average_duration') or type(data.get('auto_dcc_average_duration')) != 'str':
-                core_Journey_profile.auto_dcc_average_duration = data.get('auto_dcc_average_duration')
+                if data.get('auto_dcc_average_duration') or type(data.get('auto_dcc_average_duration')) != 'str':
+                    core_Journey_profile.auto_dcc_average_duration = data.get('auto_dcc_average_duration')
 
-            if data.get('auto_dcc_average') or type(data.get('auto_dcc_average')) != 'str':
-                core_Journey_profile.auto_dcc_average = data.get('auto_dcc_average')
+                if data.get('auto_dcc_average') or type(data.get('auto_dcc_average')) != 'str':
+                    core_Journey_profile.auto_dcc_average = data.get('auto_dcc_average')
 
-            if data.get('auto_acc_max') or type(data.get('auto_acc_max')) != 'str':
-                core_Journey_profile.auto_acc_max = data.get('auto_acc_max')
+                if data.get('auto_acc_max') or type(data.get('auto_acc_max')) != 'str':
+                    core_Journey_profile.auto_acc_max = data.get('auto_acc_max')
 
-            if data.get('auto_acc_frequency') or type(data.get('auto_acc_frequency')) != 'str':
-                core_Journey_profile.auto_acc_frequency = data.get('auto_acc_frequency')
+                if data.get('auto_acc_frequency') or type(data.get('auto_acc_frequency')) != 'str':
+                    core_Journey_profile.auto_acc_frequency = data.get('auto_acc_frequency')
 
-            if data.get('auto_acc_cnt') or type(data.get('auto_acc_cnt')) != 'str':
-                core_Journey_profile.auto_acc_cnt = data.get('auto_acc_cnt')
+                if data.get('auto_acc_cnt') or type(data.get('auto_acc_cnt')) != 'str':
+                    core_Journey_profile.auto_acc_cnt = data.get('auto_acc_cnt')
 
-            if data.get('auto_acc_duration') or type(data.get('auto_acc_duration')) != 'str':
-                core_Journey_profile.auto_acc_duration = data.get('auto_acc_duration')
+                if data.get('auto_acc_duration') or type(data.get('auto_acc_duration')) != 'str':
+                    core_Journey_profile.auto_acc_duration = data.get('auto_acc_duration')
 
-            if data.get('auto_acc_average_duration') or type(data.get('auto_acc_average_duration')) != 'str':
-                core_Journey_profile.auto_acc_average_duration = data.get('auto_acc_average_duration')
+                if data.get('auto_acc_average_duration') or type(data.get('auto_acc_average_duration')) != 'str':
+                    core_Journey_profile.auto_acc_average_duration = data.get('auto_acc_average_duration')
 
-            if data.get('auto_acc_average') or type(data.get('auto_acc_average')) != 'str':
-                core_Journey_profile.auto_acc_average = data.get('auto_acc_average')
+                if data.get('auto_acc_average') or type(data.get('auto_acc_average')) != 'str':
+                    core_Journey_profile.auto_acc_average = data.get('auto_acc_average')
 
-            if data.get('driver_mileages') or type(data.get('driver_mileages')) != 'str':
-                core_Journey_profile.driver_mileages = data.get('driver_mileages')
+                if data.get('driver_mileages') or type(data.get('driver_mileages')) != 'str':
+                    core_Journey_profile.driver_mileages = data.get('driver_mileages')
 
-            if data.get('driver_dcc_max') or type(data.get('driver_dcc_max')) != 'str':
-                core_Journey_profile.driver_dcc_max = data.get('driver_dcc_max')
+                if data.get('driver_dcc_max') or type(data.get('driver_dcc_max')) != 'str':
+                    core_Journey_profile.driver_dcc_max = data.get('driver_dcc_max')
 
-            if data.get('driver_dcc_frequency') or type(data.get('driver_dcc_frequency')) != 'str':
-                core_Journey_profile.driver_dcc_frequency = data.get('driver_dcc_frequency')
+                if data.get('driver_dcc_frequency') or type(data.get('driver_dcc_frequency')) != 'str':
+                    core_Journey_profile.driver_dcc_frequency = data.get('driver_dcc_frequency')
 
-            if data.get('driver_acc_max') or type(data.get('driver_acc_max')) != 'str':
-                core_Journey_profile.driver_acc_max = data.get('driver_acc_max')
+                if data.get('driver_acc_max') or type(data.get('driver_acc_max')) != 'str':
+                    core_Journey_profile.driver_acc_max = data.get('driver_acc_max')
 
-            if data.get('driver_acc_frequency') or type(data.get('driver_acc_frequency')) != 'str':
-                core_Journey_profile.driver_acc_frequency = data.get('driver_acc_frequency')
+                if data.get('driver_acc_frequency') or type(data.get('driver_acc_frequency')) != 'str':
+                    core_Journey_profile.driver_acc_frequency = data.get('driver_acc_frequency')
 
-            if data.get('driver_speed_average') or type(data.get('driver_speed_average')) != 'str':
-                core_Journey_profile.driver_speed_average = data.get('driver_speed_average')
+                if data.get('driver_speed_average') or type(data.get('driver_speed_average')) != 'str':
+                    core_Journey_profile.driver_speed_average = data.get('driver_speed_average')
 
-            if data.get('driver_speed_max') or type(data.get('driver_speed_max')) != 'str':
-                core_Journey_profile.driver_speed_max = data.get('driver_speed_max')
+                if data.get('driver_speed_max') or type(data.get('driver_speed_max')) != 'str':
+                    core_Journey_profile.driver_speed_max = data.get('driver_speed_max')
 
-            if data.get('driver_dcc_cnt') or type(data.get('driver_dcc_cnt')) != 'str':
-                core_Journey_profile.driver_dcc_cnt = data.get('driver_dcc_cnt')
+                if data.get('driver_dcc_cnt') or type(data.get('driver_dcc_cnt')) != 'str':
+                    core_Journey_profile.driver_dcc_cnt = data.get('driver_dcc_cnt')
 
-            if data.get('driver_acc_cnt') or type(data.get('driver_acc_cnt')) != 'str':
-                core_Journey_profile.driver_acc_cnt = data.get('driver_acc_cnt')
-            if cover_image:
-                core_Journey_profile.cover_image = cover_image
-            car_MBTI_text,human_MBTI_text = mbti_judge(core_Journey_profile.auto_speed_average,core_Journey_profile.auto_acc_average,
-                                                    core_Journey_profile.auto_dcc_average,core_Journey_profile.driver_speed_average,
-                                                    core_Journey_profile.driver_acc_average,core_Journey_profile.driver_dcc_average)
-            car_dict = {
-            "user_style": human_MBTI_text,
-            "user_features": {
-                "avg_speed_kmh": core_Journey_profile.driver_speed_average,
-                "max_speed_kmh": core_Journey_profile.driver_speed_max,
-                "accel_mps2": core_Journey_profile.driver_acc_average,
-                "turn_mps2": None
-            },
-            "car_style": car_MBTI_text,
-            "car_features": {
-                "accel_100_kmh_sec": 8.8,
-                "torque_nm": None,
-                "accel_mps2": core_Journey_profile.auto_acc_average,
-                "turn_mps2": None
-            }
-            }
-            gpt_res = get_chat_response(car_dict)
-            
-            if gpt_res :
-                core_Journey_profile.gpt_comment =gpt_res 
-            core_Journey_profile.save()
+                if data.get('driver_acc_cnt') or type(data.get('driver_acc_cnt')) != 'str':
+                    core_Journey_profile.driver_acc_cnt = data.get('driver_acc_cnt')
+                if cover_image:
+                    core_Journey_profile.cover_image = cover_image
+                car_MBTI_text,human_MBTI_text = mbti_judge(core_Journey_profile.auto_speed_average,core_Journey_profile.auto_acc_average,
+                                                        core_Journey_profile.auto_dcc_average,core_Journey_profile.driver_speed_average,
+                                                        core_Journey_profile.driver_acc_average,core_Journey_profile.driver_dcc_average)
+                car_dict = {
+                "user_style": human_MBTI_text,
+                "user_features": {
+                    "avg_speed_kmh": core_Journey_profile.driver_speed_average,
+                    "max_speed_kmh": core_Journey_profile.driver_speed_max,
+                    "accel_mps2": core_Journey_profile.driver_acc_average,
+                    "turn_mps2": None
+                },
+                "car_style": car_MBTI_text,
+                "car_features": {
+                    "accel_100_kmh_sec": 8.8,
+                    "torque_nm": None,
+                    "accel_mps2": core_Journey_profile.auto_acc_average,
+                    "turn_mps2": None
+                }
+                }
+                gpt_res = get_chat_response(car_dict)
+                
+                
+                if gpt_res :
+                    core_Journey_profile.gpt_comment =gpt_res 
+                core_Journey_profile.save()
 
-            trip = await sync_to_async(Trip.objects.get, thread_sensitive=True)(trip_id=trip_id)
-            file_name = trip.file_name.splikt('_')[-1].replace('.csv','')
-            file_path = f'video-on-demand/app_project/{trip.user_id}/inference_data/{trip.car_name}/{file_name[0:10]}/{file_name}/'
-            user_id = trip.user_id
-            profile = await sync_to_async(User.objects.get, thread_sensitive=True)(id=user.id)
-            pic = profile.pic
-            name = profile.name
-            longimg_file_path = real_test()
-            core_Journey_profile.longimg_file_path = longimg_file_path
-            core_Journey_profile.save()
+          
+                trip = Trip.objects.filter(trip_id=trip_id).first()
 
-            if data.get('intervention_gps'):
-                # core_Journey_intervention_gps = Journey.objects.using('core_user').get(journey_id=trip_id)
-                for _ in data.get('intervention_gps'):
-                    # core_Journey_intervention_gps = JourneyInterventionGps.objects.using('core_user').get(journey_id=trip_id)
-                    # 直接创建并保存对象
-                    core_Journey_intervention_gps = JourneyInterventionGps.objects.using('core_user').create(
-                        journey_id=trip_id,
-                        frame_id = _.get('frame_id'),
-                        gps_lon = _.get('gps_lon'),
-                        gps_lat = _.get('gps_lat'),
-                        gps_datetime = _.get('gps_datetime'),
-                        is_risk = _.get('is_risk'),
-                        identification_type = '自动识别',
-                        type = '识别接管'
+                if trip:
+                    file_name = trip.file_name.split('_')[-1].replace('.csv','')
+                    file_path = f'{trip.user_id}/inference_data/{trip.car_name}/{file_name[0:10]}/{file_name}/'
+                    user_id = trip.user_id
+                    
+                    profile = User.objects.filter(id=user_id).first()
+                    if profile:
+                        pic = profile.pic
+                        name = profile.name
+                
+                    
+                    result = generate_journey_report(
+                    journey_id=str(trip_id),
+                    user_avatar=pic,
+                    user_nickname=name,
+                    target_path=file_path,
+                    user_id = user_id,
+                    base_url = settings.GENERATE_JOURNEY_REPORT
                     )
+
+                    if result:
+        
+                        core_Journey_profile.longimg_file_path = result.get('data',{}).get('url')
+                        core_Journey_profile.save()
+                        result = send_message_info(
+                                trip_id=str(trip_id),
+                                task_id="111111"
+                            )
+                        logger.info(f"数据分发完成,{result}")
+
+                if data.get('intervention_gps'):
+                    # core_Journey_intervention_gps = Journey.objects.using('core_user').get(journey_id=trip_id)
+                    for _ in data.get('intervention_gps'):
+                        # core_Journey_intervention_gps = JourneyInterventionGps.objects.using('core_user').get(journey_id=trip_id)
+                        # 直接创建并保存对象
+                        core_Journey_intervention_gps = JourneyInterventionGps.objects.using('core_user').create(
+                            journey_id=trip_id,
+                            frame_id = _.get('frame_id'),
+                            gps_lon = _.get('gps_lon'),
+                            gps_lat = _.get('gps_lat'),
+                            gps_datetime = _.get('gps_datetime'),
+                            is_risk = _.get('is_risk'),
+                            identification_type = '自动识别',
+                            type = '识别接管'
+                        )
+            logger.info(f"已将行程 {trip_id} 的 jouney_status 字段落库！")
         else:
             # print(f"未找到 journey_id 为 {trip_id} 的行程记录。")
             logger.info(f"未找到 journey_id 为 {trip_id} 的行程记录。")
     except Exception as e:
         # print(e)
-        logger.info(f"报错 {e} ")
+        logger.info(f"报错 {e} ", exc_info=True)
 
 def convert_gps_time(csv_file_path,trip_id):
     """
@@ -2400,8 +2223,8 @@ def convert_gps_time(csv_file_path,trip_id):
 
         # 将时间戳转换为 datetime 对象
         dt = datetime.fromtimestamp(timestamp_s)
-        lon = df.loc[_,'lon']
-        lat = df.loc[_,'lat']
+        lon = float(df.loc[_,'lon'])
+        lat = float(df.loc[_,'lat'])
         if df.loc[_,'road_scene']:
             road_scene = df.loc[_,'road_scene']
 
@@ -2469,12 +2292,15 @@ def handle_message_gps_data(file_path_list,trip_id):
     journey_exists = Journey.objects.using('core_user').filter(journey_id=trip_id).exists()
     if journey_exists:
         # 如果存在，可以进一步获取对象
-        core_Journey_profile = Journey.objects.using('core_user').get(journey_id=trip_id)
-        _id = core_Journey_profile.id
-        initial_time,end_time = convert_gps_time(file_path_list[0],trip_id)
-        core_Journey_profile.journey_start_time = initial_time
-        core_Journey_profile.journey_end_time = end_time
-        core_Journey_profile.save()
+        logger.info(f"开始进行gps数据落库处理！")
+        logger.info(f"开始进行落库处理 trip_id : {trip_id} ！")
+        with transaction.atomic():
+            core_Journey_profile = Journey.objects.using('core_user').get(journey_id=trip_id)
+            _id = core_Journey_profile.id
+            initial_time,end_time = convert_gps_time(file_path_list[0],trip_id)
+            core_Journey_profile.journey_start_time = initial_time
+            core_Journey_profile.journey_end_time = end_time
+            core_Journey_profile.save()
     else:
         # print(f"未找到 journey_id 为 {trip_id} 的行程记录。")
         logger.info(f"未找到 journey_id 为 {trip_id} 的行程记录。")
@@ -2514,7 +2340,26 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
                                 car_hardware_version=hardware_version,
                                 car_software_version=software_version
                 )
-              
+
+                # 父行程认为是历史第一个行程
+                # 根据合并行程文件找到所有行程
+                current_trip = Trip.objects.get(trip_id=trip_id)
+                trips = Trip.objects.filter(
+                    user_id=user.id,
+                    device_id=current_trip.device_id,
+                    car_name=current_trip.car_name,
+                    hardware_version=current_trip.hardware_version,
+                    software_version=current_trip.software_version,
+                    merged_csv_path__in=file_path_list  # 添加 merged_csv_path 在列表中的筛选条件
+                ).order_by('-first_update')             # 第一次落库时间排序，这样能完全确定行程排序，使用last_update容易由于分片时间更新延迟导致出问题
+                # 获取父行程，更新父行程数据
+                trip = trips.last()
+
+                if not trip:
+                    logger.warning(f"没有找到该行程的父行程！")
+                    return False, "没有找到该行程的父行程！" 
+
+                trip_id = trip.trip_id
                 # trip_id = 'ee1a65b673504d13b9c4d5c7e39d8737'
                 # NOTE: gps处理     
           
@@ -2533,9 +2378,26 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
                 #                 car_model='', 
                 #                 car_version=software_version
                 # )
+
+
+
+
+                # 使用聚合函数获取 last_update 最晚时间和 first_update 最早时间
+                time_range = trips.aggregate(
+                    latest_last_update=Max('last_update'),  # 最晚的 last_update
+                    earliest_first_update=Min('first_update')  # 最早的 first_update
+                )
+
+                # 提取结果
+                latest_last_update = time_range['latest_last_update']
+                earliest_first_update = time_range['earliest_first_update']
                 # 行程状态更新
-                trip = Trip.objects.get(trip_id=trip_id)
-                async_to_sync(ensure_db_connection_and_set_journey_status)(trip_id, status=trip.trip_status)                
+
+                async_to_sync(ensure_db_connection_and_set_journey_status)(trip_id, status=trip.trip_status, 
+                                                                           total_journey_start = earliest_first_update, total_journey_end = latest_last_update)  
+
+
+
                 for file_path in file_path_list:
                     if Path(file_path).exists():
                         os.remove(str(file_path))
@@ -2548,6 +2410,12 @@ def process_wechat_data_sync(trip_id,user, file_path_list):
                         if os.path.exists(parent_dir):
                             shutil.rmtree(parent_dir)
                             print(f'已删除文件夹: {parent_dir}')
+                
+                # 检查一下音频打包是否完成，如果没有完成
+                # 将执行打包
+                # 使用当前id，这样如果是子行程会自动去打包其他
+                # 放到主行程下面
+                async_to_sync(process_record_zip_async)(current_trip.trip_id)
 
                 return True, f"数据处理成功. 用户名: {user.name}, 行程数据: {file_name}"
             else:
@@ -2604,7 +2472,8 @@ def get_csv_time_interval(csv_path_list):
     获取CSV文件时间间隔
     """
     try:
-        time_interval_thre = 240   # csv时间间隔4分钟,低于该阈值不做行程不做上传小程序处理
+        # time_interval_thre = 240   # csv时间间隔4分钟,低于该阈值不做行程不做上传小程序处理
+        time_interval_thre = settings.TIME_THRE
         if not (csv_path_list and isinstance(csv_path_list, list) and len(csv_path_list) > 0):
             logger.error(f"CSV文件列表为空!")
             return False
@@ -2649,7 +2518,7 @@ def start_db_connection_checker():
         try:
             connections['default'].ensure_connection()
         except Exception as e:
-            logger.error(f"数据库连接检查失败: {e}")
+            logger.error(f"数据库连接检查失败: {e}", exc_info=True)
             # 关闭连接以便重新建立
             try:
                 connections['default'].close()
@@ -2668,6 +2537,8 @@ async def ensure_db_connection_and_get_abnormal_journey(user_id,
                                                         car_name,
                                                         hardware_version, 
                                                         software_version, 
+                                                        task_id,                # 确保同一任务下的行程
+                                                        autohome_phone,         # 确保同一任务下的行程
                                                         time):
     """确保数据库连接并执行合并操作"""
     # 最大重试次数
@@ -2696,8 +2567,11 @@ async def ensure_db_connection_and_get_abnormal_journey(user_id,
                                     hardware_version=hardware_version,
                                     software_version=software_version,
                                     trip_status='正常',
+                                    # TODO: 获取task_id
+                                    task_id = task_id,  # 确保同一任务下的行程
+                                    autohome_phone = autohome_phone, # 确保同一任务下的行程
                                     last_update__lt=time
-                                    ).order_by('-last_update').values_list('trip_id',flat=True)
+                                    ).order_by('-first_update').values_list('trip_id',flat=True) #找出分片最后一次更新时间满足阈值异常行程，根据首次分片落库时间确定行程历史排序
             )
 
             file_names = await sync_to_async(
@@ -2711,9 +2585,12 @@ async def ensure_db_connection_and_get_abnormal_journey(user_id,
                     car_name=car_name,
                     hardware_version=hardware_version,
                     software_version=software_version,
+                    # TODO: 获取task_id
+                    task_id = task_id,  # 确保同一任务下的行程
+                    autohome_phone = autohome_phone, # 确保同一任务下的行程
                     trip_status='正常',
                     last_update__lt=time
-                ).order_by('-last_update').values_list('file_name', flat=True)
+                ).order_by('-first_update').values_list('file_name', flat=True) #找出分片最后一次更新时间满足阈值异常行程，根据首次分片落库时间确定行程历史排序
             )
 
             # 获取trips列表中last_update - first_update的时间差和
@@ -2727,7 +2604,7 @@ async def ensure_db_connection_and_get_abnormal_journey(user_id,
             total_time = last_update
             return trips, total_time, file_names
         except Exception as e:
-            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}", exc_info=True)
             if attempt < max_retries - 1:
                 # 关闭所有连接并等待重试
                 from django.db import connections
@@ -2759,23 +2636,27 @@ async def ensure_db_connection_and_set_merge_abnormal_journey(trips):
             
             logger.info(f"数据库连接正常，开始执行设置合并到当前行程操作")
             @sync_to_async(thread_sensitive=True)
+            @db_retry()
             def update_trips():
                 with transaction.atomic():
                     for trip_id in trips:
-                        try:
-                            trip = Trip.objects.select_for_update().get(trip_id=trip_id)
-                            trip.merge_into_current = False
-                            trip.save()
-                            logger.info(f"已将行程 {trip_id} 的 Merge_into_current 字段设置为 0")
-                        except Trip.DoesNotExist:
-                            logger.error(f"行程 {trip_id} 不存在")
-                        except Exception as e:
-                            logger.error(f"更新行程 {trip_id} merge_into_current 失败: {e}",exc_info=True)
-            # 执行更新操作
-            await update_trips()
-            return True
+                        trip = Trip.objects.select_for_update().get(trip_id=trip_id)
+                        trip.merge_into_current = False
+                        trip.save()
+                        logger.info(f"已将行程 {trip_id} 的 Merge_into_current 字段设置为 0")
+            
+            try:
+                # 执行更新操作
+                await update_trips()
+                return True
+            except Trip.DoesNotExist as e:
+                logger.error(f"行程不存在: {e}")
+                return False
+            except Exception as e:
+                logger.error(f"更新行程 merge_into_current 失败: {e}", exc_info=True)
+                return False
         except Exception as e:
-            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}", exc_info=True)
             if attempt < max_retries - 1:
                 # 关闭所有连接并等待重试
                 from django.db import connections
@@ -2789,7 +2670,7 @@ async def ensure_db_connection_and_set_merge_abnormal_journey(trips):
 
 
 # 将嵌套函数移到外部作为独立函数
-async def ensure_db_connection_and_set_journey_status(trip_id, status="行程生成中"):
+async def ensure_db_connection_and_set_journey_status(trip_id, status="行程生成中", total_journey_start = None, total_journey_end = None):
     """确保数据库连接并执行合并操作"""
     # 最大重试次数
     max_retries = 3
@@ -2807,70 +2688,76 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程生
             
             logger.info(f"数据库连接正常，开始执行设置操作totol_journey表中行程状态操作")
             @sync_to_async(thread_sensitive=True)
+            @db_retry()
             def update_trips():
                 with transaction.atomic():
-                    try:
-                        trip = Trip.objects.get(trip_id=trip_id)
-                        user_id = trip.user_id
-                        trip.set_journey_status = True
-                        # 处理用户ID
-                        # if hasattr(trip.user_id, 'hex'):
-                        #     user_id = trip.user_id.hex
-                        # elif isinstance(trip.user_id, str):
-                        #     # 如果是字符串,去掉横线
-                        #     user_id = trip.user_id.replace('-', '')
-                        logger.info(f" set_journey_status: 的 user_id: {user_id}")
-                        core_user_profile = CoreUser.objects.using("core_user").get(app_id=user_id)
-                        journey, created = Journey.objects.using("core_user").update_or_create(
-                            # 查询条件（用于定位对象）
-                            journey_id=trip.trip_id,
-                            # 默认值或更新值
-                            defaults={
-                                'brand': trip.car_name,
-                                'model': trip.car_name,
-                                'hardware_config': trip.hardware_version,
-                                'software_config': trip.software_version,
-                                'user_uuid': core_user_profile.id,
-                                'journey_status': status,
-                            }
-                        ) 
-                        # "异常退出待确认"行程状态更新journey_start_time，journey_end_time
-                        # 确保行程筛选时正常
-                        # 然后根据状态和是否新创建来更新时间字段
-                        if status == "异常退出待确认" or status == "行程生成中":
-                            journey.journey_start_time = trip.first_update
-                            journey.journey_end_time = trip.last_update
-                        elif not created:
-                            # 如果是更新现有记录，保持原有的时间字段不变
-                            pass
-                        else:
-                            # 如果是新创建的记录，时间字段保持为 None（默认值）
-                            journey.journey_start_time = None
-                            journey.journey_end_time = None
-                        trip.save()                      
-                        journey.save(using="core_user")
-                        logger.info(f"已将行程 {trip_id} 的 jouney_status 字段设置为: {status}")
-                        logger.info(f"已将行程 {trip_id} 的 默认字段设置为: brand: {trip.car_name}, model: {trip.car_name}, hardware_config: {trip.hardware_version}, software_config: {trip.software_version}, user_uuid: {core_user_profile.id}")
+                    trip = Trip.objects.get(trip_id=trip_id)
+                    user_id = trip.user_id
+                    trip.set_journey_status = True
+                    # 处理用户ID
+                    # if hasattr(trip.user_id, 'hex'):
+                    #     user_id = trip.user_id.hex
+                    # elif isinstance(trip.user_id, str):
+                    #     # 如果是字符串,去掉横线
+                    #     user_id = trip.user_id.replace('-', '')
+                    logger.info(f" set_journey_status: 的 user_id: {user_id}")
+                    core_user_profile = CoreUser.objects.using("core_user").get(app_id=user_id)
+                    journey, created = Journey.objects.using("core_user").update_or_create(
+                        # 查询条件（用于定位对象）
+                        journey_id=trip.trip_id,
+                        # 默认值或更新值
+                        defaults={
+                            'brand': trip.car_name,
+                            'model': trip.car_name,
+                            'hardware_config': trip.hardware_version,
+                            'software_config': trip.software_version,
+                            'user_uuid': core_user_profile.id,
+                            'journey_status': status,
+                        }
+                    ) 
+                    # "异常退出待确认"行程状态更新journey_start_time，journey_end_time
+                    # 确保行程筛选时正常
+                    # 然后根据状态和是否新创建来更新时间字段
+                    if status == "异常退出待确认" or status == "行程生成中":
+                        journey.journey_start_time = trip.first_update
+                        journey.journey_end_time = trip.last_update
+                    elif not created:
+                        # 如果是更新现有记录，保持原有的时间字段不变
+                        journey.journey_start_time = total_journey_start
+                        journey.journey_end_time = total_journey_end
+                        pass
+                    else:
+                        # 如果是新创建的记录，时间字段保持为 None（默认值）
+                        journey.journey_start_time = None
+                        journey.journey_end_time = None
+                    trip.save()                      
+                    journey.save(using="core_user")
+                    logger.info(f"已将行程 {trip_id} 的 jouney_status 字段设置为: {status}")
+                    logger.info(f"已将行程 {trip_id} 的 默认字段设置为: brand: {trip.car_name}, model: {trip.car_name}, hardware_config: {trip.hardware_version}, software_config: {trip.software_version}, user_uuid: {core_user_profile.id}")
 
-                        if status == "异常退出待确认" or status == "行程生成中":
-                            log_journey_start_time = trip.first_update
-                            log_journey_end_time = trip.last_update
-                        elif not created:
-                            log_journey_start_time = journey.journey_start_time
-                            log_journey_end_time = journey.journey_end_time
-                        else:
-                            log_journey_start_time = None
-                            log_journey_end_time = None
-                        logger.info(f"已将行程 {trip_id} 的 默认字段设置为: journey_start_time: {log_journey_start_time}, journey_end_time: {log_journey_end_time}")
-                    except Trip.DoesNotExist:
-                        logger.error(f"行程 {trip_id} 不存在")
-                    except Exception as e:
-                        logger.error(f"更新行程 {trip_id} jouney_status, brand, journey_start_time 失败: {e}", exc_info=True)
-            # 执行更新操作
-            await update_trips()
-            return True
+                    if status == "异常退出待确认" or status == "行程生成中":
+                        log_journey_start_time = trip.first_update
+                        log_journey_end_time = trip.last_update
+                    elif not created:
+                        log_journey_start_time = total_journey_start
+                        log_journey_end_time = total_journey_end
+                    else:
+                        log_journey_start_time = None
+                        log_journey_end_time = None
+                    logger.info(f"已将行程 {trip_id} 的 默认字段设置为: journey_start_time: {log_journey_start_time}, journey_end_time: {log_journey_end_time}")
+            
+            try:
+                # 执行更新操作
+                await update_trips()
+                return True
+            except Trip.DoesNotExist:
+                logger.error(f"行程 {trip_id} 不存在")
+                return False
+            except Exception as e:
+                logger.error(f"更新行程 {trip_id} jouney_status, brand, journey_start_time 失败: {e}", exc_info=True)
+                return False
         except Exception as e:
-            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}", exc_info=True)
             if attempt < max_retries - 1:
                 # 关闭所有连接并等待重试
                 from django.db import connections
@@ -2880,7 +2767,6 @@ async def ensure_db_connection_and_set_journey_status(trip_id, status="行程生
                 # 最后一次尝试也失败
                 logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
                 return False
-
 
 
 # 将嵌套函数移到外部作为独立函数
@@ -2902,7 +2788,7 @@ def ensure_db_connection( trip_id,user,csv_path_list):
             success, message = process_wechat_data_sync(trip_id,user,csv_path_list)
             return success, message 
         except Exception as e:
-            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}", exc_info=True)
             if attempt < max_retries - 1:
                 # 关闭所有连接并等待重试
                 from django.db import connections
@@ -2970,52 +2856,7 @@ def ensure_db_connection_and_set_tos_path_sync(trip_id, results):
                 logger.error(f"更新行程 {trip_id} Reported_Journey 失败: {e}", exc_info=True)
             return True
         except Exception as e:
-            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
-            if attempt < max_retries - 1:
-                # 关闭所有连接并等待重试
-                from django.db import connections
-                connections.close_all()
-                time.sleep(retry_delay * (attempt + 1))
-            else:
-                # 最后一次尝试也失败
-                logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
-                return False
-
-
-# 将嵌套函数移到外部作为独立函数
-def ensure_db_connection_and_set_record_path_sync(trip_id, recorded_audio_file_path):
-    """确保数据库连接并执行合并操作"""
-    # 最大重试次数
-    max_retries = 3
-    retry_delay = 1.0
-    
-    for attempt in range(max_retries):
-        try:
-            # 确保数据库连接有效
-            ensure_connection()
-            # 测试连接是否正常
-            from django.db import connection
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT 1")
-                cursor.fetchone()
-            
-            logger.info(f"数据库连接正常，开始执行csv,det在tos数据路径落库操作")
-            try:
-                trip = Trip.objects.get(trip_id=trip_id)
-                journey = Journey.objects.using("core_user").get(journey_id=trip_id)
-                # trip 和 journey 的recorded_audio_file_path落库
-                journey.recorded_audio_file_path = recorded_audio_file_path
-                trip.recorded_audio_file_path = recorded_audio_file_path
-                trip.save()                      
-                journey.save(using="core_user")
-                logger.info(f"已将行程 {trip_id} 的 recorded_audio_file_path更新. recorded_audio_file_path: {recorded_audio_file_path}")
-            except Trip.DoesNotExist:
-                logger.error(f"行程 {trip_id} 不存在")
-            except Exception as e:
-                logger.error(f"更新行程 {trip_id} recorded_audio_file_path 失败: {e}", exc_info=True)
-            return True
-        except Exception as e:
-            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}", exc_info=True)
             if attempt < max_retries - 1:
                 # 关闭所有连接并等待重试
                 from django.db import connections
@@ -3068,7 +2909,7 @@ def ensure_db_connection_and_set_sub_journey_sync(trip_id, parent_trip_id=None):
                 logger.error(f"更新行程 {trip_id}  is_sub_journey 失败: {e}",exc_info=True)
             return True
         except Exception as e:
-            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}", exc_info=True)
             if attempt < max_retries - 1:
                 # 关闭所有连接并等待重试
                 from django.db import connections
@@ -3105,7 +2946,7 @@ def ensure_db_connection_and_set_sub_journey_parent_id_sync(trip_id, parent_trip
                     # 如果没有提供parent_trip_id，则设置为None
                     trip.parent_trip_id = None
                     # 更新其他字段
-                    trip.save()
+                trip.save()
                 logger.info(f"已将行程 {trip_id} 的父行程设为 {parent_trip_id}")
             except Trip.DoesNotExist:
                 logger.error(f"行程 {trip_id} 不存在")
@@ -3113,7 +2954,47 @@ def ensure_db_connection_and_set_sub_journey_parent_id_sync(trip_id, parent_trip
                 logger.error(f"更新行程 {trip_id}  的父行程id 失败: {e}",exc_info=True)
             return True
         except Exception as e:
-            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}")
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}", exc_info=True)
+            if attempt < max_retries - 1:
+                # 关闭所有连接并等待重试
+                from django.db import connections
+                connections.close_all()
+                time.sleep(retry_delay * (attempt + 1))
+            else:
+                # 最后一次尝试也失败
+                logger.error(f"数据库连接在{max_retries}次尝试后仍然失败")
+                return False
+
+# 将trip_id行程设置为子行程，不在行程返回列表
+def ensure_db_connection_and_update_parent_journey_status_sync(parent_trip_id):
+    """确保数据库连接并执行合并操作"""
+    # 最大重试次数
+    max_retries = 3
+    retry_delay = 1.0
+    
+    for attempt in range(max_retries):
+        try:
+            # 确保数据库连接有效
+            ensure_connection()
+            # 测试连接是否正常
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            
+            logger.info(f"数据库连接正常，开始执行设置当前行程{parent_trip_id}:父行程操作")
+            try:
+                journey = Journey.objects.using("core_user").get(journey_id=parent_trip_id)
+                journey.journey_status = settings.JOURNEY_STATUS_SUCCESS
+                # 更新其他字段
+                journey.save()
+                logger.info(f"行程: {parent_trip_id} 的journey_status更新为 {journey.journey_status}")
+            except Journey.DoesNotExist:
+                # 处理对象不存在的情况
+                logger.info(f"没有查到行程: {parent_trip_id} ")
+            return True
+        except Exception as e:
+            logger.error(f"数据库连接检查失败 (尝试 {attempt+1}/{max_retries}): {e}", exc_info=True)
             if attempt < max_retries - 1:
                 # 关闭所有连接并等待重试
                 from django.db import connections
@@ -3172,6 +3053,7 @@ def ensure_db_connection_and_set_journey_less_than_timethre_sync(trip_id):
                 return False
 
 
+@async_db_retry(max_attempts=3, retry_delay=0.5)
 async def clear_less_5min_journey(_id, trip_id_list, is_last_chunk=False):
     """处理行程低于5分钟正常退出行程数据"""
     try:
@@ -3220,31 +3102,35 @@ async def clear_less_5min_journey(_id, trip_id_list, is_last_chunk=False):
                         # 数据库里删除
                         try:
                             # 查找行程
-                            trip_journey = Trip.objects.filter(
-                                trip_id=trip,
-                            ).order_by('-last_update')  # 降序排列，从最新到最旧
+                            with transaction.atomic():
+                                # 重新加锁获取最新状态（防止并发修改）
+                                trip_journey = Trip.objects.get(
+                                    trip_id=trip)  # 降序排列，从最新到最旧
 
-                            logger.info(f"行程 {trip} 开始删除")
-                            trip_id = trip
-                            trip_journey.delete()
-                            logger.info(f"行程 {trip_id} 已成功删除")
+                                logger.info(f"行程 {trip} 开始删除")
+                                trip_id = trip
+                                trip_journey.is_less_than_5min = True
+                                trip_journey.is_completed = True
+                                trip_journey.save()
+                                logger.info(f"行程 {trip_id} 已成功删除")
+
                         except Exception as e:
                             logger.error(f"删除行程 {trip} 失败: {e}")
 
                         try:
                             # 查找行程
-                            journey = Journey.objects.using('core_user').filter(
-                                journey_id=trip)
-
-                            if not journey:
-                                logger.info(f"journey 行程 {trip} 开始删除")
-                                trip_id = trip
-                                journey.delete()
-                                logger.info(f"journey 行程 {trip_id} 已成功删除")
-                            else:
-                                logger.info(f"journey 行程 {trip} 不存在, 无需删除")
-                        except Exception as e:
-                            logger.error(f"删除journey行程 {trip} 失败: {e}")
+                            with transaction.atomic():
+                                journey = Journey.objects.using('core_user').get(journey_id=trip)
+                                
+                                # 找到了行程，执行更新操作
+                                logger.info(f"journey 行程 {trip} 存在，设置 is_less_than_5min 为 True")
+                                journey.is_less_than_5min = True
+                                journey.save()
+                                logger.info(f"journey 行程 {trip} is_less_than_5min 设置为 True 成功")
+                            
+                        except ObjectDoesNotExist:
+                            # 未找到行程，记录日志
+                            logger.info(f"journey 行程 {trip} 不存在，无法设置 is_less_than_5min")
 
                 except DatabaseError as e:
                     # 如果无法获取锁（其他进程正在处理），记录并跳过
@@ -3257,6 +3143,182 @@ async def clear_less_5min_journey(_id, trip_id_list, is_last_chunk=False):
         return None, None
 
 
+# NOTE: 
+async def process_record_zip_async(journey_record_longimg_id):
+    """
+        根据上传成功信息找到当前journey_record_longimg_id，
+        在trip行程中定位是父行程还是子行程
+        父行程就直接打包pcm文件到当前音频目录
+        子行程当父行程处理完&所有子行程音频上传完进行打包，
+        音频打包文件放在父行程目录下
+    """
+    try:
+        if journey_record_longimg_id is None:
+            return 
+
+        stats = get_process_pool_stats()
+        if stats and stats['available_workers'] <= 1:
+            logger.warning(f"进程池资源紧张: 活跃进程{stats['active_processes']}/{stats['max_workers']}")
+            await asyncio.sleep(0.5)
+
+        logger.info(f"开始处理音频文件打包, 行程ID: {journey_record_longimg_id}")
+
+        trip_id = journey_record_longimg_id
+        with transaction.atomic():
+
+            trip = await sync_to_async(Trip.objects.filter(trip_id=trip_id).first, thread_sensitive=True)()
+            # 行程未处理完
+            if trip.is_completed is False:
+                return 
+            # 行程处理完
+            file_paths = []
+            output_zip = settings.VIDEO_ON_DEMAND
+            if trip.parent_trip_id is None:
+                # 自己是父行程
+                logger.info(f"当前行程是父行程, 行程ID: {trip_id}")
+                journeyRecord = await sync_to_async(JourneyRecordLongImg.objects.using("core_user").get,
+                                                    thread_sensitive=True
+                                                )(journey_id=journey_record_longimg_id)
+                try:
+                    journey_all_ele = await sync_to_async(Journey.objects.using("core_user").get,
+                                                        thread_sensitive=True
+                                                    )(journey_id=journey_record_longimg_id)
+                except ObjectDoesNotExist:
+                    logger.info(f"total journey has no item. trip_id: {trip.parent_trip_id}")
+                    return 
+                # 当前行程已完成
+                # 音频合并并通知分发接口
+                if journeyRecord.record_audio_zipfile_path is not None:
+                    logger.info(f"当前行程已完成音频合并打包, 行程ID: {trip_id}")
+                    return
+
+                if (journeyRecord.record_upload_tos_status == settings.RECORD_UPLOAD_TOS_SUCCESS):
+                    file_paths.append(settings.VIDEO_ON_DEMAND+journeyRecord.record_audio_file_path)
+                    output_zip += str(Path(journeyRecord.record_audio_file_path).with_suffix(".zip"))
+
+                    if (package_files(file_paths, output_zip)):
+                        logger.info(f"当前行程完成打包, 行程ID: {trip_id}, zip包路径: {output_zip}")
+                        journeyRecord.record_audio_zipfile_path = output_zip
+                        journeyRecord.save()
+
+                        # 所有报告数据元素表落库音频打包数据和成功状态
+                        journey_all_ele.record_audio_file_path = output_zip
+                        journey_all_ele.record_upload_tos_status = settings.RECORD_UPLOAD_TOS_SUCCESS
+                        journey_all_ele.save()
+
+                        # TODO:
+                        # 请求数据分发通知
+                        # 本行程音频处理完成
+                        await reports_successful_audio_generation(trip.trip_id, trip.task_id)
+                    else:
+                        logger.info(f"当前行程打包未完成, 行程ID: {trip_id}")
+                elif (journeyRecord.record_upload_tos_status == settings.RECORD_UPLOAD_TOS_FILE_MISSING):
+                    logger.info(f"或者音频文件丢失, 行程ID: {trip_id}")
+                else:
+                    logger.info(f"当前行程文件还未上传成功, 行程ID: {trip_id}")
+            else:
+                # 自己是子行程
+                logger.info(f"当前行程是子行程,  行程ID: {trip_id}")
+                # 查找父行程
+                parement_trip = await sync_to_async(Trip.objects.filter(trip_id=trip.parent_trip_id).first, thread_sensitive=True)()
+                if parement_trip.is_completed is False:
+                    # 父行程处理未结束
+                    return 
+                else:
+                    # 父行程处理结束
+                    # 查找父行程
+                    parement_journeyRecord = await sync_to_async(JourneyRecordLongImg.objects.using("core_user").filter(journey_id=trip.parent_trip_id).first, thread_sensitive=True)()
+
+                    try: 
+                        journey_all_ele = await sync_to_async(Journey.objects.using("core_user").get,
+                                                            thread_sensitive=True
+                                                        )(journey_id=trip.parent_trip_id)
+                    except ObjectDoesNotExist:
+                        logger.info(f"total journey has no item. trip_id: {trip.parent_trip_id}")
+                        return 
+                    # 当前行程已完成
+                    # 音频合并并通知分发接口
+                    if parement_journeyRecord.record_audio_zipfile_path is not None:
+                        logger.info(f"当前行程已完成音频合并打包, 行程ID: {trip.parent_trip_id}")
+                        return
+                    # 查找所有子行程
+                    trip_ids = await sync_to_async(
+                                    list,
+                                    thread_sensitive=True
+                                )(
+                                    Trip.objects.filter(parent_trip_id=trip.parent_trip_id).values_list('trip_id', flat=True)
+                                )
+                    
+                    journeyRecord_ids = [trip_id for trip_id in trip_ids]
+
+                    logger.info(f"所有子行程,  行程列表: {journeyRecord_ids}")
+
+                    record_audio_file_paths = await sync_to_async(
+                                                list,
+                                                thread_sensitive=True
+                                            )(
+                                                JourneyRecordLongImg.objects.using("core_user")
+                                                .filter(
+                                                    journey_id__in=journeyRecord_ids
+                                                )
+                                                .filter(
+                                                    Q(record_upload_tos_status=settings.RECORD_UPLOAD_TOS_SUCCESS) |
+                                                    Q(record_upload_tos_status=settings.RECORD_UPLOAD_TOS_FILE_MISSING)
+                                                )
+                                                .values_list('record_audio_file_path', flat=True)
+                                            )
+                    # 全部上传完成
+                    if (len(trip_ids) == len(record_audio_file_paths)
+                        and ((parement_journeyRecord.record_upload_tos_status == settings.RECORD_UPLOAD_TOS_SUCCESS)
+                            or (parement_journeyRecord.record_upload_tos_status == settings.RECORD_UPLOAD_TOS_FILE_MISSING))):
+                        # 查找父行程 journeyRecord
+                        logger.info(f"开始准备父行程和子行程路径,  准备打包")
+                        file_paths = [settings.VIDEO_ON_DEMAND + audio_file_path
+                                      for audio_file_path in record_audio_file_paths
+                                      if audio_file_path is not None]
+                        # 如果parement_record_path中音频文件未丢失
+                        parement_record_path = ""
+                        if parement_journeyRecord.record_upload_tos_status == settings.RECORD_UPLOAD_TOS_SUCCESS:
+                            parement_record_path = settings.VIDEO_ON_DEMAND + parement_journeyRecord.record_audio_file_path
+                            # 打包文件里增加父行程音频
+                            file_paths.append(parement_record_path)
+
+                            output_zip = str(Path(parement_record_path).with_suffix(".zip"))
+
+                        else:
+                            # 构建父行程打包音频存储路径
+                            file_name = parement_trip.file_name.split("/")[-1]
+                            date = file_name.split("_")[-1][:-4]
+                            day = date.split(" ")[0]
+
+                            parement_record_path = settings.VIDEO_ON_DEMAND + str(parement_trip.user_id) + "/inference_data/" + str(parement_trip.car_name) + "/" + day + "/" + date + "/" + "all.zip"
+                            output_zip = parement_record_path
+
+
+                        if(package_files(file_paths, output_zip)):
+                            logger.info(f"当前行程完成打包, 行程ID: {trip_id}, zip包路径: {output_zip}")
+                            parement_journeyRecord.record_audio_zipfile_path = output_zip
+                            parement_journeyRecord.save()
+
+                            # 所有报告数据元素表落库音频打包数据和成功状态
+                            journey_all_ele.record_audio_file_path = output_zip
+                            journey_all_ele.record_upload_tos_status = settings.RECORD_UPLOAD_TOS_SUCCESS
+                            journey_all_ele.save()
+
+                            # TODO:
+                            # 请求数据分发通知
+                            # 本行程音频处理完成
+                            await reports_successful_audio_generation(parement_trip.trip_id, parement_trip.task_id)
+                        else:
+                            logger.info(f"当前行程打包未完成, 行程ID: {trip_id}")
+        
+        return True
+    except Exception as e:
+        logger.error(f"处理和上传文件失败: {e}", exc_info=True)
+        return False, []
+
+
+
 if __name__ == '__main__':
     # file_path_list = ['tos://chek/temp/for 汽车之家/25.5.15-成都重庆测试/阿维塔06/det_csv/2025-05-16/2025-05-16 10-11-23/阿维塔12_2023款 700 三激光后驱奢享版_AVATR.OS 4.0.0_spcialPoint_2025-05-16 10-11-23.csv','tos://chek/temp/for 汽车之家/25.5.15-成都重庆测试/阿维塔06/det_csv/2025-05-16/2025-05-16 10-11-23/阿维塔12_2023款 700 三激光后驱奢享版_AVATR.OS 4.0.0_spcialPoint_2025-05-16 10-11-23.det']
     # trip_id = '82ef3322-8aa9-4cd2-81aa-3ef1499eca3d'
@@ -3266,12 +3328,12 @@ if __name__ == '__main__':
 
     total_message = process_journey(file_path_list, 
                                     user_id=100000, 
-                                    user_name='念书人', 
-                                    phone='18847801997', 
-                                    car_brand ='理想', 
+                                    user_name='名狌', 
+                                    phone='17349063987', 
+                                    car_brand ='智己LS6', 
                                     car_model='', 
-                                    car_hardware_version='2024款 Pro',
-                                    car_software_version='OTA7.0'
+                                    car_hardware_version='2023款 Max 超强性能版',
+                                    car_software_version='IMOS 2.6.5'
                     )
               
     # trip_id = 'ee1a65b673504d13b9c4d5c7e39d8737'

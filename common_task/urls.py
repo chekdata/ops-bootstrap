@@ -27,7 +27,8 @@ urlpatterns = [
     path('get_journey_mbti_entrance', views.get_journey_mbti_entrance),
     path('set_recordUploadTosStatus', views.set_recordUploadTosStatus),
     path('update_journey_image', views.update_journey_image),
-    
     path('get_notUploadTosRecord', views.get_notUploadTosRecord),
+    path('set_recordUploadTosStatusByTripId', views.set_recordUploadTosStatusByTripId),
+    
 ]
 
