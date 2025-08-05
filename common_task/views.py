@@ -996,7 +996,7 @@ async def get_journey_data_entrance(request):
                 model=model,
                 created_date = created_date,
                 fields = [   'brand', 'model','journey_end_time',
-                'journey_id','duration', 'journey_status','created_date']
+                'journey_id','duration', 'journey_status','created_date', 'journey_start_time']
             )
             
             if journeys:
@@ -1009,6 +1009,7 @@ async def get_journey_data_entrance(request):
                     'created_date':j.get('created_date').isoformat() if j.get('created_date') else None,
                     'journey_status': j.get('journey_status'),
                     'duration':j.get('duration'),
+                    'journey_start_time':j.get('journey_start_time')
                     }
                     for j in journeys
                 ]
