@@ -106,7 +106,9 @@ class CSVProcess:
                 return row.get('road_scene')
         elif model == 1:
             state = row.get('state')
-            if not isinstance(row.get('state'), str) and np.isnan(float(row.get('state'))):
+            if not row.get('state'):
+                return 'standby'
+            elif not isinstance(row.get('state'), str) and np.isnan(float(row.get('state'))):
                 return 'standby'
             else:
                 return row.get('state')
