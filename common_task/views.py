@@ -1010,7 +1010,7 @@ async def get_journey_data_entrance(request):
                     'journey_status': j.get('journey_status'),
                     'duration':j.get('duration'),
                     'journey_start_time':j.get('journey_start_time'),
-                    'cover_image':j.cover_image if j.cover_image else 'https://app.chekkk.com/assets/imgs/app_project/default/default_car.png'
+                    'cover_image':j.get('cover_image') if j.get('cover_image') else 'https://app.chekkk.com/assets/imgs/app_project/default/default_car.png'
                     }
                     for j in journeys
                 ]
