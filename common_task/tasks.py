@@ -619,7 +619,16 @@ async def upload_chunk_file(user_id, trip_id, chunk_index, file_obj, file_type, 
             if 'autohome_phone' in defaults:
                 journey_defaults['autohome_phone'] = defaults['autohome_phone']
             journey_defaults['journey_status'] = settings.JOURNEY_STATUS_CREATE
-                
+            journey_defaults['brand'] = defaults['car_name']
+            journey_defaults['model'] = defaults['car_name']
+            journey_defaults['hardware_config'] = defaults['hardware_version']
+            journey_defaults['software_config'] = defaults['software_version']
+            
+            # 查询用户uuid
+            core_user_profile = CoreUser.objects.using("core_user").get(app_id=user_id)
+
+            journey_defaults['user_uuid'] = core_user_profile.id
+
             journey_record_longImg, created = await sync_to_async(Journey.objects.using("core_user").get_or_create, thread_sensitive=True)(
                             journey_id=trip_id,
                             defaults=journey_defaults
