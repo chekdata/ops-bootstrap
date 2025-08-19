@@ -877,6 +877,83 @@ def get_journey_data(user_uuid=None, start_date=None, end_date=None, city=None, 
     
     return journeys
 
+def get_journey_data_less_column(user_uuid=None, start_date=None, end_date=None, city=None, brand=None, model=None,created_date=None,journey_id = None,page_size = 4,fields=None):
+    """
+    异步查询行程数据的函数
+    参数:
+    - user_uuid: 用户id（可选）
+    - start_date: 查询开始日期（可选）
+    - end_date: 查询结束日期（可选）
+    - city: 查询城市（可选）
+    - brand: 查询品牌（可选）
+    - model: 查询型号（可选）
+    返回:
+    - 查询到的行程数据列表
+    """
+    # 构建查询条件
+    query_conditions = Q()
+    # 添加行程ID条件（如果提供）
+    if user_uuid:
+        query_conditions &= Q(user_uuid=str(user_uuid))
+    # 添加日期范围条件（如果提供）
+    if start_date or end_date:
+        date_query = Q()
+        if start_date:
+            date_query &= Q(created_date__gte=start_date)
+        if end_date:
+            # 如果只提供了日期，则默认使用当天23:59:59作为结束时间
+            if isinstance(end_date, timezone.datetime) and end_date.time() == timezone.datetime.min.time():
+                end_date = timezone.datetime.combine(end_date.date(), timezone.datetime.max.time())
+            date_query &= Q(created_date__lte=end_date)
+        query_conditions &= date_query
+    # 添加城市条件（如果提供）
+    if city:
+        query_conditions &= Q(city=city)
+    # 添加品牌条件（如果提供）
+    if brand:
+        query_conditions &= Q(brand=brand)
+    # 添加型号条件（如果提供）
+    if model:
+        query_conditions &= Q(model=model)
+    if journey_id:
+        query_conditions &= Q(journey_id=journey_id)
+    query_conditions &= Q(is_less_than_5min=0)
+
+    # 假设journey_status是一个包含允许状态的列表
+    query_conditions &= Q(journey_status__in=['正常', '异常退出待确认', '行程生成中'])
+    
+    query_conditions &= ~Q(model__in=[ '通用模型'])
+    # 添加is_less_than_5min条件，要求等于0
+    query_conditions &= Q(is_less_than_5min=0)
+    # # 执行异步查询
+    # journeys = Journey.objects.using('core_user').filter(query_conditions).order_by('-created_date').all()
+
+     # 添加created_date分页条件
+    if created_date:
+        query_conditions &= Q(created_date__lt=created_date)
+    query_conditions &= Q(is_sub_journey=False) 
+    base_query = Journey.objects.using('core_user').filter(query_conditions).order_by('-created_date')
+    
+    # 应用字段限制（新增逻辑）
+    if fields:
+        base_query = base_query.values(*fields)
+    
+    # 应用分页（保持原有逻辑不变）
+    if page_size:
+        journeys = base_query[:page_size]
+    else:
+        journeys = base_query.all()
+    # # 执行查询并按created_date倒序排列，取前page_size条
+    # if page_size:
+    #     journeys = Journey.objects.using('core_user') \
+    #         .filter(query_conditions) \
+    #         .order_by('-created_date')[:page_size]
+    # else:
+    #     journeys = Journey.objects.using('core_user').filter(query_conditions).order_by('-created_date').all()
+    
+
+    return journeys
+    
 
 @extend_schema(
     # 指定请求体的参数和类型
@@ -910,88 +987,116 @@ async def get_journey_data_entrance(request):
     try:
         if  CoreUser.objects.using('core_user').filter(app_id=_id).exists():
             core_user_profile = await sync_to_async(CoreUser.objects.using('core_user').get, thread_sensitive=True)(app_id=_id)
-
-            journeys =get_journey_data(
+            journeys =get_journey_data_less_column(
                 user_uuid=core_user_profile.id,
-                # user_uuid='8cbb7009-7df7-44fe-b86f-2933c44eb266',
                 start_date=start_date,
                 end_date=end_date,
                 city=city,
                 brand=brand, 
                 model=model,
-                created_date = created_date
+                created_date = created_date,
+                fields = [   'brand', 'model','journey_end_time',
+                'journey_id','duration', 'journey_status','created_date', 'journey_start_time','cover_image']
             )
+            
             if journeys:
                 result_data = [
                 {
-                    'journey_id': j.journey_id,
-                    'city': j.city,
-                    'created_date': j.created_date.isoformat(),
-                    'auto_mileages': j.auto_mileages,
-                    'total_mileages': j.total_mileages,
-                    'frames': j.frames,
-                    'auto_frames': j.auto_frames,
-                    'noa_frames': j.noa_frames,
-                    'lcc_frames': j.lcc_frames,
-                    'driver_frames': j.driver_frames,
-                    'auto_speed_average': j.auto_speed_average,
-                    'auto_max_speed': j.auto_max_speed,
-                    'invervention_risk_proportion': j.invervention_risk_proportion,
-                    'invervention_mpi': j.invervention_mpi,
-                    'invervention_risk_mpi': j.invervention_risk_mpi,
-                    'invervention_cnt': j.invervention_cnt,
-                    'invervention_risk_cnt': j.invervention_risk_cnt,
-                    'noa_invervention_risk_mpi': j.noa_invervention_risk_mpi,
-                    'noa_invervention_mpi': j.noa_invervention_mpi,
-                    'noa_invervention_risk_cnt': j.noa_invervention_risk_cnt,
-                    'noa_auto_mileages': j.noa_auto_mileages,
-                    'noa_auto_mileages_proportion': j.noa_auto_mileages_proportion,
-                    'noa_invervention_cnt': j.noa_invervention_cnt,
-                    'lcc_invervention_risk_mpi': j.lcc_invervention_risk_mpi,
-                    'lcc_invervention_mpi': j.lcc_invervention_mpi,
-                    'lcc_invervention_risk_cnt': j.lcc_invervention_risk_cnt,
-                    'lcc_auto_mileages': j.lcc_auto_mileages,
-                    'lcc_auto_mileages_proportion': j.lcc_auto_mileages_proportion,
-                    'lcc_invervention_cnt': j.lcc_invervention_cnt,
-                    'auto_dcc_max': j.auto_dcc_max,
-                    'auto_dcc_frequency': j.auto_dcc_frequency,
-                    'auto_dcc_cnt': j.auto_dcc_cnt,
-                    'auto_dcc_duration': j.auto_dcc_duration,
-                    'auto_dcc_average_duration': j.auto_dcc_average_duration,
-                    'auto_dcc_average': j.auto_dcc_average,
-                    'auto_acc_max': j.auto_acc_max,
-                    'auto_acc_frequency': j.auto_acc_frequency,
-                    'auto_acc_cnt': j.auto_acc_cnt,
-                    'auto_acc_duration': j.auto_acc_duration,
-                    'auto_acc_average_duration': j.auto_acc_average_duration,
-                    'auto_acc_average': j.auto_acc_average,
-                    'driver_mileages': j.driver_mileages,
-                    'driver_dcc_max': j.driver_dcc_max,
-                    'driver_dcc_frequency': j.driver_dcc_frequency,
-                    'driver_acc_max': j.driver_acc_max,
-                    'driver_acc_frequency': j.driver_acc_frequency,
-                    'driver_speed_average': j.driver_speed_average,
-                    'driver_speed_max': j.driver_speed_max,
-                    'driver_dcc_cnt': j.driver_dcc_cnt,
-                    'driver_acc_cnt': j.driver_acc_cnt,
-                    'brand': j.brand,
-                    'model': j.model,
-                    'software_config': j.software_config,
-                    'hardware_config': j.hardware_config,
-                    'journey_start_time': j.journey_start_time.isoformat() if j.journey_start_time else None,
-                    'journey_end_time': j.journey_end_time.isoformat() if j.journey_end_time else None,
-                    'created_date':j.created_date.isoformat() if j.created_date else None,
-                    'journey_status': j.journey_status,
-                    'duration':j.duration,
-                    'driver_dcc_average':j.driver_dcc_average,
-                    'driver_acc_average':j.driver_acc_average,
-                    'auto_safe_duration':j.auto_safe_duration,
-                    'noa_safe_duration':j.noa_safe_duration,
-                    'lcc_safe_duration':j.lcc_safe_duration,
-                    'cover_image':j.cover_image if j.cover_image else 'https://app.chekkk.com/assets/imgs/app_project/default/default_car.png'
+                    'journey_id': j.get('journey_id'),
+                    'brand': j.get('brand'),
+                    'model': j.get('model'),
+                    'journey_end_time': j.get('journey_end_time').isoformat() if j.get('journey_end_time') else None,
+                    'created_date':j.get('created_date').isoformat() if j.get('created_date') else None,
+                    'journey_status': j.get('journey_status'),
+                    'duration':j.get('duration'),
+                    'journey_start_time':j.get('journey_start_time'),
+                    'cover_image':j.get('cover_image') if j.get('cover_image') else 'https://app.chekkk.com/assets/imgs/app_project/default/default_car.png'
                     }
                     for j in journeys
                 ]
+            
+            #20250804暂停使用
+            # journeys =get_journey_data(
+            #     user_uuid=core_user_profile.id,
+            #     # user_uuid='8cbb7009-7df7-44fe-b86f-2933c44eb266',
+            #     start_date=start_date,
+            #     end_date=end_date,
+            #     city=city,
+            #     brand=brand, 
+            #     model=model,
+            #     created_date = created_date
+            # )
+            # if journeys:
+            #     result_data = [
+            #     {
+            #         'journey_id': j.journey_id,
+            #         'city': j.city,
+            #         'created_date': j.created_date.isoformat(),
+            #         'auto_mileages': j.auto_mileages,
+            #         'total_mileages': j.total_mileages,
+            #         'frames': j.frames,
+            #         'auto_frames': j.auto_frames,
+            #         'noa_frames': j.noa_frames,
+            #         'lcc_frames': j.lcc_frames,
+            #         'driver_frames': j.driver_frames,
+            #         'auto_speed_average': j.auto_speed_average,
+            #         'auto_max_speed': j.auto_max_speed,
+            #         'invervention_risk_proportion': j.invervention_risk_proportion,
+            #         'invervention_mpi': j.invervention_mpi,
+            #         'invervention_risk_mpi': j.invervention_risk_mpi,
+            #         'invervention_cnt': j.invervention_cnt,
+            #         'invervention_risk_cnt': j.invervention_risk_cnt,
+            #         'noa_invervention_risk_mpi': j.noa_invervention_risk_mpi,
+            #         'noa_invervention_mpi': j.noa_invervention_mpi,
+            #         'noa_invervention_risk_cnt': j.noa_invervention_risk_cnt,
+            #         'noa_auto_mileages': j.noa_auto_mileages,
+            #         'noa_auto_mileages_proportion': j.noa_auto_mileages_proportion,
+            #         'noa_invervention_cnt': j.noa_invervention_cnt,
+            #         'lcc_invervention_risk_mpi': j.lcc_invervention_risk_mpi,
+            #         'lcc_invervention_mpi': j.lcc_invervention_mpi,
+            #         'lcc_invervention_risk_cnt': j.lcc_invervention_risk_cnt,
+            #         'lcc_auto_mileages': j.lcc_auto_mileages,
+            #         'lcc_auto_mileages_proportion': j.lcc_auto_mileages_proportion,
+            #         'lcc_invervention_cnt': j.lcc_invervention_cnt,
+            #         'auto_dcc_max': j.auto_dcc_max,
+            #         'auto_dcc_frequency': j.auto_dcc_frequency,
+            #         'auto_dcc_cnt': j.auto_dcc_cnt,
+            #         'auto_dcc_duration': j.auto_dcc_duration,
+            #         'auto_dcc_average_duration': j.auto_dcc_average_duration,
+            #         'auto_dcc_average': j.auto_dcc_average,
+            #         'auto_acc_max': j.auto_acc_max,
+            #         'auto_acc_frequency': j.auto_acc_frequency,
+            #         'auto_acc_cnt': j.auto_acc_cnt,
+            #         'auto_acc_duration': j.auto_acc_duration,
+            #         'auto_acc_average_duration': j.auto_acc_average_duration,
+            #         'auto_acc_average': j.auto_acc_average,
+            #         'driver_mileages': j.driver_mileages,
+            #         'driver_dcc_max': j.driver_dcc_max,
+            #         'driver_dcc_frequency': j.driver_dcc_frequency,
+            #         'driver_acc_max': j.driver_acc_max,
+            #         'driver_acc_frequency': j.driver_acc_frequency,
+            #         'driver_speed_average': j.driver_speed_average,
+            #         'driver_speed_max': j.driver_speed_max,
+            #         'driver_dcc_cnt': j.driver_dcc_cnt,
+            #         'driver_acc_cnt': j.driver_acc_cnt,
+            #         'brand': j.brand,
+            #         'model': j.model,
+            #         'software_config': j.software_config,
+            #         'hardware_config': j.hardware_config,
+            #         'journey_start_time': j.journey_start_time.isoformat() if j.journey_start_time else None,
+            #         'journey_end_time': j.journey_end_time.isoformat() if j.journey_end_time else None,
+            #         'created_date':j.created_date.isoformat() if j.created_date else None,
+            #         'journey_status': j.journey_status,
+            #         'duration':j.duration,
+            #         'driver_dcc_average':j.driver_dcc_average,
+            #         'driver_acc_average':j.driver_acc_average,
+            #         'auto_safe_duration':j.auto_safe_duration,
+            #         'noa_safe_duration':j.noa_safe_duration,
+            #         'lcc_safe_duration':j.lcc_safe_duration,
+            #         'cover_image':j.cover_image if j.cover_image else 'https://app.chekkk.com/assets/imgs/app_project/default/default_car.png'
+            #         }
+            #         for j in journeys
+            #     ]
 
                 return JsonResponse({'code':200,'success': True, 'message': f'查询成功', 'data':{'journeys':result_data}})
             else:
