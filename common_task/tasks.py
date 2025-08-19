@@ -2169,7 +2169,7 @@ def handle_message_data(total_message,trip_id,model,hardware_version,software_ve
                     base_url = settings.GENERATE_JOURNEY_REPORT
                     )
 
-                    if result:
+                    if result and core_Journey_profile.journey_status in ['正常','行程上传中','行程创建中']:
         
                         core_Journey_profile.longimg_file_path = result.get('data',{}).get('url')
                         core_Journey_profile.save()
