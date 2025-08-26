@@ -603,7 +603,13 @@ class CSVProcess:
         sub_journey.dcc_cnt += 1 if in_dcc == 0 and a <= self.max_dcc else 0
         sub_journey.dcc_frequency = sub_journey.odometer / \
             sub_journey.dcc_cnt if sub_journey.dcc_cnt > 0 else 0
-        sub_journey.dcc_average += a if in_dcc == 0 and a <= self.max_dcc else 0
+        # sub_journey.dcc_average += a if in_dcc == 0 and a <= self.max_dcc else 0
+        sub_journey.dcc_average += (
+            -0.9 * self.g  if in_dcc == 0 and  a < -0.9 * self.g
+            else (a if in_dcc == 0 and a <= self.max_dcc else 0)
+        )
+
+
         # NOTE: 限制加速度
         #sub_journey.dcc_max = min(a, sub_journey.dcc_max)
         sub_journey.dcc_max = max(min(a, sub_journey.dcc_max), -0.9 * self.g)
@@ -612,7 +618,12 @@ class CSVProcess:
         sub_journey.acc_cnt += 1 if in_acc == 0 and a >= self.max_acc else 0
         sub_journey.acc_frequency = sub_journey.odometer / \
             sub_journey.acc_cnt if sub_journey.acc_cnt > 0 else 0
-        sub_journey.acc_average += a if in_acc == 0 and a >= self.max_acc else 0
+        # sub_journey.acc_average += a if in_acc == 0 and a >= self.max_acc else 0
+        sub_journey.acc_average += (
+            0.9 * self.g  if in_acc == 0 and  a > 0.9 * self.g
+            else (a if a >= self.max_acc else 0)
+        )
+
         # NOTE: 限制加速度
         #sub_journey.acc_max = max(a, sub_journey.acc_max)
         sub_journey.acc_max = min(0.9 * self.g, max(a, sub_journey.acc_max))
