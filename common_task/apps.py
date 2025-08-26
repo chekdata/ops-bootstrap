@@ -106,11 +106,11 @@ class MyappConfig(AppConfig):
                 "BackgroundCleanup"
             )
 
-            # 创建并启动超时检查线程
-            self.timeout_thread = self._create_thread(
-                start_timeout_checker,
-                "TimeoutChecker"
-            )
+            # # 创建并启动超时检查线程
+            # self.timeout_thread = self._create_thread(
+            #     start_timeout_checker,
+            #     "TimeoutChecker"
+            # )
 
             # 创建并启动数据库连接检查线程
             self.db_checker_thread = self._create_thread(
