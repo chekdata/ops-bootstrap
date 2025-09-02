@@ -872,10 +872,10 @@ async def update_project_version(request):
 async def send_sms_process_login(request):
     phone = request.data.get('phone')
     #生产环境
-    # vericode=str(generate_verification_code())
+    vericode=str(generate_verification_code())
 
     #测试环境
-    vericode = '888888'
+    # vericode = '888888'
 
     if not is_valid_phone_number(phone):
         return Response({'code': 500, 'message': '手机号格式不准确' ,'data':{}})
@@ -889,7 +889,7 @@ async def send_sms_process_login(request):
         await sync_to_async(user_SMS_verification.save, thread_sensitive=True)()
 
         #生产环境
-        # send_sms(phone, vericode)
+        send_sms(phone, vericode)
         return Response({'code': 200, 'message': 'sms 发送成功','data':{}})
     
 
@@ -906,7 +906,7 @@ async def send_sms_process_login(request):
         await sync_to_async(smsverification.save, thread_sensitive=True)()
 
         #生产环境
-        # send_sms(phone, vericode)
+        send_sms(phone, vericode)
         return Response({'code': 200, 'message': 'sms 发送成功','data':{}})
 
 
