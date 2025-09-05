@@ -215,6 +215,11 @@ class CSVProcess:
         pre_weather,pre_road_scene,pre_light = None, None, None
         noa_frames, lcc_frames, driver_frames = 0, 0, 0
         in_acc, in_dcc = 0, 0  # pre 3s occur acc or dcc
+        last_acc = None
+        cnt = 0
+        his_acc = HistoryAcc(max_length=1000)
+        max_acc, max_acc_norm = np.zeros(3), 0
+        recorder_imu_norm_list, phone_imu_norm_list, gps_speed_list, delta_recorder_imu_norm_list = [], [], [], []
 
 
         for i, (frams_id, state, t, v, a, gps_time, lon, lat, weather,road_scene,light) in \
@@ -226,10 +231,10 @@ class CSVProcess:
             z_acc = recorder_accZ
             acc = np.array([x_acc, y_acc, z_acc])
             acc_norm = np.linalg.norm(acc)
-            # his_acc.add(acc)
-            # delta_acc_norm = abs(np.linalg.norm(acc - last_acc)) if last_acc is not None else 0
+            his_acc.add(acc)
+            delta_acc_norm = abs(np.linalg.norm(acc - last_acc)) if last_acc is not None else 0
             # last_acc = acc
-            a = acc_norm
+            a = delta_acc_norm
             
             # print("="*10 + f'frame index is {i}' + "="*10)
             # 速度保护，合理区间外使用pre_v做当前速度
