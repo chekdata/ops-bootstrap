@@ -14,6 +14,7 @@ from pathlib import PurePath
 from datetime import datetime, timedelta
 from google.protobuf.json_format import MessageToJson
 from geopy.geocoders import Nominatim
+from collections import deque
 
 # 获取当前脚本所在的目录
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -29,6 +30,54 @@ from .file_operater import save_to_json, get_all_specify_filename_files,  create
 from proto_v1_2 import chek_message_pb2 as chek
 from proto_v1_2 import chek_message_pb2_grpc as chek_grpc
 # from chek_gps2city import regeocode
+
+# @history
+class HistoryAcc:
+    def __init__(self, max_length=7):
+        self.acc_history = deque(maxlen=max_length)
+        self.delta_acc_history = deque(maxlen=max_length)
+        self.potential_forward_acc_history = deque(maxlen=max_length)
+        self.last_acc = None
+        self.gravity_vec = None
+        self.forward_vec = np.zeros(3)
+        
+    def add(self, acc):
+        delta_acc = abs(acc - self.last_acc) if self.last_acc is not None else np.zeros(3)
+        self.acc_history.append(acc.copy())
+        self.delta_acc_history.append(delta_acc.copy())
+        # 更新稳定状态下的重力向量
+        self._update_gravity_vec()
+        # 更新前向向量
+        potential_forward_acc = acc - self.gravity_vec if self.gravity_vec is not None else np.zeros(3)
+        if np.linalg.norm(potential_forward_acc) > 1.0:
+            self.potential_forward_acc_history.append(potential_forward_acc.copy())
+            self._update_forward_vec()
+        # 更新最后一次的加速度
+        self.last_acc = acc
+
+    def _update_forward_vec(self):
+        forward_vec = np.mean(self.potential_forward_acc_history, axis=0)
+        self.forward_vec = forward_vec / np.linalg.norm(forward_vec)
+
+
+    def _update_gravity_vec(self):
+        delta_accs = np.array(self.delta_acc_history)
+        accs = np.array(self.acc_history)
+        if accs.std(axis=0).max() < 1.0 and delta_accs.mean(axis=0).max() < 1.0:
+            # 如果加速度变化很小，认为是稳定状态
+            self.gravity_vec = np.mean(accs, axis=0)
+
+
+    def infer_real_acc(self, acc):
+        if self.gravity_vec is None:
+            return 0
+        real_acc = abs(np.dot(acc - self.gravity_vec, self.forward_vec))
+        if real_acc < 0.5:
+            return 0
+        return real_acc
+        
+
+
 
 # @dataclass
 class CSVProcess:
@@ -166,12 +215,26 @@ class CSVProcess:
         pre_weather,pre_road_scene,pre_light = None, None, None
         noa_frames, lcc_frames, driver_frames = 0, 0, 0
         in_acc, in_dcc = 0, 0  # pre 3s occur acc or dcc
+        last_acc = None
+        cnt = 0
+        his_acc = HistoryAcc(max_length=1000)
+        max_acc, max_acc_norm = np.zeros(3), 0
+        recorder_imu_norm_list, phone_imu_norm_list, gps_speed_list, delta_recorder_imu_norm_list = [], [], [], []
 
 
         for i, (frams_id, state, t, v, a, gps_time, lon, lat, weather,road_scene,light) in \
             enumerate(zip(self.df['frame'],self.df['state'], self.df['time'], self.df['speed'], self.df['acc'], \
-                        self.df['gps_timestamp'], self.df['lon'], self.df['lat'], self.df['weather'], self.df['road_scene'],self.df['light'])):
-
+                        self.df['gps_timestamp'], self.df['lon'], self.df['lat'], self.df['weather'], self.df['road_scene'],self.df['light'],self.df['recorder_accX'],self.df['recorder_accY'],self.df['recorder_accZ'])):
+            
+            x_acc = recorder_accX
+            y_acc = recorder_accY
+            z_acc = recorder_accZ
+            acc = np.array([x_acc, y_acc, z_acc])
+            acc_norm = np.linalg.norm(acc)
+            his_acc.add(acc)
+            delta_acc_norm = abs(np.linalg.norm(acc - last_acc)) if last_acc is not None else 0
+            # last_acc = acc
+            a = delta_acc_norm
             
             # print("="*10 + f'frame index is {i}' + "="*10)
             # 速度保护，合理区间外使用pre_v做当前速度
