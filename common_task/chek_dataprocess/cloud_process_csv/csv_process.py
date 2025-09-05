@@ -222,7 +222,7 @@ class CSVProcess:
         recorder_imu_norm_list, phone_imu_norm_list, gps_speed_list, delta_recorder_imu_norm_list = [], [], [], []
 
 
-        for i, (frams_id, state, t, v, a, gps_time, lon, lat, weather,road_scene,light) in \
+        for i, (frams_id, state, t, v, a, gps_time, lon, lat, weather,road_scene,light,recorder_accX,	recorder_accY,	recorder_accZ) in \
             enumerate(zip(self.df['frame'],self.df['state'], self.df['time'], self.df['speed'], self.df['acc'], \
                         self.df['gps_timestamp'], self.df['lon'], self.df['lat'], self.df['weather'], self.df['road_scene'],self.df['light'],self.df['recorder_accX'],self.df['recorder_accY'],self.df['recorder_accZ'])):
             
