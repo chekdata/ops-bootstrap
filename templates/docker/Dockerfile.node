@@ -1,0 +1,16 @@
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package.json pnpm-lock.yaml ./
+RUN npm i -g pnpm@9 && pnpm install --frozen-lockfile
+COPY . .
+RUN pnpm build
+
+FROM alpine:3.20
+RUN adduser -D app && apk add --no-cache nodejs-current
+WORKDIR /app
+COPY --from=builder /app/.next/standalone .
+COPY --from=builder /app/.next/static ./.next/static
+USER app
+EXPOSE <port>
+CMD ["node","server.js"]
+

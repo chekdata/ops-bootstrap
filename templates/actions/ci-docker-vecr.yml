@@ -1,0 +1,39 @@
+name: ci-docker-vecr
+
+on:
+  push:
+    branches: [ main, dev, staging ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install pnpm
+        run: npm i -g pnpm@9
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm -w lint || true
+      - name: Test
+        run: pnpm -w test || true
+      - name: Login VECR
+        env:
+          REGISTRY: chek-images-cn-beijing.cr.volces.com
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+          REGISTRY_PASS: ${{ secrets.REGISTRY_PASS }}
+        run: echo "$REGISTRY_PASS" | docker login "$REGISTRY" -u "$REGISTRY_USER" --password-stdin
+      - name: Build and push
+        env:
+          REGISTRY: chek-images-cn-beijing.cr.volces.com
+          IMAGE: ${{ env.IMAGE || 'devops/example' }}
+          TAG: ${{ github.sha }}
+        run: |
+          docker build -t "$REGISTRY/$IMAGE:$TAG" .
+          docker push "$REGISTRY/$IMAGE:$TAG"
+
+

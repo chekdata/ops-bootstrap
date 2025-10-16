@@ -1,0 +1,23 @@
+replicaCount: 1
+
+image:
+  registry: chek-images-cn-beijing.cr.volces.com
+  repository: <imageRepo>/<service>
+  tag: "sha-<short>"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: vecr-auth
+
+service:
+  type: ClusterIP
+  port: <port>
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
