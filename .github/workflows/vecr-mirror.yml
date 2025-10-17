@@ -38,10 +38,15 @@ jobs:
           getent hosts ${{ secrets.REGISTRY_ENDPOINT }} || true
           curl -I --max-time 10 https://${{ secrets.REGISTRY_ENDPOINT }}/v2/ || true
 
-      - name: Login DockerHub (if provided)
+      - name: Login DockerHub (USER)
         if: ${{ secrets.DOCKERHUB_USER && secrets.DOCKERHUB_TOKEN }}
         run: |
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USER }}" --password-stdin
+
+      - name: Login DockerHub (USERNAME)
+        if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
       - name: Login VECR
         env:
