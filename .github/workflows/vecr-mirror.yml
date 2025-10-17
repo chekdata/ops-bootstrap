@@ -23,6 +23,10 @@ on:
         description: busybox tag (docker.io/library)
         required: false
         default: 1.36
+      coredns_tag:
+        description: coredns tag (docker.io/coredns/coredns)
+        required: false
+        default: 1.11.1
 
 jobs:
   mirror:
@@ -111,6 +115,17 @@ jobs:
         run: |
           SRC="docker.io/library/busybox:${TAG}"
           DST="${REGISTRY_ENDPOINT}/devops/busybox:${TAG}"
+          docker pull "$SRC"
+          docker tag "$SRC" "$DST"
+          docker push "$DST"
+
+      - name: Mirror coredns (docker.io -> VECR)
+        env:
+          TAG: ${{ github.event.inputs.coredns_tag }}
+          REGISTRY_ENDPOINT: ${{ secrets.REGISTRY_ENDPOINT }}
+        run: |
+          SRC="docker.io/coredns/coredns:${TAG}"
+          DST="${REGISTRY_ENDPOINT}/devops/coredns:${TAG}"
           docker pull "$SRC"
           docker tag "$SRC" "$DST"
           docker push "$DST"
