@@ -38,15 +38,18 @@ jobs:
           getent hosts ${{ secrets.REGISTRY_ENDPOINT }} || true
           curl -I --max-time 10 https://${{ secrets.REGISTRY_ENDPOINT }}/v2/ || true
 
-      - name: Login DockerHub (USER)
-        if: ${{ secrets.DOCKERHUB_USER && secrets.DOCKERHUB_TOKEN }}
+      - name: Login DockerHub (auto)
+        env:
+          DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USER }}" --password-stdin
-
-      - name: Login DockerHub (USERNAME)
-        if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
-        run: |
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          USERNAME="${DOCKERHUB_USER:-$DOCKERHUB_USERNAME}"
+          if [ -n "$USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
+            echo "$DOCKERHUB_TOKEN" | docker login -u "$USERNAME" --password-stdin
+          else
+            echo "DockerHub credentials not provided; skipping login"
+          fi
 
       - name: Login VECR
         env:
