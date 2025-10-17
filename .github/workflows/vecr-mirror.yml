@@ -1,0 +1,110 @@
+name: Mirror base images to VECR
+
+on:
+  workflow_dispatch:
+    inputs:
+      actions_runner_tag:
+        description: ghcr.io/actions/actions-runner tag
+        required: false
+        default: 2.321.0
+      dind_tag:
+        description: docker:dind tag
+        required: false
+        default: 24-dind
+      rbac_proxy_tag:
+        description: kube-rbac-proxy tag (quay.io/brancz)
+        required: false
+        default: v0.13.1
+      alpine_tag:
+        description: alpine tag (docker.io/library)
+        required: false
+        default: 3.20
+      busybox_tag:
+        description: busybox tag (docker.io/library)
+        required: false
+        default: 1.36
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show runner env and DNS
+        run: |
+          uname -a
+          cat /etc/resolv.conf || true
+          getent hosts ${{ secrets.REGISTRY_ENDPOINT }} || true
+          curl -I --max-time 10 https://${{ secrets.REGISTRY_ENDPOINT }}/v2/ || true
+
+      - name: Login DockerHub (if provided)
+        if: ${{ secrets.DOCKERHUB_USER && secrets.DOCKERHUB_TOKEN }}
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USER }}" --password-stdin
+
+      - name: Login VECR
+        env:
+          REGISTRY_ENDPOINT: ${{ secrets.REGISTRY_ENDPOINT }}
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+        run: |
+          test -n "$REGISTRY_ENDPOINT" && test -n "$REGISTRY_USERNAME" && test -n "$REGISTRY_PASSWORD"
+          echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY_ENDPOINT" -u "$REGISTRY_USERNAME" --password-stdin
+
+      - name: Mirror actions-runner (ghcr.io -> VECR)
+        env:
+          TAG: ${{ github.event.inputs.actions_runner_tag }}
+          REGISTRY_ENDPOINT: ${{ secrets.REGISTRY_ENDPOINT }}
+        run: |
+          SRC="ghcr.io/actions/actions-runner:${TAG}"
+          DST="${REGISTRY_ENDPOINT}/devops/actions-runner:${TAG}"
+          docker pull "$SRC"
+          docker tag "$SRC" "$DST"
+          docker push "$DST"
+
+      - name: Mirror docker:dind (docker.io -> VECR)
+        env:
+          TAG: ${{ github.event.inputs.dind_tag }}
+          REGISTRY_ENDPOINT: ${{ secrets.REGISTRY_ENDPOINT }}
+        run: |
+          SRC="docker.io/library/docker:${TAG}"
+          DST="${REGISTRY_ENDPOINT}/devops/docker:${TAG}"
+          docker pull "$SRC"
+          docker tag "$SRC" "$DST"
+          docker push "$DST"
+
+      - name: Mirror kube-rbac-proxy (quay.io -> VECR)
+        env:
+          TAG: ${{ github.event.inputs.rbac_proxy_tag }}
+          REGISTRY_ENDPOINT: ${{ secrets.REGISTRY_ENDPOINT }}
+        run: |
+          SRC="quay.io/brancz/kube-rbac-proxy:${TAG}"
+          DST="${REGISTRY_ENDPOINT}/devops/kube-rbac-proxy:${TAG}"
+          docker pull "$SRC"
+          docker tag "$SRC" "$DST"
+          docker push "$DST"
+
+      - name: Mirror alpine (docker.io -> VECR)
+        env:
+          TAG: ${{ github.event.inputs.alpine_tag }}
+          REGISTRY_ENDPOINT: ${{ secrets.REGISTRY_ENDPOINT }}
+        run: |
+          SRC="docker.io/library/alpine:${TAG}"
+          DST="${REGISTRY_ENDPOINT}/devops/alpine:${TAG}"
+          docker pull "$SRC"
+          docker tag "$SRC" "$DST"
+          docker push "$DST"
+
+      - name: Mirror busybox (docker.io -> VECR)
+        env:
+          TAG: ${{ github.event.inputs.busybox_tag }}
+          REGISTRY_ENDPOINT: ${{ secrets.REGISTRY_ENDPOINT }}
+        run: |
+          SRC="docker.io/library/busybox:${TAG}"
+          DST="${REGISTRY_ENDPOINT}/devops/busybox:${TAG}"
+          docker pull "$SRC"
+          docker tag "$SRC" "$DST"
+          docker push "$DST"
+
+
