@@ -34,6 +34,9 @@ on:
 
 jobs:
   mirror:
+    permissions:
+      contents: read
+      packages: read
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -67,6 +70,14 @@ jobs:
         run: |
           test -n "$REGISTRY_ENDPOINT" && test -n "$REGISTRY_USERNAME" && test -n "$REGISTRY_PASSWORD"
           echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY_ENDPOINT" -u "$REGISTRY_USERNAME" --password-stdin
+
+      - name: Login GHCR (uses GITHUB_TOKEN)
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          TOKEN="${GHCR_TOKEN:-${{ github.token }}}"
+          echo "$TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
       - name: Mirror actions-runner (ghcr.io -> VECR)
         env:
