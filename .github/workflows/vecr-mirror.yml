@@ -150,7 +150,7 @@ jobs:
           TAG: ${{ github.event.inputs.arc_wrapper_tag }}
           REGISTRY_ENDPOINT: ${{ secrets.REGISTRY_ENDPOINT }}
         run: |
-          SRC="ghcr.io/actions/actions-runner-controller/actions-runner:${TAG}"
+          SRC="ghcr.io/actions-runner-controller/actions-runner:${TAG}"
           DST="${REGISTRY_ENDPOINT}/devops/arc-actions-runner:${TAG}"
           docker pull "$SRC"
           docker tag "$SRC" "$DST"
