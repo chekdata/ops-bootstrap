@@ -73,11 +73,12 @@ jobs:
 
       - name: Login GHCR (uses GITHUB_TOKEN)
         env:
-          GHCR_USER: ${{ github.actor }}
+          GHCR_USER: ${{ secrets.GHCR_USER }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
-          TOKEN="${GHCR_TOKEN:-${{ github.token }}}"
-          echo "$TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+          test -n "$GHCR_USER"
+          test -n "$GHCR_TOKEN"
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
       - name: Mirror actions-runner (ghcr.io -> VECR)
         env:
