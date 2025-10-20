@@ -27,6 +27,10 @@ on:
         description: coredns tag (docker.io/coredns/coredns)
         required: false
         default: 1.11.1
+      summerwind_tag:
+        description: summerwind/actions-runner tag (Docker Hub)
+        required: false
+        default: latest
       arc_wrapper_tag:
         description: ghcr.io/actions/actions-runner-controller/actions-runner tag
         required: false
@@ -142,6 +146,17 @@ jobs:
         run: |
           SRC="docker.io/coredns/coredns:${TAG}"
           DST="${REGISTRY_ENDPOINT}/devops/coredns:${TAG}"
+          docker pull "$SRC"
+          docker tag "$SRC" "$DST"
+          docker push "$DST"
+
+      - name: Mirror summerwind actions-runner (docker.io -> VECR)
+        env:
+          TAG: ${{ github.event.inputs.summerwind_tag }}
+          REGISTRY_ENDPOINT: ${{ secrets.REGISTRY_ENDPOINT }}
+        run: |
+          SRC="docker.io/summerwind/actions-runner:${TAG}"
+          DST="${REGISTRY_ENDPOINT}/devops/summerwind-actions-runner:${TAG}"
           docker pull "$SRC"
           docker tag "$SRC" "$DST"
           docker push "$DST"
