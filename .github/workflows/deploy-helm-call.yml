@@ -34,11 +34,19 @@ on:
       tls_secret:
         required: false
         type: string
+      extra_values:
+        required: false
+        type: string
+        description: Inline YAML for extra Helm values
+      extra_values_file:
+        required: false
+        type: string
+        description: Path (in caller repo) to extra Helm values file
     secrets:
       KUBECONFIG_B64:
         required: true
       IMAGE_REGISTRY:
-        required: true
+        required: false
 
 jobs:
   deploy:
@@ -67,7 +75,7 @@ jobs:
           KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG_B64 }}
       - name: Helm upgrade
         env:
-          IMG_REG: ${{ secrets.IMAGE_REGISTRY }}
+          IMG_REG: ${{ secrets.IMAGE_REGISTRY || secrets.REGISTRY_ENDPOINT }}
         run: |
           set -euo pipefail
           CHART_DIR=ops-bootstrap/templates/helm
@@ -80,6 +88,8 @@ jobs:
           TGT_PORT='${{ inputs.target_port }}'
           HOST='${{ inputs.host }}'
           TLS='${{ inputs.tls_secret }}'
+          EXTRA_VALUES='${{ inputs.extra_values }}'
+          EXTRA_VALUES_FILE='${{ inputs.extra_values_file }}'
           kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
           VALUES=$(mktemp)
           cat > "$VALUES" <<YAML
@@ -103,6 +113,14 @@ jobs:
               tlsSecret: $TLS
             V
             HELM_ARGS+=( -f "$EXTRA" )
+          fi
+          if [ -n "$EXTRA_VALUES" ]; then
+            EV=$(mktemp)
+            printf "%s\n" "$EXTRA_VALUES" > "$EV"
+            HELM_ARGS+=( -f "$EV" )
+          fi
+          if [ -n "$EXTRA_VALUES_FILE" ] && [ -f "$EXTRA_VALUES_FILE" ]; then
+            HELM_ARGS+=( -f "$EXTRA_VALUES_FILE" )
           fi
           helm upgrade --install "$SERVICE" "$CHART_DIR" -n "$NAMESPACE" -f "$VALUES" "${HELM_ARGS[@]}"
 
