@@ -1,0 +1,110 @@
+name: ci-helm-deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: Service name used by Helm chart
+        required: true
+      namespace:
+        description: K8s namespace
+        required: true
+        default: prod
+      image_repo:
+        description: Image repository path (without registry)
+        required: true
+      image_tag:
+        description: Image tag (default sha)
+        required: false
+      container_port:
+        description: Container port
+        required: true
+        default: 3000
+      svc_port:
+        description: Service port
+        required: true
+        default: 80
+      target_port:
+        description: Target port
+        required: true
+        default: 3000
+      host:
+        description: Ingress host (optional)
+        required: false
+      tls_secret:
+        description: Ingress TLS secret (optional)
+        required: false
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.30.0
+      - name: Set up helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.2
+      - name: Kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${KUBECONFIG_CONTENT}" | base64 -d > ~/.kube/config
+        env:
+          KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG_B64 }}
+      - name: Render values
+        id: vals
+        run: |
+          echo "service=${{ github.event.inputs.service }}" >> $GITHUB_OUTPUT
+          echo "namespace=${{ github.event.inputs.namespace || 'prod' }}" >> $GITHUB_OUTPUT
+          echo "image_repo=${{ github.event.inputs.image_repo }}" >> $GITHUB_OUTPUT
+          echo "image_tag=${{ github.event.inputs.image_tag || github.sha }}" >> $GITHUB_OUTPUT
+          echo "container_port=${{ github.event.inputs.container_port || '3000' }}" >> $GITHUB_OUTPUT
+          echo "svc_port=${{ github.event.inputs.svc_port || '80' }}" >> $GITHUB_OUTPUT
+          echo "target_port=${{ github.event.inputs.target_port || '3000' }}" >> $GITHUB_OUTPUT
+          echo "host=${{ github.event.inputs.host || '' }}" >> $GITHUB_OUTPUT
+          echo "tls_secret=${{ github.event.inputs.tls_secret || '' }}" >> $GITHUB_OUTPUT
+      - name: Helm upgrade
+        run: |
+          CHART_DIR=ops-bootstrap/templates/helm
+          SERVICE='${{ steps.vals.outputs.service }}'
+          NAMESPACE='${{ steps.vals.outputs.namespace }}'
+          IMG_REG='${{ secrets.IMAGE_REGISTRY }}'
+          IMG_REPO='${{ steps.vals.outputs.image_repo }}'
+          IMG_TAG='${{ steps.vals.outputs.image_tag }}'
+          CON_PORT='${{ steps.vals.outputs.container_port }}'
+          SVC_PORT='${{ steps.vals.outputs.svc_port }}'
+          TGT_PORT='${{ steps.vals.outputs.target_port }}'
+          HOST='${{ steps.vals.outputs.host }}'
+          TLS='${{ steps.vals.outputs.tls_secret }}'
+          set -euo pipefail
+          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+          VALUES=$(mktemp)
+          cat > "$VALUES" <<YAML
+          image:
+            registry: "$IMG_REG"
+            repository: "$IMG_REPO/$SERVICE"
+            tag: "$IMG_TAG"
+          containerPort: $CON_PORT
+          service:
+            type: ClusterIP
+            port: $SVC_PORT
+            targetPort: $TGT_PORT
+          YAML
+          HELM_ARGS=""
+          if [[ -n "$HOST" && -n "$TLS" ]]; then
+            HELM_ARGS="-f <(cat <<V
+            ingress:
+              host: $HOST
+              tlsSecret: $TLS
+            V
+            )"
+          fi
+          # shellcheck disable=SC2086
+          helm upgrade --install "$SERVICE" "$CHART_DIR" -n "$NAMESPACE" -f "$VALUES"
+
+

@@ -1,0 +1,68 @@
+name: k8s-secret-check
+description: "Check K8s Secret keys exist (fail fast with readable summary)"
+inputs:
+  kubeconfig:
+    description: Base64 encoded kubeconfig content
+    required: true
+  namespace:
+    description: Kubernetes namespace
+    required: true
+  secret:
+    description: Secret name
+    required: true
+  required-keys:
+    description: Comma separated required keys (e.g. username,password,address,server_addr)
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Setup kubeconfig
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p "$HOME/.kube"
+        echo "${{ inputs.kubeconfig }}" | base64 -d > "$HOME/.kube/config"
+        echo "KUBECONFIG prepared"
+
+    - name: Verify secret keys
+      id: check
+      shell: bash
+      run: |
+        set -euo pipefail
+        NS='${{ inputs.namespace }}'
+        SEC='${{ inputs.secret }}'
+        REQ='${{ inputs["required-keys"] }}'
+        if ! kubectl get secret "$SEC" -n "$NS" >/dev/null 2>&1; then
+          echo "::error::Secret $SEC not found in namespace $NS"; exit 2; fi
+        json=$(kubectl get secret "$SEC" -n "$NS" -o json)
+        have=$(echo "$json" | jq -r '.data | keys[]' | tr '\n' ',')
+        missing=()
+        IFS=',' read -r -a keys <<< "$REQ"
+        for k in "${keys[@]}"; do
+          [[ -z "$k" ]] && continue
+          if ! echo "$json" | jq -e --arg k "$k" '.data[$k] // empty' >/dev/null; then
+            missing+=("$k")
+          fi
+        done
+        if ((${#missing[@]})); then
+          echo "HAVE=$have" >> "$GITHUB_OUTPUT"
+          echo "MISSING=${missing[*]}" >> "$GITHUB_OUTPUT"
+          echo "::error::Secret $SEC missing keys: ${missing[*]} (have: $have)"
+          exit 1
+        fi
+        echo "HAVE=$have" >> "$GITHUB_OUTPUT"
+        echo "MISSING=" >> "$GITHUB_OUTPUT"
+        echo "All required keys present: $REQ"
+
+    - name: Summary
+      if: always()
+      shell: bash
+      run: |
+        echo "Secret: ${{ inputs.namespace }}/${{ inputs.secret }}" >> "$GITHUB_STEP_SUMMARY"
+        echo "Required keys: ${{ inputs["required-keys"] }}" >> "$GITHUB_STEP_SUMMARY"
+        echo "Present: ${{ steps.check.outputs.HAVE }}" >> "$GITHUB_STEP_SUMMARY"
+        if [[ -n "${{ steps.check.outputs.MISSING }}" ]]; then
+          echo "Missing: ${{ steps.check.outputs.MISSING }}" >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+

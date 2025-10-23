@@ -1,0 +1,50 @@
+# Feishu app chat_id notification workflow template
+# Verified 2025-10-22 (miker-prod)
+
+name: feishu-notify
+
+on:
+  workflow_run:
+    workflows: ["ci-cd", "build"]
+    types: [completed]
+  push:
+    branches: [ main ]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compose message
+        id: msg
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            STATUS="${{ github.event.workflow_run.conclusion }}"
+            TITLE="${{ github.event.workflow_run.name }}: ${STATUS}"
+            URL="${{ github.event.workflow_run.html_url }}"
+          else
+            TITLE="Push on ${{ github.ref_name }} by ${{ github.actor }}"
+            URL="${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+          fi
+          echo "title=${TITLE}" >> "$GITHUB_OUTPUT"
+          echo "text=Repo: ${{ github.repository }}%0AEvent: ${{ github.event_name }}%0ALink: ${URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Send Feishu message via app chat_id
+        env:
+          APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+          CHAT_ID: ${{ secrets.FEISHU_CHAT_ID }}
+          TITLE: ${{ steps.msg.outputs.title }}
+          TEXT: ${{ steps.msg.outputs.text }}
+        shell: bash
+        run: |
+          set -e
+          TAT=$(curl -sS -X POST -H 'Content-Type: application/json' \
+            -d "{\"app_id\":\"$APP_ID\",\"app_secret\":\"$APP_SECRET\"}" \
+            https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal/ | jq -r '.tenant_access_token')
+          CARD=$(jq -c -n --arg title "$TITLE" --arg text "$TEXT" '{msg_type:"interactive", card:{header:{title:{tag:"plain_text",content:$title}}, elements:[{tag:"div", text:{tag:"lark_md", content:$text}}]}}')
+          curl -sS -X POST "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id" \
+            -H "Authorization: Bearer $TAT" -H 'Content-Type: application/json' \
+            -d "{\"receive_id\":\"$CHAT_ID\",\"msg_type\":\"interactive\",\"content\":$CARD}" | tee /dev/stderr
+
+

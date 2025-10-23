@@ -1,0 +1,28 @@
+replicaCount: 1
+
+containerPort: 8080
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+persistence:
+  enabled: true
+  existingClaim: osm-data-pvc
+  mounts:
+    - name: data
+      mountPath: /data/osm
+
+# 如果 Nacos 凭据在 Secret 中，名称如下
+envFromSecret: nacos-cred
+
+# 非机密配置在此设置（示例）
+env:
+  NODE_ENV: production
+
+ingress:
+  enabled: false
+  # host: osm.example.com
+  # tlsSecret: prod-tls
+

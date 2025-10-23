@@ -1,0 +1,16 @@
+# Core controllers (pin exact versions for reproducibility)
+registry.k8s.io/ingress-nginx/controller:v1.10.1
+registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.4.1
+
+# cert-manager components
+quay.io/jetstack/cert-manager-controller:v1.13.3
+quay.io/jetstack/cert-manager-webhook:v1.13.3
+quay.io/jetstack/cert-manager-cainjector:v1.13.3
+
+# Utilities used in jobs/debug
+curlimages/curl:8.10.1
+library/busybox:1.36
+
+# GitHub Actions self-hosted runner (Solution A)
+docker.io/summerwind/actions-runner:latest
+

@@ -1,0 +1,126 @@
+name: mirror-images
+
+on:
+  workflow_dispatch:
+    inputs:
+      extra_images:
+        description: "Optional, comma-separated list of additional images (e.g. docker.io/org/img:tag)"
+        required: false
+        default: ""
+  schedule:
+    - cron: "0 19 * * *" # daily 03:00 CST (UTC+8)
+
+concurrency:
+  group: mirror-images
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      VECR_REGISTRY: ${{ secrets.VECR_REGISTRY }}
+      VECR_USER: ${{ secrets.VECR_USER }}
+      VECR_PASS: ${{ secrets.VECR_PASS }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to VECR
+        if: env.VECR_REGISTRY != ''
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.VECR_REGISTRY }}
+          username: ${{ env.VECR_USER }}
+          password: ${{ env.VECR_PASS }}
+
+      - name: Optional login to Docker Hub (rate-limit friendly)
+        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+
+      - name: Prepare image list
+        id: prep
+        shell: bash
+        run: |
+          set -euo pipefail
+          default_list_file="ops-bootstrap/templates/image-mirror.list"
+          if [[ -f "$default_list_file" ]]; then
+            mapfile -t DEFAULTS < <(grep -vE '^\s*#' "$default_list_file" | sed '/^\s*$/d')
+          else
+            DEFAULTS=()
+          fi
+
+          EXTRA=()
+          if [[ -n "${{ github.event.inputs.extra_images }}" ]]; then
+            IFS=',' read -ra EXTRA <<< "${{ github.event.inputs.extra_images }}"
+          fi
+
+          # De-duplicate while preserving order
+          declare -A seen=()
+          ALL=()
+          for img in "${DEFAULTS[@]}" "${EXTRA[@]}"; do
+            img_trimmed="$(echo "$img" | xargs)"
+            [[ -z "$img_trimmed" ]] && continue
+            if [[ -z "${seen[$img_trimmed]:-}" ]]; then
+              seen[$img_trimmed]=1
+              ALL+=("$img_trimmed")
+            fi
+          done
+
+          printf '%s\n' "${ALL[@]}" > images.txt
+          echo "images_count=${#ALL[@]}" >> "$GITHUB_OUTPUT"
+          echo "Prepared ${#ALL[@]} images to mirror"
+
+      - name: Show images to mirror
+        shell: bash
+        run: |
+          echo 'Will mirror the following images:'
+          cat images.txt || true
+
+      - name: Enable Buildx (for registry features)
+        uses: docker/setup-buildx-action@v3
+
+      - name: Mirror images to VECR
+        if: env.VECR_REGISTRY != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -s images.txt ]]; then
+            echo "No images to process"; exit 0
+          fi
+          while IFS= read -r SRC; do
+            [[ -z "$SRC" ]] && continue
+            # Normalize source to have explicit registry
+            if [[ "$SRC" != */*/* ]]; then
+              # e.g. library/busybox:tag -> docker.io/library/busybox:tag
+              SRC="docker.io/${SRC}"
+            fi
+            # Split into registry, path, and tag
+            REG_AND_PATH="${SRC%%:*}"
+            TAG="${SRC##*:}"
+            REGISTRY="${REG_AND_PATH%%/*}"
+            PATH_WITHIN="${REG_AND_PATH#*/}"
+            TARGET_PATH="mirror/${PATH_WITHIN}"
+            TARGET="${VECR_REGISTRY}/${TARGET_PATH}:${TAG}"
+
+            echo "==> Mirroring $SRC -> $TARGET"
+            # Pull source
+            docker pull "$SRC"
+            # Tag and push to VECR
+            docker tag "$SRC" "$TARGET"
+            docker push "$TARGET"
+          done < images.txt
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          echo "Mirroring completed. Pushed images are under ${VECR_REGISTRY}/mirror/*"
+
+

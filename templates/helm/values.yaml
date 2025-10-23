@@ -9,9 +9,12 @@ image:
 imagePullSecrets:
   - name: vecr-auth
 
+containerPort: 3000
+
 service:
   type: ClusterIP
-  port: <port>
+  port: 80
+  targetPort: 3000
 
 resources:
   requests:
@@ -20,4 +23,24 @@ resources:
   limits:
     cpu: 500m
     memory: 512Mi
+
+# key-value env map, rendered as container env vars
+env: {}
+
+# optional secret name; if set, will be attached via envFrom.secretRef
+envFromSecret: ""
+
+persistence:
+  enabled: false
+  # Use existing PVC name (preferred) OR set storageClass & size to create one
+  existingClaim: ""
+  storageClass: ""
+  size: 50Gi
+  # List of mounts. Each item: { name, mountPath, subPath(optional) }
+  mounts: []
+
+ingress:
+  enabled: false
+  host: ""
+  tlsSecret: ""
 

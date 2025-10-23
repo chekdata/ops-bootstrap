@@ -1,0 +1,31 @@
+# Example .gitlab-ci.yml for vehicle-model-service
+# Copy this into the vehicle-model-service repository root and adjust variables.
+
+include:
+  - local: ops-bootstrap/templates/gitlab/docker-build-ssh-deploy.gitlab-ci.yml
+
+variables:
+  DOCKERFILE: Dockerfile
+  BUILD_CONTEXT: .
+  CONTAINER_NAME: vehicle-model-service
+  # Replace with the actual service port mapping
+  DEPLOY_PORTS: "8081:8081"
+  ENV_VARS: "NODE_ENV=production"
+  # HEALTHCHECK_URL: "http://172.31.44.122:8081/health"
+
+stages:
+  - build
+  - deploy
+
+build_image:
+  rules:
+    - if: $CI_COMMIT_BRANCH
+
+deploy_ssh:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH != "main"
+      when: manual
+      allow_failure: true
+
+

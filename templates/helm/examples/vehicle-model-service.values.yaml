@@ -1,0 +1,20 @@
+replicaCount: 1
+
+containerPort: 8081
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8081
+
+persistence:
+  enabled: false
+
+envFromSecret: nacos-cred
+
+env:
+  NODE_ENV: production
+
+ingress:
+  enabled: false
+

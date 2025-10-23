@@ -1,0 +1,112 @@
+name: ci-docker-ssh-deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: Image repo path under registry (e.g. your-org/osm-gateway)
+        required: true
+        default: osm-gateway
+      tag:
+        description: Image tag (default sha)
+        required: false
+      container_name:
+        description: Remote container name
+        required: true
+        default: osm-gateway
+      deploy_ports:
+        description: Comma-separated -p mappings (host:container)
+        required: true
+        default: 8080:8080
+      env_vars:
+        description: Space-separated env pairs (e.g. KEY=VALUE FOO=BAR)
+        required: false
+      volumes:
+        description: Space-separated -v mappings
+        required: false
+      network:
+        description: Docker network name
+        required: false
+      healthcheck_url:
+        description: URL to probe after deploy
+        required: false
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.DOCKER_REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_REGISTRY }}/${{ github.event.inputs.image || 'osm-gateway' }}:${{ github.event.inputs.tag || github.sha }}
+      - name: Export image ref
+        id: meta
+        run: echo "image_ref=${{ secrets.DOCKER_REGISTRY }}/${{ github.event.inputs.image || 'osm-gateway' }}:${{ github.event.inputs.tag || github.sha }}" >> $GITHUB_OUTPUT
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Prepare variables
+        id: vars
+        run: |
+          echo "container_name=${{ github.event.inputs.container_name || 'osm-gateway' }}" >> $GITHUB_OUTPUT
+          echo "deploy_ports=${{ github.event.inputs.deploy_ports || '8080:8080' }}" >> $GITHUB_OUTPUT
+          echo "env_vars=${{ github.event.inputs.env_vars || '' }}" >> $GITHUB_OUTPUT
+          echo "volumes=${{ github.event.inputs.volumes || '' }}" >> $GITHUB_OUTPUT
+          echo "network=${{ github.event.inputs.network || '' }}" >> $GITHUB_OUTPUT
+          echo "healthcheck_url=${{ github.event.inputs.healthcheck_url || '' }}" >> $GITHUB_OUTPUT
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            IMAGE_REF='${{ needs.build.outputs.image_ref || steps.meta.outputs.image_ref }}'
+            CONTAINER_NAME='${{ steps.vars.outputs.container_name }}'
+            DEPLOY_PORTS='${{ steps.vars.outputs.deploy_ports }}'
+            ENV_VARS='${{ steps.vars.outputs.env_vars }}'
+            VOLUMES='${{ steps.vars.outputs.volumes }}'
+            NETWORK='${{ steps.vars.outputs.network }}'
+            RUN_PORTS=""
+            IFS=',' read -ra PORTS_ARR <<< "$DEPLOY_PORTS"
+            for mapping in "${PORTS_ARR[@]}"; do RUN_PORTS="$RUN_PORTS -p ${mapping}"; done
+            RUN_ENVS=""; for kv in $ENV_VARS; do [[ -n "$kv" ]] && RUN_ENVS="$RUN_ENVS -e $kv"; done
+            RUN_VOLS=""; for v in $VOLUMES; do [[ -n "$v" ]] && RUN_VOLS="$RUN_VOLS -v $v"; done
+            RUN_NET=""; [[ -n "$NETWORK" ]] && RUN_NET="--network $NETWORK"
+            echo "Pull $IMAGE_REF" && docker pull "$IMAGE_REF"
+            docker rm -f "$CONTAINER_NAME" || true
+            # shellcheck disable=SC2086
+            docker run -d --restart=always --name "$CONTAINER_NAME" $RUN_PORTS $RUN_ENVS $RUN_VOLS $RUN_NET "$IMAGE_REF"
+            docker ps --filter name="$CONTAINER_NAME" --format 'table {{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
+      - name: Healthcheck
+        if: steps.vars.outputs.healthcheck_url != ''
+        run: |
+          for i in {1..30}; do
+            if curl -fsS "${{ steps.vars.outputs.healthcheck_url }}" >/dev/null 2>&1; then echo OK; exit 0; fi
+            sleep 2
+          done
+          echo "Healthcheck failed"; exit 1
+
+

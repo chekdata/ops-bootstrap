@@ -1,0 +1,109 @@
+name: deploy-helm-call
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        required: true
+        type: string
+      namespace:
+        required: false
+        type: string
+        default: prod
+      image_repo:
+        required: true
+        type: string
+      image_tag:
+        required: false
+        type: string
+      container_port:
+        required: true
+        type: string
+        default: '3000'
+      svc_port:
+        required: true
+        type: string
+        default: '80'
+      target_port:
+        required: true
+        type: string
+        default: '3000'
+      host:
+        required: false
+        type: string
+      tls_secret:
+        required: false
+        type: string
+    secrets:
+      KUBECONFIG_B64:
+        required: true
+      IMAGE_REGISTRY:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout caller repo
+        uses: actions/checkout@v4
+      - name: Checkout ops-bootstrap
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/ops-bootstrap
+          path: ops-bootstrap
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.30.0
+      - name: Set up helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.2
+      - name: Kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${KUBECONFIG_CONTENT}" | base64 -d > ~/.kube/config
+        env:
+          KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG_B64 }}
+      - name: Helm upgrade
+        env:
+          IMG_REG: ${{ secrets.IMAGE_REGISTRY }}
+        run: |
+          set -euo pipefail
+          CHART_DIR=ops-bootstrap/templates/helm
+          SERVICE='${{ inputs.service }}'
+          NAMESPACE='${{ inputs.namespace }}'
+          IMG_REPO='${{ inputs.image_repo }}'
+          IMG_TAG='${{ inputs.image_tag || github.sha }}'
+          CON_PORT='${{ inputs.container_port }}'
+          SVC_PORT='${{ inputs.svc_port }}'
+          TGT_PORT='${{ inputs.target_port }}'
+          HOST='${{ inputs.host }}'
+          TLS='${{ inputs.tls_secret }}'
+          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+          VALUES=$(mktemp)
+          cat > "$VALUES" <<YAML
+          image:
+            registry: "$IMG_REG"
+            repository: "$IMG_REPO/$SERVICE"
+            tag: "$IMG_TAG"
+          containerPort: $CON_PORT
+          service:
+            type: ClusterIP
+            port: $SVC_PORT
+            targetPort: $TGT_PORT
+          YAML
+          HELM_ARGS=()
+          if [ -n "$HOST" ] && [ -n "$TLS" ]; then
+            EXTRA=$(mktemp)
+            cat > "$EXTRA" <<V
+            ingress:
+              enabled: true
+              host: $HOST
+              tlsSecret: $TLS
+            V
+            HELM_ARGS+=( -f "$EXTRA" )
+          fi
+          helm upgrade --install "$SERVICE" "$CHART_DIR" -n "$NAMESPACE" -f "$VALUES" "${HELM_ARGS[@]}"
+
+

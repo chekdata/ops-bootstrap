@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: osm-data-migrate
+  namespace: prod
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: rsync
+          image: alpine:3.20
+          command:
+            - sh
+            - -c
+            - |
+              set -euo pipefail
+              apk add --no-cache rsync openssh-client
+              rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" \
+                ${SRC_SSH_USER}@${SRC_HOST}:${SRC_PATH}/ /data/osm/
+          env:
+            - name: SRC_HOST
+              value: 172.31.44.122
+            - name: SRC_SSH_USER
+              value: ec2-user
+            - name: SRC_PATH
+              value: /data/osm
+          volumeMounts:
+            - name: data
+              mountPath: /data/osm
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: osm-data-pvc
+

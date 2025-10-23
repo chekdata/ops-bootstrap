@@ -1,0 +1,31 @@
+name: feishu-notify
+description: Send notification to Feishu Incoming Webhook
+inputs:
+  webhook:
+    description: Feishu webhook URL
+    required: true
+  title:
+    description: Title text
+    required: true
+  text:
+    description: Content text
+    required: true
+runs:
+  using: composite
+  steps:
+    - id: notify
+      shell: bash
+      run: |
+        payload=$(jq -c -n --arg title "$INPUT_TITLE" --arg text "$INPUT_TEXT" '{
+          msg_type:"interactive",
+          card:{
+            header:{title:{tag:"plain_text",content:$title}},
+            elements:[{tag:"div",text:{tag:"lark_md",content:$text}}]
+          }
+        }')
+        curl -sS -H 'Content-Type: application/json' -d "$payload" "$INPUT_WEBHOOK" | tee /dev/stderr
+      env:
+        INPUT_WEBHOOK: ${{ inputs.webhook }}
+        INPUT_TITLE: ${{ inputs.title }}
+        INPUT_TEXT: ${{ inputs.text }}
+

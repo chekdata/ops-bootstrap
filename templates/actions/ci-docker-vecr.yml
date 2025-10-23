@@ -1,6 +1,16 @@
 name: ci-docker-vecr
 
 on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: Image repo path under VECR (e.g. prod/miker-web)
+        required: true
+        default: prod/miker-web
+      tag:
+        description: Image tag
+        required: true
+        default: v0.1.0
   push:
     branches: [ main, dev, staging ]
   pull_request:
@@ -21,17 +31,21 @@ jobs:
         run: pnpm -w lint || true
       - name: Test
         run: pnpm -w test || true
+      - name: Preflight DNS
+        run: |
+          nslookup ${{ secrets.VECR_REGISTRY }} || true
+          getent hosts ${{ secrets.VECR_REGISTRY }} || true
       - name: Login VECR
-        env:
-          REGISTRY: chek-images-cn-beijing.cr.volces.com
-          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
-          REGISTRY_PASS: ${{ secrets.REGISTRY_PASS }}
-        run: echo "$REGISTRY_PASS" | docker login "$REGISTRY" -u "$REGISTRY_USER" --password-stdin
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.VECR_REGISTRY }}
+          username: ${{ secrets.VECR_USER }}
+          password: ${{ secrets.VECR_PASS }}
       - name: Build and push
         env:
-          REGISTRY: chek-images-cn-beijing.cr.volces.com
-          IMAGE: ${{ env.IMAGE || 'devops/example' }}
-          TAG: ${{ github.sha }}
+          REGISTRY: ${{ secrets.VECR_REGISTRY }}
+          IMAGE: ${{ github.event.inputs.image || 'devops/example' }}
+          TAG: ${{ github.event.inputs.tag || github.sha }}
         run: |
           docker build -t "$REGISTRY/$IMAGE:$TAG" .
           docker push "$REGISTRY/$IMAGE:$TAG"

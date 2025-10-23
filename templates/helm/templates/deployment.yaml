@@ -22,19 +22,45 @@ spec:
           image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - containerPort: {{ .Values.service.port }}
+            - containerPort: {{ .Values.containerPort | default .Values.service.targetPort | default .Values.service.port }}
+          env:
+            {{- range $k, $v := .Values.env }}
+            - name: {{ $k }}
+              value: "{{ $v }}"
+            {{- end }}
+          {{- if .Values.envFromSecret }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.envFromSecret }}
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           readinessProbe:
             httpGet:
               path: /healthz
-              port: {{ .Values.service.port }}
+              port: {{ .Values.service.targetPort | default .Values.containerPort | default .Values.service.port }}
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /healthz
-              port: {{ .Values.service.port }}
+              port: {{ .Values.service.targetPort | default .Values.containerPort | default .Values.service.port }}
             initialDelaySeconds: 10
             periodSeconds: 20
+          volumeMounts:
+            {{- if and .Values.persistence.enabled (or .Values.persistence.existingClaim .Values.persistence.storageClass) }}
+            {{- range .Values.persistence.mounts }}
+            - name: data
+              mountPath: {{ .mountPath }}
+              {{- if .subPath }}
+              subPath: {{ .subPath }}
+              {{- end }}
+            {{- end }}
+            {{- end }}
+      {{- if and .Values.persistence.enabled (or .Values.persistence.existingClaim .Values.persistence.storageClass) }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ if .Values.persistence.existingClaim }}{{ .Values.persistence.existingClaim }}{{ else }}<service>-pvc{{ end }}
+      {{- end }}
 

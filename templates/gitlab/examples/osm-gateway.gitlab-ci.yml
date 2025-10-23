@@ -1,0 +1,38 @@
+# Example .gitlab-ci.yml for osm-gateway
+# Copy this into the osm-gateway repository root and adjust variables.
+# If you host this CICD repo in the same GitLab, you can include the template via project include.
+
+include:
+  - local: ops-bootstrap/templates/gitlab/docker-build-ssh-deploy.gitlab-ci.yml
+
+variables:
+  DOCKERFILE: Dockerfile
+  BUILD_CONTEXT: .
+  CONTAINER_NAME: osm-gateway
+  # Example port mapping; replace with the actual service port(s): host:container
+  DEPLOY_PORTS: "8080:8080"
+  # Optional env vars passed to container
+  ENV_VARS: "NODE_ENV=production"
+  # Optional volumes
+  # VOLUMES: "/data/osm-gateway/logs:/app/logs"
+  # HEALTHCHECK_URL: "http://172.31.44.122:8080/health"
+
+# Two common flows: feature branches deploy to a staging port, main deploys to prod port.
+# You can also set DEPLOY_PORTS via GitLab CI variables per environment instead of here.
+
+stages:
+  - build
+  - deploy
+
+build_image:
+  rules:
+    - if: $CI_COMMIT_BRANCH
+
+deploy_ssh:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH != "main"
+      when: manual
+      allow_failure: true
+
+
