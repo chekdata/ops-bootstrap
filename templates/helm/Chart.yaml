@@ -1,6 +1,6 @@
 apiVersion: v2
-name: <service>
-description: Helm chart for <service>
+name: {{ .Chart.Name }}
+description: Helm chart for {{ .Chart.Name }}
 type: application
 version: 0.1.0
 appVersion: "1.0.0"

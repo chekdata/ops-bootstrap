@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: <service>
-  namespace: <namespace>
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
   labels:
-    app.kubernetes.io/name: <service>
+    app.kubernetes.io/name: {{ .Release.Name }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app.kubernetes.io/name: <service>
+      app.kubernetes.io/name: {{ .Release.Name }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: <service>
+        app.kubernetes.io/name: {{ .Release.Name }}
     spec:
       imagePullSecrets:
       {{- toYaml .Values.imagePullSecrets | nindent 6 }}
       containers:
-        - name: <service>
+        - name: {{ .Release.Name }}
           image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:

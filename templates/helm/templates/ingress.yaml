@@ -2,8 +2,8 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: <service>
-  namespace: <namespace>
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
   annotations:
     # 按需添加限流/白名单等注解
 spec:
@@ -22,7 +22,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: <service>
+                name: {{ .Release.Name }}
                 port:
                   name: http
 {{- end }}
