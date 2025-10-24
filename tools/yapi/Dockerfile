@@ -1,4 +1,4 @@
-FROM registry.cn-hangzhou.aliyuncs.com/anoy/yapi:1.10.2
+FROM docker.io/jayfong/yapi:1.10.2
 
 # Keep image minimal; upstream already contains YApi runtime
 # Labels for traceability
