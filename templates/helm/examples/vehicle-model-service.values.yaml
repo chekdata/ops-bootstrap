@@ -1,3 +1,30 @@
+replicaCount: 2
+
+image:
+  registry: chek-images-cn-beijing.cr.volces.com
+  repository: miker/vehicle-model-service
+  tag: "sha-<short>"
+  pullPolicy: IfNotPresent
+
+containerPort: 4010
+
+service:
+  type: ClusterIP
+  port: 4010
+  targetPort: 4010
+
+env:
+  SERVICE_NAME: "vehicle-model-service"
+  AWS_REGION: "cn-beijing"
+  TOS_ENDPOINT: "https://tos-cn-beijing.volces.com"
+  TOS_BUCKET: "chek-app-assets"
+  TOS_PREFIX: "app_project_pic"
+  # Only prod enables upload; dev/staging set false via overlay
+  ALLOW_UPLOAD: "true"
+
+# Optional: reference secret for MONGO_URI etc
+envFromSecret: "vehicle-model-service-secrets"
+
 replicaCount: 1
 
 containerPort: 8081

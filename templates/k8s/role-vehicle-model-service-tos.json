@@ -1,0 +1,38 @@
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket",
+        "s3:ListBucketMultipartUploads"
+      ],
+      "Resource": [
+        "arn:aws:s3:::chek-app-assets"
+      ],
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
+            "app_project_pic/*"
+          ]
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:AbortMultipartUpload"
+      ],
+      "Resource": [
+        "arn:aws:s3:::chek-app-assets/app_project_pic/*"
+      ]
+    }
+  ]
+}
+
+
+
+
+

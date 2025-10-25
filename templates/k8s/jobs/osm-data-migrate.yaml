@@ -33,3 +33,4 @@ spec:
           persistentVolumeClaim:
             claimName: osm-data-pvc
 
+

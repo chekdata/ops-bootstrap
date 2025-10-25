@@ -51,3 +51,6 @@ echo "- Set FEISHU_CHAT_ID_DEV/FEISHU_CHAT_ID_STG secrets if not set"
 echo "- Deploy miker via Helm chart with Service port name http and targetPort 3000"
 
 
+
+
+
