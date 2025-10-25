@@ -1,0 +1,17 @@
+spec:
+  template:
+    spec:
+      serviceAccountName: vehicle-model-service-tos
+      containers:
+        - name: vehicle-model-service
+          env:
+            - name: AWS_REGION
+              value: cn-beijing
+            - name: TOS_ENDPOINT
+              value: https://tos-cn-beijing.volces.com
+            - name: TOS_BUCKET
+              value: chek-app-assets
+            - name: TOS_PREFIX
+              value: app_project_pic
+            - name: ALLOW_UPLOAD
+              value: "true"
