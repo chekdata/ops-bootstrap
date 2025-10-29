@@ -1,18 +1,6 @@
-<!--
-Sync Impact Report
-- Version: 1.2.0 → 1.2.1
-- Modified principles: 九、身份与密钥记录与加密规范（路径与脚本示例修正）
-- Added sections: 无
-- Removed sections: 跟踪项中的 TODO(COMMANDS_DIR)、TODO(SECRET_FILE_PATH)
-- Templates requiring updates:
-  ✅ README.md（SpecKit commands 说明已调整为“业务仓自行软链/引入”）
-  ✅ .specify/memory/specify.md（secrets 路径对齐）
-- Deferred TODOs: 无
--->
+# 团队宪章（Speckit Constitution)
 
-# 团队宪章（Speckit Constitution）
-
-版本：1.2.1｜生效：2025-10-12｜最后修订：2025-10-29
+版本：1.1.1｜生效：2025-10-12｜最后修订：2025-10-29
 
 ## 一、宗旨与适用范围
 
@@ -109,15 +97,6 @@ chmod +x scripts/ci.sh
 - 修订流程：提交 PR → 说明背景/变更点/迁移方案 → 评审通过后生效，更新本文件的版本与日期。
 - 新项目与子仓库必须在初始化时纳入本宪章；差异需显式说明。
 
-- 版本策略（SemVer）：
-  - MAJOR：破坏性治理调整（删除/重定义原则或与现有流程不兼容）。
-  - MINOR：新增原则或对现有原则进行实质性扩展。
-  - PATCH：表述澄清、错别字修正、无语义性微调（本次属此类）。
-
-- 合规复审：
-  - 每次 PR 审核须核对是否符合本宪章中“质量门禁/安全/发布流程”等硬性要求；
-  - 每月进行一次例行自检，记录偏差并在当月内以 PR 修复或豁免说明。
-
 ---
 
 附：在 `miker.repo/` 中的推荐本地质量门禁命令（可直接复制执行）：
@@ -128,7 +107,7 @@ cd miker.repo && pnpm install --frozen-lockfile && pnpm lint && pnpm type-check 
 
 ## 九、身份与密钥记录与加密规范（secrets.enc.yaml）
 
-- 记录位置（唯一）：仓库根目录 `secrets.enc.yaml`（repo‑relative）。
+- 记录位置（唯一）：`/Users/jasonhong/Desktop/CICD/ops-bootstrap/secrets.enc.yaml`。
 - 加密要求：只提交 SOPS 加密后的文件，禁止在仓库中存放任何明文机密。
 - 结构要求：以分组键存放（如 `github.token`、`volcengine.access_key_id`、`registry.username` 等），保持 YAML 合法且可被工具解析。
 - 来源要求：凡新发给或过程产生的身份与密钥，须“当次即刻”写入上述文件并提交（不允许暂存于临时/个人本机笔记）。
@@ -137,7 +116,7 @@ cd miker.repo && pnpm install --frozen-lockfile && pnpm lint && pnpm type-check 
 一条命令（脚本）写入示例：
 
 ```bash
-./scripts/secret_set.sh volcengine.access_key_id "<VALUE>"
+./ops-bootstrap/scripts/secret_set.sh volcengine.access_key_id "<VALUE>"
 ```
 
 脚本行为：
@@ -188,4 +167,10 @@ cd miker.repo && pnpm install --frozen-lockfile && pnpm lint && pnpm type-check 
 - 记录与同步
   - 重要变更需在 `README.md` 或模板 `README` 追加“变更记录/验证记录”。
   - 与业务仓库的同步采取“复制更新 + PR”方式；不得引入子模块造成耦合。
+
+- 共享与协作（面向团队）
+  - 仓库地址：`https://github.com/chekdata/ops-bootstrap`（只读共享给团队成员）。
+  - 使用方式：复制 `templates/` 与 `scripts/` 到业务仓，或以子模块方式引入并软链到 `.specify/`。
+  - 贡献流程：新建分支 → PR（使用模板）→ 评审通过 → 合并；严禁直接推送到 `main`。
+  - 变更核对：对照“质量门禁/安全/发布流程”等硬性要求自检后再提交 PR。
 
