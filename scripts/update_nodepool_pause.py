@@ -10,10 +10,11 @@ from volcengine.ServiceInfo import ServiceInfo
 from volcengine.Credentials import Credentials
 
 
-def make_service(ak: str, sk: str, region: str, service: str) -> Service:
-    creds = Credentials(ak, sk, region, service)
+def make_service(ak: str, sk: str, region: str, service: str, host: str = "open.volcengineapi.com") -> Service:
+    # Note: Credentials expects (service, region) order in this SDK
+    creds = Credentials(ak, sk, service, region)
     svc_info = ServiceInfo(
-        host="open.volcengineapi.com",
+        host=host,
         header={"Accept": "application/json"},
         credentials=creds,
         connection_timeout=60,
@@ -91,8 +92,29 @@ def main():
     except Exception:
         sk = sk_in
 
-    svc = make_service(ak, sk, region, "ke")
-    pools = describe_node_pools(svc, cluster)
+    # Try multiple service/host combinations for KE OpenAPI
+    candidates = [
+        ("ke", "open.volcengineapi.com"),
+        ("ke", "ke.volcengineapi.com"),
+        ("eks", "open.volcengineapi.com"),
+        ("vke", "open.volcengineapi.com"),
+        ("ecs", "open.volcengineapi.com"),
+    ]
+
+    last_err = None
+    pools = []
+    svc = None
+    for svc_name, host in candidates:
+        try:
+            svc = make_service(ak, sk, region, svc_name, host=host)
+            pools = describe_node_pools(svc, cluster)
+            if pools:
+                break
+        except Exception as e:
+            last_err = e
+            continue
+    if not pools:
+        raise SystemExit(f"DescribeNodePools failed: {last_err}")
     if not pools:
         print("No node pools returned", file=sys.stderr)
         sys.exit(1)

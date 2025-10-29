@@ -1,0 +1,13 @@
+env:
+  TOS_ENDPOINT: "https://tos-cn-beijing.volces.com"
+  TOS_BUCKET: "chek-app-assets"
+  TOS_PREFIX: "<prefix>"
+  AWS_REGION: "cn-beijing"
+  ALLOW_UPLOAD: "<true|false>"
+
+serviceAccount:
+  name: <service>-tos
+
+
+
+

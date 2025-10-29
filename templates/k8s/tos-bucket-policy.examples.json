@@ -1,0 +1,36 @@
+{
+  "examples": {
+    "least_allow_read_write_specific_prefix": {
+      "Statement": [
+        {
+          "Sid": "ListHeadBucket",
+          "Effect": "Allow",
+          "Principal": { "TOS": [
+            "trn:sts::<ACCOUNT_ID>:assumed-role/<ROLE_NAME>/*",
+            "trn:iam::<ACCOUNT_ID>:role/<ROLE_NAME>"
+          ]},
+          "Action": ["tos:HeadBucket", "tos:ListBucket"],
+          "Resource": ["trn:tos:::<BUCKET>"]
+        },
+        {
+          "Sid": "RWPrefix",
+          "Effect": "Allow",
+          "Principal": { "TOS": [
+            "trn:sts::<ACCOUNT_ID>:assumed-role/<ROLE_NAME>/*",
+            "trn:iam::<ACCOUNT_ID>:role/<ROLE_NAME>"
+          ]},
+          "Action": ["tos:GetObject", "tos:PutObject", "tos:PutObjectAcl", "tos:AbortMultipartUpload"],
+          "Resource": ["trn:tos:::<BUCKET>/<PREFIX>/*"]
+        }
+      ]
+    },
+    "wide_open_for_debug": {
+      "Statement": [
+        {"Sid":"ListHead","Effect":"Allow","Principal":{"TOS":["*"]},"Action":["tos:HeadBucket","tos:ListBucket"],"Resource":["trn:tos:::<BUCKET>"]},
+        {"Sid":"RWAll","Effect":"Allow","Principal":{"TOS":["*"]},"Action":["tos:GetObject","tos:PutObject","tos:PutObjectAcl","tos:AbortMultipartUpload","tos:DeleteObject"],"Resource":["trn:tos:::<BUCKET>/*"]}
+      ]
+    }
+  }
+}
+
+

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: <service>-tos
+  namespace: <product>-<env>
+  annotations:
+    eks.amazonaws.com/role-arn: <REPLACE_WITH_IAM_ROLE_ARN>
+
+
+
+

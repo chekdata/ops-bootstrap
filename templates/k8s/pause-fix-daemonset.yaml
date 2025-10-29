@@ -1,0 +1,110 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: pause-fix
+  namespace: kube-system
+  labels:
+    app: pause-fix
+spec:
+  selector:
+    matchLabels:
+      app: pause-fix
+  template:
+    metadata:
+      labels:
+        app: pause-fix
+    spec:
+      hostPID: true
+      tolerations:
+        - operator: Exists
+      nodeSelector:
+        kubernetes.io/os: linux
+      imagePullSecrets:
+        - name: vecr-auth
+      containers:
+        - name: fixer
+          image: chek-images-cn-beijing.cr.volces.com/prod/vehicle-model-service:sha-db09582
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -euo pipefail
+              PAUSE="chek-images-cn-beijing.cr.volces.com/prod/pause:3.6"
+              TS="$(date +%Y%m%d%H%M%S)"
+              # containerd VECR auth via hosts.toml using vecr-auth
+              if [ -f /auth/.dockerconfigjson ]; then
+                mkdir -p /host/etc/containerd/certs.d/chek-images-cn-beijing.cr.volces.com
+                AUTH_B64=$(python3 -c 'import json,sys; cfg=json.load(sys.stdin);\n\
+for host,entry in cfg.get("auths",{}).items():\n\
+    if host.startswith("chek-images-cn-beijing.cr.volces.com"):\n\
+        print(entry.get("auth","")); break' < /auth/.dockerconfigjson || true)
+                if [ -n "$AUTH_B64" ]; then
+                  printf '%s\n' \
+                    'server = "https://chek-images-cn-beijing.cr.volces.com"' \
+                    '' \
+                    '[host."https://chek-images-cn-beijing.cr.volces.com"]' \
+                    '  capabilities = ["pull", "resolve"]' \
+                    '  override_path = true' \
+                    "  header = [\"Authorization: Basic ${AUTH_B64}\"]" \
+                    > /host/etc/containerd/certs.d/chek-images-cn-beijing.cr.volces.com/hosts.toml
+                fi
+              fi
+              # containerd minimal CRI sandbox_image
+              mkdir -p /host/etc/containerd
+              if [ -f /host/etc/containerd/config.toml ]; then cp -a /host/etc/containerd/config.toml /host/etc/containerd/config.toml.bak-${TS}; fi
+              printf '%s\n' \
+                'version = 2' \
+                '[plugins."io.containerd.grpc.v1.cri"]' \
+                "  sandbox_image = \"${PAUSE}\"" \
+                > /host/etc/containerd/config.toml
+              # kubelet flags
+              mkdir -p /host/var/lib/kubelet
+              if [ -f /host/var/lib/kubelet/kubeadm-flags.env ]; then cp -a /host/var/lib/kubelet/kubeadm-flags.env /host/var/lib/kubelet/kubeadm-flags.env.bak-${TS}; fi
+              CUR="$(sed -n 's/^KUBELET_KUBEADM_ARGS="\(.*\)"$/\1/p' /host/var/lib/kubelet/kubeadm-flags.env 2>/dev/null || true)"
+              case "${CUR}" in
+                *--pod-infra-container-image=*) NEW="$(echo "${CUR}" | sed -E "s|--pod-infra-container-image=[^ ]+|--pod-infra-container-image=${PAUSE}|")" ;;
+                "") NEW="--pod-infra-container-image=${PAUSE}" ;;
+                *) NEW="${CUR} --pod-infra-container-image=${PAUSE}" ;;
+              esac
+              printf 'KUBELET_KUBEADM_ARGS="%s"\n' "${NEW}" > /host/var/lib/kubelet/kubeadm-flags.env
+              # kubelet drop-in
+              mkdir -p /host/etc/systemd/system/kubelet.service.d
+              printf '%s\n' \
+                '[Service]' \
+                "Environment=\"KUBELET_EXTRA_ARGS=--pod-infra-container-image=${PAUSE}\"" \
+                > /host/etc/systemd/system/kubelet.service.d/10-pod-infra-image.conf
+              # reload + restart on host using nsenter
+              if [ -x /usr/bin/nsenter ]; then
+                /usr/bin/nsenter -t 1 -m -u -i -n -p /usr/bin/systemctl daemon-reload || /usr/bin/nsenter -t 1 -m -u -i -n -p /bin/systemctl daemon-reload || true
+                /usr/bin/nsenter -t 1 -m -u -i -n -p /usr/bin/systemctl restart containerd || /usr/bin/nsenter -t 1 -m -u -i -n -p /bin/systemctl restart containerd || true
+                /usr/bin/nsenter -t 1 -m -u -i -n -p /usr/bin/systemctl restart kubelet || /usr/bin/nsenter -t 1 -m -u -i -n -p /bin/systemctl restart kubelet || true
+              else
+                echo "nsenter not found on host; wrote configs, please restart services manually" >&2
+              fi
+              # Sleep to keep pod around for inspection
+              sleep 31536000
+          volumeMounts:
+            - name: host-root
+              mountPath: /host
+            - name: nsenter-bin
+              mountPath: /usr/bin/nsenter
+              readOnly: true
+            - name: vecr-auth
+              mountPath: /auth
+              readOnly: true
+      volumes:
+        - name: host-root
+          hostPath:
+            path: /
+            type: Directory
+        - name: nsenter-bin
+          hostPath:
+            path: /usr/bin/nsenter
+            type: FileOrCreate
+        - name: vecr-auth
+          secret:
+            secretName: vecr-auth
+

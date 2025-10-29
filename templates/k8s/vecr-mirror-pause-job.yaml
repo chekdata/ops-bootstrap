@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vecr-mirror-pause
+  namespace: kube-system
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: skopeo
+          image: quay.io/skopeo/stable:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -euo pipefail
+              SRC="docker://registry.aliyuncs.com/google_containers/pause:3.6"
+              DST="docker://chek-images-cn-beijing.cr.volces.com/prod/pause:3.6"
+              echo "Copy $SRC -> $DST"
+              skopeo copy --dest-authfile /auth/.dockerconfigjson "$SRC" "$DST"
+          volumeMounts:
+            - name: vecr-auth
+              mountPath: /auth
+              readOnly: true
+      volumes:
+        - name: vecr-auth
+          secret:
+            secretName: vecr-auth
+
