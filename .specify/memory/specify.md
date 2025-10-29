@@ -1,6 +1,6 @@
 # 智能流水线规范（Speckit Specify）
 
-版本：1.2.0｜生效：2025-10-12｜最后修订：2025-10-29
+版本：1.2.1｜生效：2025-10-12｜最后修订：2025-10-29
 
 ## 总体目标
 
@@ -32,7 +32,7 @@
 - 镜像：使用 `miker.repo/Dockerfile` 构建，推送至 VECR（火山引擎镜像仓库）。
 - CD：GitOps（Argo CD + Argo Rollouts）驱动部署与带分析的金丝雀/蓝绿发布，满足自动回滚策略。
 - 通知：飞书 Webhook（群机器人）在创建/提交/发布/回滚节点发送消息，保留审计。
-- 密钥：仅存于 `ops-bootstrap/secrets.enc.yaml`（SOPS 加密），通过脚本非交互操作；禁止明文。
+- 密钥：仅存于 `secrets.enc.yaml`（SOPS 加密，仓库根目录），通过脚本非交互操作；禁止明文。
 
 ## 质量门禁（CI Gates）
 
@@ -53,7 +53,7 @@
 
 - 镜像标签策略：`<app>:<git-sha>`，同时生成不可变 `digest` 并记录到构建产物元数据（build metadata）。
 - 推送：登录 VECR 后 `docker buildx build --push` 或常规 `docker build && docker push`。
-- 所需凭据：`registry.username`、`registry.password`、`vecr.access_key_id`、`vecr.secret_access_key` 等，均来自 `ops-bootstrap/secrets.enc.yaml`。
+- 所需凭据：`registry.username`、`registry.password`、`vecr.access_key_id`、`vecr.secret_access_key` 等，均来自 `secrets.enc.yaml`。
 
 ## 发布（GitOps）
 
@@ -72,13 +72,13 @@
 
 ## 手动回滚（一条命令）
 
-- 入口脚本（由运维提供）：`./ops-bootstrap/scripts/rollback.sh <app> <revision-or-image>`。
+- 入口脚本（由运维提供）：`./scripts/rollback.sh <app> <revision-or-image>`。
 - 行为：调用 Argo Rollouts/Argo CD 将应用回滚至指定修订或指定镜像标签；输出详细审计日志并发送飞书通知。
 
 ## 简单入口（开发者视角）
 
 - 推荐：开发者仅需 `git push` 到受控分支（如 `main`/`production`），GitHub Actions 自动构建/测试/扫描/推送/发版。
-- 本地一条命令发布（可选）：`./ops-bootstrap/scripts/release.sh <version|git-sha>`（构建、推送、提交 GitOps 变更、触发同步、等待完成）。
+- 本地一条命令发布（可选）：`./scripts/release.sh <version|git-sha>`（构建、推送、提交 GitOps 变更、触发同步、等待完成）。
 
 ## 可追溯、可分析、可优化
 
@@ -90,10 +90,10 @@
 
 ## 密钥与凭据
 
-- 统一在 `ops-bootstrap/secrets.enc.yaml` 管理；通过以下脚本维护：
-  - 写入：`./ops-bootstrap/scripts/secret_set.sh <yaml.key.path> <value>`
-  - 查看：`./ops-bootstrap/scripts/secret_view.sh`
-  - 加密：`./ops-bootstrap/scripts/secret_encrypt.sh`
+- 统一在 `secrets.enc.yaml` 管理；通过以下脚本维护：
+  - 写入：`./scripts/secret_set.sh <yaml.key.path> <value>`
+  - 查看：`./scripts/secret_view.sh`
+  - 加密：`./scripts/secret_encrypt.sh`
 - GitHub Actions 使用仓库/环境 Secrets 注入运行时；发布脚本在必要时从解密后的环境载入变量（非交互）。
 
 ## 最小化工具暴露
@@ -106,7 +106,7 @@
 - 构建：复用 `miker.repo/Dockerfile`（Next.js standalone）。
 - 运行：本地或容器化使用 `miker.repo/docker-compose.yml` 作为参考示例。
 - 密钥：遵循 `.specify/memory/constitution.md` 的加密与治理规范。
-- 脚本：可使用 `ops-bootstrap/scripts/release.sh` 与 `ops-bootstrap/scripts/rollback.sh` 作为补充入口。
+- 脚本：可使用 `scripts/release.sh` 与 `scripts/rollback.sh` 作为补充入口。
 
 ---
 

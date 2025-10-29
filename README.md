@@ -14,6 +14,7 @@ ops-bootstrap/
   apps/argocd/           # 示例清单（建议视作 examples，而非生产真源）
   研发使用指南.md         # 面向团队的完整操作与约束（四段式）
   README.md              # 本文档（目的、用法、目录）
+  secrets.enc.yaml       # SOPS 加密的机密文件（仓库根目录，建议）
 ```
 
 ### 快速开始（团队）
@@ -31,56 +32,29 @@ ops-bootstrap/
 - 文档与规范：统一在本仓库维护，应用仓库只引用与落地。
 
 ### 使用 SpecKit — SDD（与 GitHub SpecKit 对齐）
-- 项目：参考 GitHub SpecKit 的 README 以了解完整工作流与目录结构（memory/scripts/templates）
-  - 链接：github/spec-kit（见 README）
-  - 地址：`https://github.com/github/spec-kit`
-- 本仓已预置与 SpecKit 兼容的目录与脚本（无需二次搭建）：
-  - `.specify/commands/`：
-    - `speckit.constitution.md`、`speckit.specify.md`、`speckit.plan.md`、`speckit.tasks.md`
-  - `.specify/`（软链 → `ops-bootstrap/.specify/`）：
-    - `memory/constitution.md`
-    - `templates/{plan-template.md,spec-template.md,tasks-template.md,agent-file-template.md,checklist-template.md}`
-    - `scripts/bash/{create-new-feature.sh,setup-plan.sh,update-agent-context.sh,check-prerequisites.sh,common.sh}`
-- 在 Cursor/SpecKit 中直接使用（示例）：
-  - `/speckit.constitution  .specify/commands/speckit.constitution.md`
-  - `/speckit.specify  .specify/commands/speckit.specify.md  "<你的功能描述>"`
-  - `/speckit.plan  .specify/commands/speckit.plan.md`
-  - `/speckit.tasks  .specify/commands/speckit.tasks.md`
-- 重要说明：以上命令依赖 `.specify/` 的模板与脚本；本仓已将 `.specify/` 目录内置到 `ops-bootstrap/` 下统一维护，路径对 Cursor/SpecKit 恒定可用。
-
-#### 将本仓的 SpecKit 能力下发到业务仓（推荐：子模块 + 软链）
+- 本仓不内置 `.specify/commands/` 命令文件；如需在业务仓使用 SpecKit 命令，请按以下方式引入：
+  - 方案 A（推荐）：直接从开源仓库 `github/spec-kit` 引入命令模版。
+  - 方案 B：将 `ops-bootstrap` 作为子模块引入后，在业务仓自行创建 `.specify/commands/` 并维护命令文件。
+- 在业务仓引入 `ops-bootstrap` 的示例：
 ```bash
 # 在业务仓根目录执行：
 git submodule add -b main <your-git-url>/ops-bootstrap ops-bootstrap
 git submodule update --init --recursive
 
-# 建立软链，保证 SpecKit 固定查找路径
-ln -s ops-bootstrap/commands commands
+# 可选：建立软链，保证 SpecKit 固定查找路径
 ln -s ops-bootstrap/.specify .specify
-git add .gitmodules ops-bootstrap commands .specify
-git commit -m "chore(spec-kit): add ops-bootstrap submodule and SpecKit symlinks"
-```
+# 如需命令目录，请在业务仓创建并维护：
+mkdir -p .specify/commands
+# 将需要的 speckit.*.md 命令文件放入该目录
 
-- 升级：在业务仓执行 `git submodule update --remote ops-bootstrap` 获取平台最新模板/脚本。
-- 验证：在业务仓打开 Cursor，运行 `/speckit.specify .specify/commands/speckit.specify.md "<功能描述>"`，应在 `specs/` 下生成新的规范目录。
+git add .gitmodules ops-bootstrap .specify
+git commit -m "chore(spec-kit): add ops-bootstrap submodule and SpecKit links"
+```
 
 ### Spec‑Driven Development（SpecKit）
 - 工具：使用开源 `github/spec-kit` 实现 Spec‑Driven Development（SDD）。参考项目主页与 README 了解命令与流程：[github/spec-kit](https://github.com/github/spec-kit)
-- 本仓输出目录（供 SpecKit 直接使用）：
-  - `.specify/commands/`：Speckit 命令定义与说明
-  - `.specify/`（软链，实际位于 `ops-bootstrap/.specify/`）：模板、脚本与内存（constitution）
-- 在 Cursor/SpecKit 中直接触发命令示例：
-  - `/speckit.constitution  .specify/commands/speckit.constitution.md`
-  - `/speckit.specify  .specify/commands/speckit.specify.md`
-- 引入到业务仓库（推荐子模块 + 软链）：
-  ```bash
-  git submodule add -b main <your-git-url>/ops-bootstrap ops-bootstrap
-  ln -s ops-bootstrap/commands commands
-  ln -s ops-bootstrap/.specify .specify
-  git add .gitmodules ops-bootstrap commands .specify
-  git commit -m "chore: add ops-bootstrap submodule with SpecKit links"
-  ```
-- 注意：SpecKit 默认在仓库根查找 `.specify/commands` 与 `.specify/`，本仓已内置对应目录结构。
+- 本仓输出目录（供 SpecKit 模板/内存直接使用）：
+  - `.specify/`：模板与内存（constitution/specify），可被业务仓软链复用
 
 ### 不要提交什么
 - `_local/**`（任何本地密钥/令牌/个人配置）
