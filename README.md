@@ -28,6 +28,24 @@ ops-bootstrap/
   - 构建与镜像：`templates/actions/ci-docker-vecr.yml`（VECR）或 `templates/actions/ci-docker-ssh-deploy.yml`（任意 Registry + SSH 部署）
   - 集群部署（推荐）：`templates/actions/ci-helm-deploy.yml`（Helm 到 prod 集群）
 - 镜像与部署：Helm 模板见 `templates/helm/`；K8s 示例见 `templates/k8s/`。
+- 常用脚本：`templates/scripts/create-namespace.sh`（一键创建命名空间并下发基础配额/策略）
+
+  使用示例：
+  ```bash
+  # 本地 kubeconfig + 完整命名空间
+  ./templates/scripts/create-namespace.sh \
+    --kubeconfig /path/to/kubeconfig \
+    --namespace miker-prod
+
+  # 本地 kubeconfig + 组合命名
+  ./templates/scripts/create-namespace.sh \
+    --kubeconfig /path/to/kubeconfig \
+    --product miker --env prod
+
+  # 远程快速执行（需按需替换仓库 RAW URL 和 kubeconfig 路径）
+  curl -fsSL "<YOUR_RAW_URL>/ops-bootstrap/templates/scripts/create-namespace.sh" | \
+    bash -s -- --kubeconfig /path/to/kubeconfig --product miker --env prod
+  ```
 - 服务治理：注册 Nacos、接口管理入驻 YApi，遵循服务命名、环境命名与网关规范。
 - 文档与规范：统一在本仓库维护，应用仓库只引用与落地。
 

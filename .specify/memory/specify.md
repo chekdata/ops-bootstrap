@@ -23,8 +23,8 @@
 - ✅ AI 帮助团队：代码生成、测试建议、日志分析、风险评估（Copilot + 工作流内 AI 步骤）。
 - ✅ 自动执行安全扫描（依赖 / 镜像 / secrets）。
 - ✅ 团队成员有明确分工与权限边界（环境保护、审批与最小权限）。
-- 📘 开发者操作手册：`/Users/jasonhong/Desktop/CICD/ops-bootstrap/研发使用指南.md`（看完即会操作）。
-- 📗 当前资源清单：`/Users/jasonhong/Desktop/CICD/ops-bootstrap/资源清单与现状.md`。
+- 📘 开发者操作手册：`研发使用指南.md`（看完即会操作）。
+- 📗 当前资源清单：`资源清单与现状.md`。
 
 ## 总体设计
 
@@ -32,7 +32,7 @@
 - 镜像：使用 `miker.repo/Dockerfile` 构建，推送至 VECR（火山引擎镜像仓库）。
 - CD：GitOps（Argo CD + Argo Rollouts）驱动部署与带分析的金丝雀/蓝绿发布，满足自动回滚策略。
 - 通知：飞书 Webhook（群机器人）在创建/提交/发布/回滚节点发送消息，保留审计。
-- 密钥：仅存于 `/Users/jasonhong/Desktop/CICD/ops-bootstrap/secrets.enc.yaml`（SOPS 加密），通过脚本非交互操作；禁止明文。
+- 密钥：仅存于仓库根目录 `secrets.enc.yaml`（SOPS 加密），通过脚本非交互操作；禁止明文。
 
 ## 质量门禁（CI Gates）
 
@@ -53,7 +53,7 @@
 
 - 镜像标签策略：`<app>:<git-sha>`，同时生成不可变 `digest` 并记录到构建产物元数据（build metadata）。
 - 推送：登录 VECR 后 `docker buildx build --push` 或常规 `docker build && docker push`。
-- 所需凭据：`registry.username`、`registry.password`、`vecr.access_key_id`、`vecr.secret_access_key` 等，均来自 `/Users/jasonhong/Desktop/CICD/ops-bootstrap/secrets.enc.yaml`。
+- 所需凭据：`registry.username`、`registry.password`、`vecr.access_key_id`、`vecr.secret_access_key` 等，均来自仓库根目录 `secrets.enc.yaml`。
 
 ## 发布（GitOps）
 
@@ -90,7 +90,7 @@
 
 ## 密钥与凭据
 
-- 统一在 `/Users/jasonhong/Desktop/CICD/ops-bootstrap/secrets.enc.yaml` 管理；通过以下脚本维护：
+- 统一在仓库根目录 `secrets.enc.yaml` 管理；通过以下脚本维护：
   - 写入：`./ops-bootstrap/scripts/secret_set.sh <yaml.key.path> <value>`
   - 查看：`./ops-bootstrap/scripts/secret_view.sh`
   - 加密：`./ops-bootstrap/scripts/secret_encrypt.sh`

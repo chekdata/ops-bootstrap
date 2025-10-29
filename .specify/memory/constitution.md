@@ -1,6 +1,20 @@
 # 团队宪章（Speckit Constitution)
 
-版本：1.1.1｜生效：2025-10-12｜最后修订：2025-10-29
+<!--
+Sync Impact Report
+- Version change: 1.1.1 → 1.1.2
+- Modified sections: 九、身份与密钥记录与加密规范（secrets.enc.yaml）— 路径规范化为仓库相对
+- Added sections: None
+- Removed sections: None
+- Templates requiring updates:
+  - .specify/memory/specify.md ✅ updated
+  - .specify/templates/plan-template.md ✅ aligned (no changes)
+  - .specify/templates/spec-template.md ✅ aligned (no changes)
+  - .specify/templates/tasks-template.md ✅ aligned (no changes)
+- Follow-up TODOs: None
+-->
+
+版本：1.1.2｜生效：2025-10-12｜最后修订：2025-10-29
 
 ## 一、宗旨与适用范围
 
@@ -107,7 +121,7 @@ cd miker.repo && pnpm install --frozen-lockfile && pnpm lint && pnpm type-check 
 
 ## 九、身份与密钥记录与加密规范（secrets.enc.yaml）
 
-- 记录位置（唯一）：`/Users/jasonhong/Desktop/CICD/ops-bootstrap/secrets.enc.yaml`。
+- 记录位置（唯一）：仓库根目录 `secrets.enc.yaml`。
 - 加密要求：只提交 SOPS 加密后的文件，禁止在仓库中存放任何明文机密。
 - 结构要求：以分组键存放（如 `github.token`、`volcengine.access_key_id`、`registry.username` 等），保持 YAML 合法且可被工具解析。
 - 来源要求：凡新发给或过程产生的身份与密钥，须“当次即刻”写入上述文件并提交（不允许暂存于临时/个人本机笔记）。
