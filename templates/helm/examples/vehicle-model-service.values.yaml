@@ -13,6 +13,10 @@ service:
   port: 4010
   targetPort: 4010
 
+# Pod networking policy
+hostNetwork: false
+dnsPolicy: ClusterFirst
+
 env:
   SERVICE_NAME: "vehicle-model-service"
   AWS_REGION: "cn-beijing"
