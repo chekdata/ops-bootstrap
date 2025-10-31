@@ -41,13 +41,22 @@ jobs:
           registry: ${{ secrets.VECR_REGISTRY }}
           username: ${{ secrets.VECR_USER }}
           password: ${{ secrets.VECR_PASS }}
-      - name: Build and push
+      - name: Build and push (sha-short + optional custom tag)
         env:
           REGISTRY: ${{ secrets.VECR_REGISTRY }}
           IMAGE: ${{ github.event.inputs.image || 'devops/example' }}
-          TAG: ${{ github.event.inputs.tag || github.sha }}
+          TAG: ${{ github.event.inputs.tag || '' }}
+          SHA_SHORT: ${{ github.sha }}
         run: |
-          docker build -t "$REGISTRY/$IMAGE:$TAG" .
-          docker push "$REGISTRY/$IMAGE:$TAG"
+          set -e
+          SHA_SHORT=${SHA_SHORT:0:7}
+          # primary immutable tag
+          docker build -t "$REGISTRY/$IMAGE:sha-$SHA_SHORT" .
+          docker push "$REGISTRY/$IMAGE:sha-$SHA_SHORT"
+          # optional extra tag via workflow_dispatch input
+          if [ -n "$TAG" ]; then
+            docker tag "$REGISTRY/$IMAGE:sha-$SHA_SHORT" "$REGISTRY/$IMAGE:$TAG"
+            docker push "$REGISTRY/$IMAGE:$TAG"
+          fi
 
 
