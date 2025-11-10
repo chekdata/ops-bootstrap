@@ -1,13 +1,11 @@
-{{- if .Values.ingress.enabled }}
+{{- if .Values.ingressHttps.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ .Release.Name }}
+  name: {{ .Release.Name }}-https
   namespace: {{ .Release.Namespace }}
-  {{- with .Values.ingress.annotations }}
   annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
+    ingress.vke.volcengine.com/loadbalancer-protocol: https
 spec:
   ingressClassName: {{ .Values.ingress.className | default "nginx" }}
   {{- if and .Values.ingress.host .Values.ingress.tlsSecret }}
