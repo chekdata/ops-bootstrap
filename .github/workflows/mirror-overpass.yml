@@ -1,0 +1,16 @@
+name: mirror-overpass
+
+on: { workflow_dispatch: {} }
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login VECR
+        run: echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login chek-images-cn-beijing.cr-volces.com -u "${{ secrets.REGISTRY_USERNAME }}" --password-stdin
+      - name: Pull from Docker Hub
+        run: docker pull wiktorn/overpass-api:latest
+      - name: Tag
+        run: docker tag wiktorn/overpass-api:latest chek-images-cn-beijing.cr-volces.com/prod/overpass-api:latest
+      - name: Push to VECR
+        run: docker push chek-images-cn-beijing.cr-volces.com/prod/overpass-api:latest
