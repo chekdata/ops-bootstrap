@@ -1,0 +1,29 @@
+image:
+  repository: chek-images-cn-beijing.cr.volces.com/saas/frontend-saas
+  tag: sha-PLACEHOLDER
+imagePullSecrets:
+  - name: vecr-auth
+service:
+  port: 80
+  targetPort: 80
+  name: http
+ingress:
+  enabled: true
+  className: alb
+  host: www-dev.chekkk.com
+  tlsSecret: frontend-saas-tls
+  hosts:
+    - host: www-dev.chekkk.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+certificate:
+  enabled: true
+  issuerRefName: letsencrypt-http
+  dnsNames: [www-dev.chekkk.com]
+env:
+  USER_API_BASE: "https://www-dev.chekkk.com/api/user"
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits: { cpu: 500m, memory: 512Mi }
