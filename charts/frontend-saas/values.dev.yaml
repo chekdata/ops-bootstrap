@@ -9,19 +9,18 @@ service:
   name: http
 ingress:
   enabled: true
-  className: alb
+  className: chek-dev-alb
   host: www-dev.chekkk.com
-  tlsSecret: frontend-saas-tls
-  hosts:
-    - host: www-dev.chekkk.com
-      paths:
-        - path: /
-          pathType: Prefix
-  tls: []
+  tlsSecret: frontend-saas-dev-tls
+  annotations:
+    ingress.vke.volcengine.com/actions.ssl-redirect: '{"Type":"redirect","RedirectConfig":{"Protocol":"HTTPS","Port":"443","StatusCode":"HTTP_301"}}'
+    ingress.vke.volcengine.com/loadbalancer-protocol: https
 certificate:
   enabled: true
   issuerRefName: letsencrypt-http
-  dnsNames: [www-dev.chekkk.com]
+  issuerRefKind: ClusterIssuer
+  dnsNames:
+    - www-dev.chekkk.com
 env:
   USER_API_BASE: "https://www-dev.chekkk.com/api/user"
 resources:
