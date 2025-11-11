@@ -1,0 +1,39 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: yapi
+  namespace: platform-prod
+  annotations:
+    ingress.vke.volcengine.com/address-type: internet
+    ingress.vke.volcengine.com/target-type: instance
+    ingress.vke.volcengine.com/backend-protocol: HTTP
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    ingress.vke.volcengine.com/alb-instance-id: alb-1pg8j4wnye0w0845wfacnard9
+    ingress.vke.volcengine.com/health-check-host: yapi.chekkk.com
+    ingress.vke.volcengine.com/health-check-path: /
+    ingress.vke.volcengine.com/success-codes: "200,301,302"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/certificate-ids: cert-04cc9e57f1b34a4ca9a0c834b2d3784b
+spec:
+  ingressClassName: alb
+  rules:
+    - host: yapi.chekkk.com
+      http:
+        paths:
+          - path: /feishu-sso/
+            pathType: Prefix
+            backend:
+              service:
+                name: yapi
+                port:
+                  number: 8080
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: yapi
+                port:
+                  number: 80
+
+
