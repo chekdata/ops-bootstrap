@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: https://github.com/chekdata/ops-bootstrap.git
     targetRevision: main
-    path: charts/frontend-saas
+    path: frontend-saas/charts/frontend-saas
     helm:
       valueFiles:
         - values.prod.yaml
