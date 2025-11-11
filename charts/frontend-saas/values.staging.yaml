@@ -20,7 +20,7 @@ ingress:
     alb.ingress.kubernetes.io/ssl-redirect: "443"
     alb.ingress.kubernetes.io/certificate-ids: cert-04cc9e57f1b34a4ca9a0c834b2d3784b
 ingressHttps:
-  enabled: false
+  enabled: true
 certificate:
   enabled: false
 env:
