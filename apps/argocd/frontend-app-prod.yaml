@@ -1,0 +1,52 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: frontend-app-prod
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: ssh://git@ssh.github.com:443/chekdata/frontend-app.git
+    targetRevision: main
+    path: charts/frontend-app
+    helm:
+      valueFiles:
+        - values-prod.yaml
+      values: |
+        service:
+          type: NodePort
+          port: 80
+          targetPort: 80
+          name: http
+        ingress:
+          enabled: true
+          className: alb
+          host: www.chekkk.com
+          annotations:
+            ingress.vke.volcengine.com/address-type: internet
+            ingress.vke.volcengine.com/target-type: instance
+            ingress.vke.volcengine.com/backend-protocol: HTTP
+            alb.ingress.kubernetes.io/scheme: internet-facing
+            ingress.vke.volcengine.com/alb-instance-id: alb-1pg8j4wnye0w0845wfacnard9
+            ingress.vke.volcengine.com/health-check-host: www.chekkk.com
+            ingress.vke.volcengine.com/health-check-path: /
+            ingress.vke.volcengine.com/success-codes: "200,301,302"
+            alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+            alb.ingress.kubernetes.io/ssl-redirect: "443"
+            alb.ingress.kubernetes.io/certificate-ids: cert-04cc9e57f1b34a4ca9a0c834b2d3784b
+      parameters:
+        - name: ingress.className
+          value: alb
+        - name: service.portName
+          value: http
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: app-prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+
+
