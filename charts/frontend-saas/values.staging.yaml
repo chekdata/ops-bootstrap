@@ -1,8 +1,6 @@
 image:
   repository: chek-images-cn-beijing.cr.volces.com/saas/frontend-saas
   tag: sha-PLACEHOLDER
-imagePullSecrets:
-  - name: vecr-auth
 service:
   port: 80
   targetPort: 80
@@ -11,7 +9,6 @@ ingress:
   enabled: true
   className: chek-staging-alb
   host: www-staging.chekkk.com
-  tlsSecret: frontend-saas-staging-tls
   annotations:
     ingress.vke.volcengine.com/address-type: internet
     ingress.vke.volcengine.com/target-type: instance
