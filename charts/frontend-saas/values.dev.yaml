@@ -13,15 +13,16 @@ ingress:
   host: www-dev.chekkk.com
   tlsSecret: frontend-saas-dev-tls
   annotations:
-    acme.cert-manager.io/http01-edit-in-place: "true"
+    ingress.vke.volcengine.com/address-type: internet
+    ingress.vke.volcengine.com/target-type: instance
+    ingress.vke.volcengine.com/backend-protocol: HTTP
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/certificate-ids: cert-04cc9e57f1b34a4ca9a0c834b2d3784b
 ingressHttps:
-  enabled: true
+  enabled: false
 certificate:
-  enabled: true
-  issuerRefName: letsencrypt-http
-  issuerRefKind: ClusterIssuer
-  dnsNames:
-    - www-dev.chekkk.com
+  enabled: false
 env:
   USER_API_BASE: "https://www-dev.chekkk.com/api/user"
 resources:
