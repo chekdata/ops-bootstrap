@@ -18,6 +18,9 @@ ingress:
     ingress.vke.volcengine.com/backend-protocol: HTTP
     alb.ingress.kubernetes.io/scheme: internet-facing
     ingress.vke.volcengine.com/alb-instance-id: alb-xp0pn039hxq854ov5ex0477i
+    ingress.vke.volcengine.com/health-check-host: www-dev.chekkk.com
+    ingress.vke.volcengine.com/health-check-path: /
+    ingress.vke.volcengine.com/success-codes: "200,301,302"
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
     alb.ingress.kubernetes.io/ssl-redirect: "443"
     alb.ingress.kubernetes.io/certificate-ids: cert-04cc9e57f1b34a4ca9a0c834b2d3784b
