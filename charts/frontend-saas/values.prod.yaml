@@ -7,7 +7,7 @@ service:
   name: http
 ingress:
   enabled: true
-  className: chek-prod-alb
+  className: alb
   host: www.chekkk.com
   annotations:
     ingress.vke.volcengine.com/address-type: internet
