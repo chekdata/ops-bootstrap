@@ -9,7 +9,7 @@ service:
   name: http
 ingress:
   enabled: true
-  className: chek-dev-alb
+  className: alb
   host: www-dev.chekkk.com
   tlsSecret: frontend-saas-dev-tls
   annotations:
@@ -25,7 +25,7 @@ ingress:
     alb.ingress.kubernetes.io/ssl-redirect: "443"
     alb.ingress.kubernetes.io/certificate-ids: cert-04cc9e57f1b34a4ca9a0c834b2d3784b
 ingressHttps:
-  enabled: true
+  enabled: false
 certificate:
   enabled: false
 env:
