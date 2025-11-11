@@ -16,6 +16,7 @@ ingress:
     ingress.vke.volcengine.com/address-type: internet
     ingress.vke.volcengine.com/target-type: instance
     ingress.vke.volcengine.com/backend-protocol: HTTP
+    alb.ingress.kubernetes.io/scheme: internet-facing
     ingress.vke.volcengine.com/alb-instance-id: alb-bdccywbfh0xs8dv40ord8u4k
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
     alb.ingress.kubernetes.io/ssl-redirect: "443"
