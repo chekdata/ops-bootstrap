@@ -4,6 +4,8 @@ kind: Certificate
 metadata:
   name: {{ .Release.Name }}
   namespace: {{ .Release.Namespace }}
+  annotations:
+    acme.cert-manager.io/http01-ingress-class: {{ .Values.ingress.className | default "nginx" }}
 spec:
   secretName: {{ .Values.ingress.tlsSecret | default (printf "%s-tls" .Release.Name) }}
   issuerRef:
