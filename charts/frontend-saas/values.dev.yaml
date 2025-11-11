@@ -9,7 +9,7 @@ service:
   name: http
 ingress:
   enabled: true
-  className: alb
+  className: chek-dev-alb
   host: www-dev.chekkk.com
   tlsSecret: frontend-saas-dev-tls
   annotations:
