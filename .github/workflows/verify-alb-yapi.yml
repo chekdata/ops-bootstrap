@@ -1,0 +1,113 @@
+name: verify-alb-yapi
+on:
+  workflow_dispatch:
+    inputs:
+      lb_id:
+        description: 'ALB ID'
+        required: true
+      region:
+        description: 'Region'
+        required: false
+        default: 'cn-beijing'
+      host:
+        description: 'Filter host (optional)'
+        required: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      VOLC_AK: ${{ secrets.VOLC_AK }}
+      VOLC_SK: ${{ secrets.VOLC_SK }}
+      REGION: ${{ inputs.region }}
+      LB_ID: ${{ inputs.lb_id }}
+      HOST: ${{ inputs.host }}
+    steps:
+      - name: Query ALB mappings
+        run: |
+          python3 - <<'PY'
+          import os,hashlib,hmac,urllib.parse,requests,json
+          from datetime import datetime
+          AK=os.environ['VOLC_AK']; SK=os.environ['VOLC_SK']; REGION=os.environ.get('REGION','cn-beijing')
+          LB=os.environ['LB_ID']; HOST=os.environ.get('HOST') or None
+          EP='https://open.volcengineapi.com/'
+          s=requests.Session(); s.headers['Content-Type']='application/json'
+          def h(k,m): return hmac.new(k,m.encode(),hashlib.sha256).digest()
+          def sign(service,method,path,query):
+            t=datetime.utcnow(); amz=t.strftime('%Y%m%dT%H%M%SZ'); dat=t.strftime('%Y%m%d')
+            host=urllib.parse.urlparse(EP).netloc
+            qs='&'.join(f"{urllib.parse.quote_plus(str(k))}={urllib.parse.quote_plus(str(v))}" for k,v in sorted(query.items()))
+            ch=f"content-type:application/json\nhost:{host}\nx-volc-date:{amz}\n"
+            cr='\n'.join([method,path,qs,ch,'content-type;host;x-volc-date',hashlib.sha256(b'').hexdigest()])
+            scope=f"{dat}/{REGION}/{service}/request"
+            sts='\n'.join(['HMAC-SHA256',amz,scope,hashlib.sha256(cr.encode()).hexdigest()])
+            kDate=h(("VOLC"+SK).encode(),dat); kRegion=h(kDate,REGION); kService=h(kRegion,service); kSign=h(kService,'request')
+            sig=hmac.new(kSign,sts.encode(),hashlib.sha256).hexdigest()
+            return {'Authorization':f'HMAC-SHA256 Credential={AK}/{scope}, SignedHeaders=content-type;host;x-volc-date, Signature={sig}','X-Volc-Date':amz,'Content-Type':'application/json'}
+          def call(action,ver,params):
+            q={'Action':action,'Version':ver,'Region':REGION}; q.update(params)
+            r=s.get(EP,headers=sign('alb','GET','/',q),params=q,timeout=30)
+            try: return r.status_code,r.json()
+            except: return r.status_code,{'raw':r.text[:400]}
+          VERS=['2023-01-01','2020-11-26']
+          def first_ok(action,params):
+            for v in VERS:
+              c,d=call(action,v,params)
+              if c==200 and isinstance(d,dict): return d
+            return None
+          def extract_list(node,cands):
+            for path in cands:
+              cur=node; ok=True
+              for k in path:
+                if isinstance(cur,dict) and k in cur: cur=cur[k]
+                else: ok=False; break
+              if ok and isinstance(cur,list): return cur
+            return []
+          listeners=first_ok('DescribeListeners',{'LoadBalancerId':LB}) or first_ok('DescribeListeners',{'LoadBalancerIds.1':LB})
+          if not listeners:
+            print('DescribeListeners failed'); exit(1)
+          lst=extract_list(listeners,(('Result','Listeners'),('Listeners',),('ListenerSet',)))
+          out=[]
+          for li in lst:
+            port=li.get('Port') or li.get('ListenerPort'); lid=li.get('ListenerId') or li.get('Id')
+            rules=first_ok('DescribeRules',{'ListenerId':lid}) or first_ok('DescribeRules',{'ListenerIds.1':lid})
+            rr=[]
+            if rules:
+              for r in extract_list(rules,(('Result','Rules'),('Rules',),('RuleSet',))):
+                host=None; paths=[]; groups=[]
+                for c in r.get('Conditions') or []:
+                  f=(c.get('Field') or '').lower()
+                  if f=='host':
+                    hc=c.get('HostConfig') or {}; vals=hc.get('Values') or hc.get('DomainName') or []
+                    host=vals[0] if isinstance(vals,list) and vals else (vals if isinstance(vals,str) else None)
+                  if f=='path':
+                    pc=c.get('PathConfig') or {}; vals=pc.get('Values') or []; paths+=vals if isinstance(vals,list) else []
+                for a in r.get('Actions') or []:
+                  fg=a.get('ForwardGroupConfig') or {}
+                  for g in fg.get('ServerGroups') or fg.get('ServerGroupTuples') or []:
+                    gid=g.get('ServerGroupId') or g.get('ServerGroupIdTwo') or g.get('ServerGroup')
+                    if gid: groups.append(gid)
+                if HOST and host and HOST!=host: continue
+                rr.append({'ruleId':r.get('RuleId') or r.get('Id'),'host':host,'paths':paths,'serverGroupIds':groups})
+            out.append({'port':port,'listenerId':lid,'rules':rr})
+          sgids=sorted({g for li in out for r in li['rules'] for g in r['serverGroupIds']})
+          sginfo={}
+          if sgids:
+            params={f'ServerGroupIds.{i+1}':gid for i,gid in enumerate(sgids)}
+            d=first_ok('DescribeServerGroups',params)
+            if d:
+              for it in extract_list(d,(('Result','ServerGroups'),('ServerGroups',),('ServerGroupSet',))):
+                gid=it.get('ServerGroupId') or it.get('Id')
+                sginfo[gid]={'name':it.get('ServerGroupName') or it.get('Name'),'protocol':it.get('Protocol')}
+          data={'listeners':out,'serverGroups':sginfo}
+          print(json.dumps(data,ensure_ascii=False,indent=2))
+          with open('alb-mapping.json','w') as f: json.dump(data,f,ensure_ascii=False,indent=2)
+          with open(os.environ.get('GITHUB_STEP_SUMMARY','/dev/stdout'),'a') as f:
+            f.write('\n```\n'+json.dumps(data,ensure_ascii=False,indent=2)+'\n```\n')
+          PY
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: alb-mapping
+          path: alb-mapping.json
+
+
