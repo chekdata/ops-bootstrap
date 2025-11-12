@@ -1,6 +1,9 @@
 name: alb-verify
 on:
   workflow_dispatch: {}
+  push:
+    paths:
+      - .github/workflows/alb-verify.yml
 jobs:
   verify:
     runs-on: ubuntu-latest
