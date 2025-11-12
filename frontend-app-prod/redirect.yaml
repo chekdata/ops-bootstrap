@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-app-http-redirect
+  namespace: app-prod
+  labels:
+    app: frontend-app-http-redirect
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend-app-http-redirect
+  template:
+    metadata:
+      labels:
+        app: frontend-app-http-redirect
+    spec:
+      containers:
+        - name: redirect
+          image: chek-images-cn-beijing.cr.volces.com/devops/yapi:1.10.2
+          command: ["node"]
+          args:
+            - "-e"
+            - |
+              require("http")
+                .createServer((req,res)=>{
+                  res.statusCode=301;
+                  res.setHeader("Location","https://"+req.headers.host+req.url);
+                  res.end();
+                })
+                .listen(8080);
+          ports:
+            - name: http
+              containerPort: 8080
+          resources: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-app-http-redirect
+  namespace: app-prod
+  labels:
+    app: frontend-app-http-redirect
+spec:
+  type: NodePort
+  selector:
+    app: frontend-app-http-redirect
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+
+
