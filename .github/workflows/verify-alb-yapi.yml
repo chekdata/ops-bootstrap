@@ -12,12 +12,18 @@ on:
       host:
         description: 'Filter host (optional)'
         required: false
+      ak:
+        description: 'VOLC AK (optional, prefer secrets)'
+        required: false
+      sk:
+        description: 'VOLC SK (optional, prefer secrets)'
+        required: false
 jobs:
   verify:
     runs-on: ubuntu-latest
     env:
-      VOLC_AK: ${{ secrets.VOLC_AK }}
-      VOLC_SK: ${{ secrets.VOLC_SK }}
+      VOLC_AK: ${{ inputs.ak || secrets.VOLC_AK }}
+      VOLC_SK: ${{ inputs.sk || secrets.VOLC_SK }}
       REGION: ${{ inputs.region }}
       LB_ID: ${{ inputs.lb_id }}
       HOST: ${{ inputs.host }}
