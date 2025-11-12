@@ -42,6 +42,8 @@ spec:
           value: "a15810b5-cca6-4eb2-9f6d-7a2c0d68fa76"
         - name: env.SPRING_CLOUD_NACOS_CONFIG_NAMESPACE
           value: "a15810b5-cca6-4eb2-9f6d-7a2c0d68fa76"
+        - name: env.SPRING_CLOUD_NACOS_CONFIG_ENABLED
+          value: "false"
         - name: env.SPRING_AUTOCONFIGURE_EXCLUDE
           value: "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration,org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceAutoConfigure,org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration,org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration"
         - name: env.MANAGEMENT_HEALTH_DB_ENABLED
