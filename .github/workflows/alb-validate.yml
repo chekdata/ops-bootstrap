@@ -1,0 +1,83 @@
+name: alb-validate
+on:
+  workflow_dispatch:
+    inputs:
+      ak:
+        description: volcengine access key id
+        required: true
+      sk:
+        description: volcengine secret access key (base64 allowed)
+        required: true
+      region:
+        description: region
+        required: true
+        default: cn-beijing
+      alb_prod:
+        description: prod ALB_ID
+        required: true
+        default: alb-1pg8j4wnye0w0845wfacnard9
+      alb_staging:
+        description: staging ALB_ID
+        required: true
+        default: alb-bdccywbfh0xs8dv40ord8u4k
+      alb_dev:
+        description: dev ALB_ID
+        required: true
+        default: alb-xp0pn039hxq854ov5ex0477i
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      AK: ${{ inputs.ak }}
+      SK: ${{ inputs.sk }}
+      REGION: ${{ inputs.region }}
+      ALB_PROD: ${{ inputs.alb_prod }}
+      ALB_STAGING: ${{ inputs.alb_staging }}
+      ALB_DEV: ${{ inputs.alb_dev }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install volcengine
+      - name: Validate listeners and server groups
+        run: |
+          python - <<'PY'
+          import os, json, urllib.request
+          from volcengine.Credentials import Credentials
+          from volcengine.base.Request import Request
+          from volcengine.auth.SignerV4 import SignerV4
+          ak=os.environ['AK']
+          sk=os.environ['SK']
+          region=os.environ.get('REGION','cn-beijing')
+          albs=[('prod',os.environ['ALB_PROD']),('staging',os.environ['ALB_STAGING']),('dev',os.environ['ALB_DEV'])]
+          def presign(action, **query):
+              ep=f"alb.{region}.volcengineapi.com"
+              req=Request(); req.method='GET'; req.host=ep; req.path='/'
+              q={'Action':action,'Version':'2020-04-01','Region':region}; q.update(query)
+              req.query=q; req.headers={'Host':ep}
+              cred=Credentials(ak, sk, service='alb', region=region)
+              return f"https://{ep}/?"+SignerV4.sign_url(req, cred)
+          summary={}
+          for env, alb in albs:
+              url=presign('DescribeListeners', LoadBalancerId=alb)
+              data=json.loads(urllib.request.urlopen(url, timeout=60).read().decode())
+              listeners=[{
+                'ListenerId': i['ListenerId'],
+                'Protocol': i['Protocol'],
+                'Port': i['Port'],
+                'ServerGroupIds': [sg['ServerGroupId'] for sg in i.get('ServerGroups',[])],
+                'ServerGroupNames': [sg.get('ServerGroupName','') for sg in i.get('ServerGroups',[])]
+              } for i in data['Result'].get('Listeners',[])]
+              summary[env]=listeners
+          print(json.dumps(summary, ensure_ascii=False, indent=2))
+          open('alb-validate.json','w').write(json.dumps(summary, ensure_ascii=False, indent=2))
+          PY
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: alb-validate
+          path: alb-validate.json
