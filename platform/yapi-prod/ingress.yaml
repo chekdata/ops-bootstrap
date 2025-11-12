@@ -33,6 +33,7 @@ metadata:
   name: yapi-https
   namespace: platform-prod
   annotations:
+    ops.chek/reconcile: "force-2025-11-12T20:12Z"
     ingress.vke.volcengine.com/address-type: internet
     ingress.vke.volcengine.com/target-type: instance
     ingress.vke.volcengine.com/backend-protocol: HTTP
