@@ -9,6 +9,7 @@ metadata:
     ingress.vke.volcengine.com/target-type: instance
     ingress.vke.volcengine.com/backend-protocol: HTTP
     ingress.vke.volcengine.com/alb-instance-id: alb-1pg8j4wnye0w0845wfacnard9
+    ingress.vke.volcengine.com/alb-instance-name: chek-prod-alb
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
     ingress.vke.volcengine.com/health-check-host: app.chekkk.com
     ingress.vke.volcengine.com/health-check-path: /
