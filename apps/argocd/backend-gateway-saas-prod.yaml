@@ -89,7 +89,6 @@ spec:
                         "predicates": ["Path=/openapi.json"],
                         "filters": ["SetPath=/api/offline/openapi.json"]
                       },
-                      },
                       {
                         "id": "offline-openapi-alias",
                         "uri": "http://backend-miker-offline.miker-prod.svc.cluster.local:80",
