@@ -6,15 +6,18 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/chekdata/ops-bootstrap.git
+    repoURL: ssh://git@ssh.github.com:443/chekdata/ops-bootstrap.git
     targetRevision: main
     path: frontend-saas/charts/frontend-saas
     helm:
       valueFiles:
         - values.prod.yaml
+      parameters:
+        - name: ingress.className
+          value: chek-prod-alb
   destination:
     server: https://kubernetes.default.svc
-    namespace: app-prod
+    namespace: frontend-saas-prod
   syncPolicy:
     automated:
       prune: true
