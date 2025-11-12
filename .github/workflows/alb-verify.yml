@@ -1,6 +1,20 @@
 name: alb-verify
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      ak:
+        description: 'Volcengine AK (临时输入优先于 Secrets)'
+        required: false
+      sk:
+        description: 'Volcengine SK (临时输入优先于 Secrets)'
+        required: false
+      region:
+        description: 'Region'
+        required: false
+        default: 'cn-beijing'
+      alb_ids:
+        description: 'ALB Ids, comma separated'
+        required: false
   push:
     paths:
       - .github/workflows/alb-verify.yml
@@ -8,10 +22,10 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     env:
-      VOLC_AK: ${{ secrets.VOLC_AK }}
-      VOLC_SK: ${{ secrets.VOLC_SK }}
-      VOLC_REGION: ${{ vars.VOLC_REGION || 'cn-beijing' }}
-      ALB_IDS: ${{ vars.ALB_IDS || 'alb-xp0pn039hxq854ov5ex0477i,alb-bdccywbfh0xs8dv40ord8u4k,alb-1pg8j4wnye0w0845wfacnard9' }}
+      VOLC_AK: ${{ inputs.ak || secrets.VOLC_AK }}
+      VOLC_SK: ${{ inputs.sk || secrets.VOLC_SK }}
+      VOLC_REGION: ${{ inputs.region || vars.VOLC_REGION || 'cn-beijing' }}
+      ALB_IDS: ${{ inputs.alb_ids || vars.ALB_IDS || 'alb-xp0pn039hxq854ov5ex0477i,alb-bdccywbfh0xs8dv40ord8u4k,alb-1pg8j4wnye0w0845wfacnard9' }}
     steps:
       - name: Verify listeners and rules via OpenAPI (pre-signed + curl)
         shell: bash
