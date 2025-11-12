@@ -44,6 +44,7 @@ metadata:
     ingress.vke.volcengine.com/success-codes: "200,301,302"
     ingress.vke.volcengine.com/loadbalancer-port: "443"
     ingress.vke.volcengine.com/loadbalancer-protocol: https
+    alb.ingress.kubernetes.io/certificate-ids: cert-04cc9e57f1b34a4ca9a0c834b2d3784b
 spec:
   ingressClassName: chek-prod-alb
   rules:
@@ -64,7 +65,3 @@ spec:
                 name: yapi
                 port:
                   number: 80
-  tls:
-    - hosts:
-        - yapi.chekkk.com
-      secretName: yapi-chekkk-com-tls
