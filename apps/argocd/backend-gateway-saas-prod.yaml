@@ -69,7 +69,7 @@ spec:
                     "/api/offline/healthz",
                     "/api/osmgw/actuator/**",
                     "/api/osmgw/metrics",
-                    "/api/osmgw/healthz","/api/vms/healthz","/api/vms/actuator/**"
+                    "/api/osmgw/healthz","/api/vms/healthz","/api/vms/actuator/**","/api/vms/**"
                   ]
                 }
               },
