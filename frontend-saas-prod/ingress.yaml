@@ -53,7 +53,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: frontend-saas-nodeport
+                name: frontend-saas-http-redirect
                 port:
                   number: 80
 
