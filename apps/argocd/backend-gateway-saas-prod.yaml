@@ -10,6 +10,8 @@ spec:
     targetRevision: main
     path: charts/backend-gateway-saas
     helm:
+      valueFiles:
+        - values-prod.yaml
       releaseName: backend-gateway-saas
       parameters:
         - name: image.registry
