@@ -4,31 +4,68 @@ metadata:
   name: api-gateway
   namespace: miker-prod
   annotations:
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/certificate-ids: cert-04cc9e57f1b34a4ca9a0c834b2d3784b
+    ingress.vke.volcengine.com/address-type: internet
+    ingress.vke.volcengine.com/target-type: instance
+    ingress.vke.volcengine.com/backend-protocol: HTTP
+    alb.ingress.kubernetes.io/target-type: instance
+    # Increase idle/read timeout to tolerate slow upstream responses (OpenAPI generation, etc.)
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=120
+    ingress.vke.volcengine.com/idle-timeout: '120'
+    ingress.vke.volcengine.com/alb-instance-name: chek-prod-alb
+    # Health checks (ALB controller drives TG config)
+    alb.ingress.kubernetes.io/healthcheck-path: /
+    alb.ingress.kubernetes.io/success-codes: '200,301,302'
+    alb.ingress.kubernetes.io/healthcheck-host: api.chekkk.com
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '10'
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: '3'
+    alb.ingress.kubernetes.io/healthy-threshold-count: '3'
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: '3'
+    # Volcengine-specific health check annotations (for compatibility)
+    ingress.vke.volcengine.com/health-check-host: api.chekkk.com
+    ingress.vke.volcengine.com/health-check-path: /
+    ingress.vke.volcengine.com/success-codes: '200,301,302'
 spec:
-  ingressClassName: nginx
-  tls:
-  - hosts:
-    - api.chekkk.com
-    secretName: chekkk-wildcard-tls
+  ingressClassName: chek-prod-alb
   rules:
   - host: api.chekkk.com
     http:
       paths:
-      - path: /api/vms(/|$)(.*)
-        pathType: ImplementationSpecific
+      - path: /openapi
+        pathType: Exact
         backend:
           service:
-            name: vehicle-model-service
+            name: backend-gateway-saas
             port:
               number: 80
-      - path: /api/osmgw(/|$)(.*)
-        pathType: ImplementationSpecific
+      - path: /openapi.json
+        pathType: Exact
         backend:
           service:
-            name: osm-gateway
+            name: backend-gateway-saas
+            port:
+              number: 80
+      - path: /api/vms/
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-gateway-saas
+            port:
+              number: 80
+      - path: /api/osmgw/
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-gateway-saas
+            port:
+              number: 80
+      - path: /api/offline/
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-gateway-saas
             port:
               number: 80
