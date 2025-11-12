@@ -8,6 +8,7 @@ metadata:
     ingress.vke.volcengine.com/target-type: instance
     ingress.vke.volcengine.com/backend-protocol: HTTP
     ingress.vke.volcengine.com/alb-instance-id: alb-1pg8j4wnye0w0845wfacnard9
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
     ingress.vke.volcengine.com/health-check-host: www.chekkk.com
     ingress.vke.volcengine.com/health-check-path: /
     ingress.vke.volcengine.com/success-codes: "200,301,302"
