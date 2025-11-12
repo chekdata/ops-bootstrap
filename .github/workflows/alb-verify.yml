@@ -1,4 +1,5 @@
 name: alb-verify
+# touch: trigger run
 on:
   workflow_dispatch:
     inputs:
@@ -22,8 +23,8 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     env:
-      VOLC_AK: ${{ inputs.ak || secrets.VOLC_AK }}
-      VOLC_SK: ${{ inputs.sk || secrets.VOLC_SK }}
+      VOLC_AK: ${{ inputs.ak || secrets.VOLC_AK || vars.VOLC_AK }}
+      VOLC_SK: ${{ inputs.sk || secrets.VOLC_SK || vars.VOLC_SK }}
       VOLC_REGION: ${{ inputs.region || vars.VOLC_REGION || 'cn-beijing' }}
       ALB_IDS: ${{ inputs.alb_ids || vars.ALB_IDS || 'alb-xp0pn039hxq854ov5ex0477i,alb-bdccywbfh0xs8dv40ord8u4k,alb-1pg8j4wnye0w0845wfacnard9' }}
     steps:
