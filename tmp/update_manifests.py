@@ -95,7 +95,7 @@ changed = 0
 for root in target_dirs(APP, ENVS):
     if not root.exists():
         continue
-for p in root.rglob("*"):
+    for p in root.rglob("*"):
     if p.suffix in (".yaml", ".yml"):
         if replace_images_in_file(p, IMAGE_REPO, NEW_IMAGE):
             changed += 1
