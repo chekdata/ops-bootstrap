@@ -1,0 +1,63 @@
+name: Receive Image Dispatch and Update Manifests
+on:
+  repository_dispatch:
+    types: [app-image-pushed]
+  workflow_dispatch:
+    inputs:
+      app:
+        required: true
+        type: string
+        description: 'Application name (e.g., frontend-app)'
+      image_repo:
+        required: true
+        type: string
+        description: 'Image repository (e.g., chek-images.../frontend-app)'
+      image_tag:
+        required: true
+        type: string
+        description: 'Image tag (e.g., sha-abcdef1)'
+      envs:
+        required: true
+        type: string
+        description: 'Comma-separated environments (e.g., dev,staging,prod)'
+jobs:
+  update-manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: pip install PyYAML
+      - name: Prepare inputs
+        id: inputs
+        run: |
+          if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
+            echo "app=${{ github.event.client_payload.app }}" >> "$GITHUB_OUTPUT"
+            echo "image_repo=${{ github.event.client_payload.image_repo }}" >> "$GITHUB_OUTPUT"
+            echo "image_tag=${{ github.event.client_payload.image_tag }}" >> "$GITHUB_OUTPUT"
+            echo "envs=${{ github.event.client_payload.envs }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=${{ github.inputs.app }}" >> "$GITHUB_OUTPUT"
+            echo "image_repo=${{ github.inputs.image_repo }}" >> "$GITHUB_OUTPUT"
+            echo "image_tag=${{ github.inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+            echo "envs=${{ github.inputs.envs }}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Update Kubernetes manifests
+        id: update
+        run: |
+          python tmp/update_manifests.py             --app "${{ steps.inputs.outputs.app }}"             --image-repo "${{ steps.inputs.outputs.image_repo }}"             --image-tag "${{ steps.inputs.outputs.image_tag }}"             --envs "${{ steps.inputs.outputs.envs }}"
+          echo "files_updated=$(cat /tmp/files_updated.txt)" >> "$GITHUB_OUTPUT"
+      - name: Create Pull Request
+        if: steps.update.outputs.files_updated != '0'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITOPS_PAT }}
+          commit-message: "ci(${{ steps.inputs.outputs.app }}): update image to ${{ steps.inputs.outputs.image_tag }}"
+          title: "ci(${{ steps.inputs.outputs.app }}): update image to ${{ steps.inputs.outputs.image_tag }}"
+          body: "Automated image update for ${{ steps.inputs.outputs.app }} to ${{ steps.inputs.outputs.image_tag }} across ${{ steps.inputs.outputs.envs }} environments."
+          branch: "auto-update/${{ steps.inputs.outputs.app }}-${{ github.run_id }}"
+          labels: automerge
+          delete-branch: true
