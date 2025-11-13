@@ -47,8 +47,13 @@ jobs:
           fi
       - name: Update Kubernetes manifests
         id: update
+        env:
+          APP: ${{ steps.inputs.outputs.app }}
+          IMAGE_REPO: ${{ steps.inputs.outputs.image_repo }}
+          IMAGE_TAG: ${{ steps.inputs.outputs.image_tag }}
+          ENVS: ${{ steps.inputs.outputs.envs }}
         run: |
-          python tmp/update_manifests.py             --app "${{ steps.inputs.outputs.app }}"             --image-repo "${{ steps.inputs.outputs.image_repo }}"             --image-tag "${{ steps.inputs.outputs.image_tag }}"             --envs "${{ steps.inputs.outputs.envs }}"
+          python tmp/update_manifests.py
           echo "files_updated=$(cat /tmp/files_updated.txt)" >> "$GITHUB_OUTPUT"
       - name: Create Pull Request
         if: steps.update.outputs.files_updated != '0'
