@@ -1,0 +1,32 @@
+name: ALB Clean HTTP Business Rules
+
+on:
+  workflow_dispatch:
+    inputs:
+      host:
+        description: "Domain host (e.g., api.chekkk.com)"
+        required: true
+        default: "api.chekkk.com"
+        type: string
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Run cleaner
+        env:
+          AK: ${{ secrets.VOLC_ACCESS_KEY_ID }}
+          SK: ${{ secrets.VOLC_SECRET_ACCESS_KEY }}
+          REGION: cn-beijing
+          ALB_ID: ${{ secrets.VOLC_ALB_ID }}
+          HOST: ${{ inputs.host }}
+        run: |
+          python3 scripts/alb_clean_http_rules_presign.py
+
+
