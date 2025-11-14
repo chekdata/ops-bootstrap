@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: osm-gateway
+  namespace: miker-prod
+spec:
+  template:
+    spec:
+      containers:
+      - name: osm-gateway
+        env:
+        - name: NACOS_SERVER_ADDR
+          value: "172.31.120.5:8848"
+        - name: NACOS_NAMESPACE
+          value: "a15810b5-cca6-4eb2-9f6d-7a2c0d68fa76"
+        - name: NACOS_USERNAME
+          value: "nacos"
+        - name: NACOS_PASSWORD
+          value: "tnM*fb6P"
+        - name: NACOS_GROUP
+          value: "DEFAULT_GROUP"
+        - name: SERVICE_NAME
+          value: "osm-gateway"
+

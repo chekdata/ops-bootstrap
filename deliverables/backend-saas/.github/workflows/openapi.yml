@@ -1,0 +1,44 @@
+name: openapi
+on:
+  push:
+    branches: [ main, dev, staging ]
+  workflow_dispatch:
+
+jobs:
+  prod:
+    if: ${{ github.ref_name == 'main' }}
+    uses: chekdata/.github/.github/workflows/openapi-file-sync.yml@main
+    with:
+      export_cmd: bash scripts/export_openapi.sh
+      artifact_path: build/swagger/swagger.json
+      service: backend-saas
+      env: prod
+      fail_on_lint: true
+      checkout_ref: main
+    secrets: inherit
+  stg:
+    if: ${{ github.ref_name == 'staging' }}
+    uses: chekdata/.github/.github/workflows/openapi-file-sync.yml@main
+    with:
+      export_cmd: bash scripts/export_openapi.sh
+      artifact_path: build/swagger/swagger.json
+      service: backend-saas
+      env: staging
+      fail_on_lint: true
+      checkout_ref: main
+    secrets: inherit
+  dev:
+    if: ${{ github.ref_name == 'dev' }}
+    uses: chekdata/.github/.github/workflows/openapi-file-sync.yml@main
+    with:
+      export_cmd: bash scripts/export_openapi.sh
+      artifact_path: build/swagger/swagger.json
+      service: backend-saas
+      env: dev
+      fail_on_lint: true
+      checkout_ref: main
+    secrets: inherit
+
+
+
+

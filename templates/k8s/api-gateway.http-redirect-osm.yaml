@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-gateway-http-osm
+  namespace: miker-prod
+  annotations:
+    alb.ingress.kubernetes.io/group.name: chek-prod-alb
+    alb.ingress.kubernetes.io/group.order: '0'
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    ingress.vke.volcengine.com/address-type: internet
+    ingress.vke.volcengine.com/target-type: instance
+    ingress.vke.volcengine.com/backend-protocol: HTTP
+spec:
+  ingressClassName: chek-prod-alb
+  rules:
+  - host: api.chekkk.com
+    http:
+      paths:
+      - path: /osm-gateway
+        pathType: Prefix
+        backend:
+          service:
+            name: http-redirect
+            port:
+              number: 80
+
+

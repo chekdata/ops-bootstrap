@@ -1,0 +1,93 @@
+name: yapi-sync
+on:
+  push:
+    branches: [ main, dev, staging ]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *'
+jobs:
+  select-token:
+    runs-on: ubuntu-latest
+    outputs:
+      token: ${{ steps.sel.outputs.token }}
+    steps:
+      - id: sel
+        run: |
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "token=${{ secrets.YAPI_TOKEN }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref_name }}" == "staging" ]]; then
+            echo "token=${{ secrets.YAPI_TOKEN_STG }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "token=${{ secrets.YAPI_TOKEN_DEV }}" >> "$GITHUB_OUTPUT"
+          fi
+  import:
+    needs: select-token
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          load: true
+          tags: local/app:ci
+      - name: Run container (host net)
+        run: |
+          set -e
+          docker rm -f app-ci >/dev/null 2>&1 || true
+          docker run -d --name app-ci --network host local/app:ci >/dev/null
+      - name: Detect swagger endpoint
+        id: detect
+        run: |
+          set -e
+          ports="80 3000 8080 4010 8090 8088"
+          paths="/openapi.json /v3/api-docs /v2/api-docs /swagger.json /swagger/doc.json /api/offline/openapi.json"
+          found=
+          for p in $ports; do
+            for path in $paths; do
+              url="http://127.0.0.1:${p}${path}"
+              echo "try $url"
+              if curl -fsS "$url" -o swagger.json; then
+                if head -c 1 swagger.json | grep -q '{'; then
+                  echo "found_url=$url" >> "$GITHUB_OUTPUT"
+                  echo "path=swagger.json" >> "$GITHUB_OUTPUT"
+                  found=1
+                  break
+                fi
+              fi
+            done
+            [ -n "$found" ] && break || true
+          done
+          if [ -z "$found" ]; then
+            echo "Swagger not found on candidate ports/paths" >&2
+            exit 1
+          fi
+      - name: Import into YApi
+        env:
+          YAPI_BASE: ${{ secrets.YAPI_BASE }}
+          YAPI_TOKEN: ${{ needs.select-token.outputs.token }}
+        run: |
+          set -e
+          if [ -z "$YAPI_BASE" ] || [ -z "$YAPI_TOKEN" ]; then
+            echo "Missing YAPI_BASE or YAPI_TOKEN" >&2
+            exit 1
+          fi
+          jq -c . < swagger.json >/tmp/swagger.min.json
+          curl -fsS -X POST "$YAPI_BASE/api/open/import_data?token=$YAPI_TOKEN" \
+            -H 'Content-Type: application/x-www-form-urlencoded' \
+            --data-urlencode "type=swagger" \
+            --data-urlencode "json=$(cat /tmp/swagger.min.json)" \
+            --data-urlencode "merge=merge" >/tmp/yapi_resp.json
+          cat /tmp/yapi_resp.json
+          jq -e '.errcode==0' /tmp/yapi_resp.json >/dev/null
+      - name: Cleanup
+        if: always()
+        run: docker rm -f app-ci >/dev/null 2>&1 || true
+
+
+

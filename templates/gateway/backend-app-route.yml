@@ -1,0 +1,20 @@
+spring:
+  cloud:
+    gateway:
+      routes:
+        # 业务路由：/api/backend-app/** → 后端服务，上游根路径（StripPrefix=2）
+        - id: backend-app
+          uri: http://backend-app.app-prod.svc.cluster.local:80
+          predicates:
+            - Path=/api/backend-app/**
+          filters:
+            - StripPrefix=2
+        # OpenAPI 直达：将 /api/backend-app/openapi.json 重写为 /openapi.json
+        - id: backend-app-openapi
+          uri: http://backend-app.app-prod.svc.cluster.local:80
+          predicates:
+            - Path=/api/backend-app/openapi.json
+          filters:
+            - StripPrefix=2
+            - SetPath=/openapi.json
+
