@@ -2,18 +2,28 @@
 import os
 import re
 import json
+import argparse
 from pathlib import Path
+from typing import List
 
-APP = os.environ.get("APP", "").strip()
-IMAGE_REPO = os.environ.get("IMAGE_REPO", "").strip()
-IMAGE_TAG = os.environ.get("IMAGE_TAG", "").strip()
-IMAGE_DIGEST = os.environ.get("IMAGE_DIGEST", "").strip()
-ENVS = [e.strip() for e in os.environ.get("ENVS", "").split(",") if e.strip()]
 
-if not APP or not IMAGE_REPO or not ENVS:
-    raise SystemExit("Missing APP/IMAGE_REPO/ENVS")
+def parse_args():
+    parser = argparse.ArgumentParser(description="Update k8s manifests with new container image")
+    parser.add_argument("--app", dest="app", help="Application name (e.g., frontend-app)", default=os.environ.get("APP", "").strip())
+    parser.add_argument("--image-repo", dest="image_repo", help="Image repository prefix", default=os.environ.get("IMAGE_REPO", "").strip())
+    parser.add_argument("--image-tag", dest="image_tag", help="Image tag", default=os.environ.get("IMAGE_TAG", "").strip())
+    parser.add_argument("--image-digest", dest="image_digest", help="Image digest (sha256...)", default=os.environ.get("IMAGE_DIGEST", "").strip())
+    parser.add_argument("--envs", dest="envs", help="Comma-separated envs (e.g., dev,staging,prod)", default=os.environ.get("ENVS", "").strip())
+    args = parser.parse_args()
+    return args
 
-def target_dirs(app: str, envs: list[str]) -> list[Path]:
+
+def ensure_required(app: str, image_repo: str, envs: List[str]) -> None:
+    if not app or not image_repo or not envs:
+        raise SystemExit("Missing APP/IMAGE_REPO/ENVS")
+
+
+def target_dirs(app: str, envs: List[str]) -> List[Path]:
     roots = []
     if app == "frontend-saas":
         mapping = {
@@ -39,6 +49,7 @@ def target_dirs(app: str, envs: list[str]) -> list[Path]:
             roots.append(Path(d))
     return roots
 
+
 def build_new_image(repo: str, tag: str, digest: str) -> str:
     if digest:
         if not digest.startswith("sha256:"):
@@ -48,14 +59,12 @@ def build_new_image(repo: str, tag: str, digest: str) -> str:
         return f"{repo}:{tag}"
     raise SystemExit("IMAGE_TAG or IMAGE_DIGEST required")
 
-NEW_IMAGE = build_new_image(IMAGE_REPO, IMAGE_TAG, IMAGE_DIGEST)
 
 def replace_images_in_file(path: Path, repo_prefix: str, new_image: str) -> bool:
     try:
         text = path.read_text(encoding="utf-8")
     except Exception:
         return False
-    # Match lines like: image: repo[:tag]|@sha256:...
     pattern = re.compile(rf'(^\s*image:\s*)(?P<img>{re.escape(repo_prefix)}[^\s"]*)', re.MULTILINE)
     if not pattern.search(text):
         return False
@@ -65,6 +74,7 @@ def replace_images_in_file(path: Path, repo_prefix: str, new_image: str) -> bool
         print(f"UPDATED {path}")
         return True
     return False
+
 
 def replace_images_in_json_file(path: Path, repo_prefix: str, new_image: str) -> bool:
     try:
@@ -91,24 +101,41 @@ def replace_images_in_json_file(path: Path, repo_prefix: str, new_image: str) ->
         return True
     return False
 
-changed = 0
-for root in target_dirs(APP, ENVS):
-    if not root.exists():
-        continue
-    for p in root.rglob("*"):
-    if p.suffix in (".yaml", ".yml"):
-        if replace_images_in_file(p, IMAGE_REPO, NEW_IMAGE):
-            changed += 1
-    elif p.suffix == ".json":
-        if replace_images_in_json_file(p, IMAGE_REPO, NEW_IMAGE):
-            changed += 1
 
-print(f"TOTAL_FILES_UPDATED {changed}")
-if changed == 0:
-    # Not fatal; manifests may not include this image yet
-    print("WARNING: No files updated. Check IMAGE_REPO/APP/ENVS mapping.")
+def main():
+    args = parse_args()
+    app = args.app
+    image_repo = args.image_repo
+    image_tag = args.image_tag
+    image_digest = args.image_digest
+    envs = [e.strip() for e in args.envs.split(",") if e.strip()]
+
+    ensure_required(app, image_repo, envs)
+    new_image = build_new_image(image_repo, image_tag, image_digest)
+
+    changed = 0
+    for root in target_dirs(app, envs):
+        if not root.exists():
+            continue
+        for p in root.rglob("*"):
+            if p.suffix in (".yaml", ".yml"):
+                if replace_images_in_file(p, image_repo, new_image):
+                    changed += 1
+            elif p.suffix == ".json":
+                if replace_images_in_json_file(p, image_repo, new_image):
+                    changed += 1
+
+    # Write summary for GitHub Actions step consumption
+    try:
+        Path("/tmp/files_updated.txt").write_text(str(changed), encoding="utf-8")
+    except Exception:
+        pass
+
+    print(f"TOTAL_FILES_UPDATED {changed}")
+    if changed == 0:
+        print("WARNING: No files updated. Check IMAGE_REPO/APP/ENVS mapping.")
 
 
-
-
+if __name__ == "__main__":
+    main()
 
