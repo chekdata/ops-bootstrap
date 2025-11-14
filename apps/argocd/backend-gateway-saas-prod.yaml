@@ -42,8 +42,6 @@ spec:
           value: "a15810b5-cca6-4eb2-9f6d-7a2c0d68fa76"
         - name: env.SPRING_CLOUD_NACOS_CONFIG_NAMESPACE
           value: "a15810b5-cca6-4eb2-9f6d-7a2c0d68fa76"
-        - name: env.SPRING_CLOUD_NACOS_CONFIG_ENABLED
-          value: "false"
         - name: env.SPRING_AUTOCONFIGURE_EXCLUDE
           value: "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration,org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceAutoConfigure,org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration,org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration"
         - name: env.MANAGEMENT_HEALTH_DB_ENABLED
@@ -57,55 +55,46 @@ spec:
         - name: env.SPRING_PROFILES_ACTIVE
           value: "no-db"
         - name: env.ROLL_TS
-          value: "2025-11-12T12:48:00Z"
+          value: "2025-11-13T19:05:00Z"
+        - name: env.SPRING_CLOUD_NACOS_CONFIG_ENABLED
+          value: "false"
+        # Gateway routes: offline openapi under prefix
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_0_ID
+          value: offline-openapi-prefixed
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_0_URI
+          value: http://backend-miker-offline.miker-prod.svc.cluster.local:80
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_0_PREDICATES_0
+          value: Path=/api/offline/openapi.json
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_0_FILTERS_0
+          value: SetPath=/openapi.json
+        # Gateway routes: vms service
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_ID
+          value: vehicle-model-service
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_URI
+          value: http://vehicle-model-service.miker-prod.svc.cluster.local:8080
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_PREDICATES_0
+          value: Path=/api/vms/**
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_FILTERS_0
+          value: StripPrefix=2
+        # Gateway routes: osm-gateway (business, keep prefix)
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_ID
+          value: osm-gateway-biz
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_URI
+          value: http://osm-gateway.miker-prod.svc.cluster.local:80
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_PREDICATES_0
+          value: Path=/api/osm-gateway/**
+        # Gateway routes: osm-gateway OpenAPI rewrite
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_ID
+          value: osm-gateway-openapi
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_URI
+          value: http://osm-gateway.miker-prod.svc.cluster.local:80
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_PREDICATES_0
+          value: Path=/api/osm-gateway/openapi.json
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_FILTERS_0
+          value: SetPath=/openapi.json
+        # Security whitelist
         - name: env.SECURE_IGNORE_URLS
-          value: "/api/offline/diag/**,/api/offline/docs,/api/offline/openapi.json,/openapi.json,/actuator/**,/api/osmgw/actuator/**,/api/osmgw/metrics,/api/osmgw/healthz,/api/vms/healthz,/api/vms/actuator/**"
-        - name: env.SPRING_APPLICATION_JSON
-          value: |
-            {
-              "secure": {
-                "ignore": {
-                  "urls": [
-                    "/auth/v1/getClientToken",
-                    "/actuator/**",
-                    "/api/offline/diag/**",
-                    "/api/offline/docs",
-                    "/api/offline/openapi.json",
-                    "/openapi.json",
-                    "/api/offline/healthz",
-                    "/api/osmgw/actuator/**",
-                    "/api/osmgw/metrics",
-                    "/api/osmgw/healthz","/api/vms/healthz","/api/vms/actuator/**","/api/vms/**"
-                  ]
-                }
-              },
-              "spring": {
-                "cloud": {
-                  "gateway": {
-                    "routes": [
-                      {
-                        "id": "offline-openapi-root",
-                        "uri": "http://backend-miker-offline.miker-prod.svc.cluster.local:80",
-                        "predicates": ["Path=/openapi.json"],
-                        "filters": ["SetPath=/api/offline/openapi.json"]
-                      },
-                      {
-                        "id": "offline-openapi-alias",
-                        "uri": "http://backend-miker-offline.miker-prod.svc.cluster.local:80",
-                        "predicates": ["Path=/openapi"],
-                        "filters": ["SetPath=/api/offline/openapi.json"]
-                      },
-                      {
-                        "id": "vehicle-model-service",
-                        "uri": "http://vehicle-model-service.miker-prod.svc.cluster.local:8080",
-                        "predicates": ["Path=/api/vms/**"],
-                        "filters": ["StripPrefix=2"]
-                      }
-                    ]
-                  }
-                }
-              }
-            }
+          value: /api/offline/openapi.json,/openapi.json,/openapi,/actuator/**,/api/vms/healthz,/api/vms/actuator/**,/api/osm-gateway/healthz,/api/osm-gateway/actuator/**,/api/osm-gateway/openapi.json
   destination:
     server: https://kubernetes.default.svc
     namespace: miker-prod
