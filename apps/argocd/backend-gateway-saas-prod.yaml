@@ -54,8 +54,7 @@ spec:
           value: "false"
         - name: env.SPRING_PROFILES_ACTIVE
           value: "no-db"
-        - name: env.ROLL_TS
-          value: "2025-11-13T19:05:00Z"
+        - P25-11-14T05:48:28Z"
         - name: env.SPRING_CLOUD_NACOS_CONFIG_ENABLED
           value: "false"
         # Gateway routes: offline openapi under prefix
