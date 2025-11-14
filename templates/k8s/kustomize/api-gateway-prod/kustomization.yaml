@@ -3,6 +3,6 @@ kind: Kustomization
 resources:
   - ../../api-gateway.prod.yaml
   - ../../http-redirect.miker-prod.yaml
+  - ../../api-gateway.openapi-osm.prod.yaml
 namespace: miker-prod
-
 
