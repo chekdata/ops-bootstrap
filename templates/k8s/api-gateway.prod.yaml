@@ -55,6 +55,13 @@ spec:
             name: backend-gateway-saas
             port:
               number: 80
+      - path: /api/osm-gateway/
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-gateway-saas
+            port:
+              number: 80
       - path: /api/osmgw/
         pathType: Prefix
         backend:
