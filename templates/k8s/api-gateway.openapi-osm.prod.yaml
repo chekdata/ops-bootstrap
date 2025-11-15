@@ -22,13 +22,13 @@ spec:
         pathType: Exact
         backend:
           service:
-            name: osm-gateway
+            name: backend-gateway-saas
             port:
               number: 80
       - path: /api/osm-gateway/openapi.json
         pathType: Exact
         backend:
           service:
-            name: osm-gateway
+            name: backend-gateway-saas
             port:
               number: 80
