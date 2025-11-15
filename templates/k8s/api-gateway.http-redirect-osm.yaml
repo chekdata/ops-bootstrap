@@ -17,13 +17,10 @@ spec:
   - host: api.chekkk.com
     http:
       paths:
-      - path: /osm-gateway
-        pathType: Prefix
+      - path: /
+        pathType: Exact
         backend:
           service:
             name: http-redirect
             port:
               number: 80
-
-
-
