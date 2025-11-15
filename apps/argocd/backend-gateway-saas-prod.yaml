@@ -61,6 +61,9 @@ spec:
           value: "nacos"
         - name: env.SPRING_CLOUD_NACOS_DISCOVERY_PASSWORD
           value: "tnM*fb6P"
+        # Explicitly disable response body filter, and set security ignore list
+        - name: env.SPRING_APPLICATION_JSON
+          value: '{"gateway":{"responseBodyFilter":{"enabled":false}},"secure":{"ignore":{"urls":["/api/offline/**","/api/vms/openapi.json","/api/vms/v3/api-docs","/api/vms/v3/api-docs/**","/openapi.json","/openapi","/v3/api-docs","/v3/api-docs/**","/actuator/**","/api/vms/healthz","/api/vms/actuator/**"]}}}'
         # Gateway routes: offline openapi under prefix
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_0_ID
           value: offline-openapi-prefixed
@@ -79,13 +82,15 @@ spec:
           value: Path=/api/vms/**
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_FILTERS_0
           value: StripPrefix=2
-        # Gateway routes: vms healthz passthrough (backend already exposes /healthz)
+        # Gateway routes: vms healthz mapping to actuator/health
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_ID
           value: vms-health
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_URI
           value: http://vehicle-model-service.miker-prod.svc.cluster.local:80
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_PREDICATES_0
           value: Path=/api/vms/healthz
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_FILTERS_0
+          value: SetPath=/actuator/health
         # Gateway routes: osm-gateway (business, keep prefix)
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_ID
           value: osm-gateway-biz
