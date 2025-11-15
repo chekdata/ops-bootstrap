@@ -88,13 +88,11 @@ spec:
           value: http://osm-gateway.miker-prod.svc.cluster.local:80
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_PREDICATES_0
           value: Path=/api/osm-gateway/openapi.json
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_FILTERS_0
-          value: SetPath=/api/osm-gateway/openapi.json
         # Security whitelist
         - name: env.SECURE_IGNORE_URLS
           value: /api/offline/openapi.json,/openapi.json,/openapi,/actuator/**,/api/vms/healthz,/api/vms/actuator/**,/api/osm-gateway/healthz,/api/osm-gateway/actuator/**,/api/osm-gateway/openapi.json
         - name: env.ROLL_TS
-          value: "20251114T175932Z"
+          value: "20251115T033947Z"
   destination:
     server: https://kubernetes.default.svc
     namespace: miker-prod
@@ -104,4 +102,3 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-
