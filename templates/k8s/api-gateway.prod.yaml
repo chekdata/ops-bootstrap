@@ -1,3 +1,4 @@
+# DEPRECATED: split into api-gateway.http-redirect-osm.yaml (80) and api-gateway.https-biz.yaml (443)
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
