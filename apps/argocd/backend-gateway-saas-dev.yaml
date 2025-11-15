@@ -33,8 +33,6 @@ spec:
           value: "12000"
         - name: containerPort
           value: "12000"
-        - name: envFromSecret
-          value: nacos-cred-gateway
         - name: env.NACOS_HOST
           value: "172.31.120.5"
         - name: env.NACOS_PORT
@@ -46,7 +44,7 @@ spec:
         - name: env.SPRING_CLOUD_NACOS_DISCOVERY_ENABLED
           value: "true"
         - name: env.SPRING_CLOUD_NACOS_DISCOVERY_REGISTER_ENABLED
-          value: "true"
+          value: "false"
         - name: env.SPRING_CLOUD_NACOS_DISCOVERY_USERNAME
           value: "nacos"
         - name: env.SPRING_CLOUD_NACOS_DISCOVERY_PASSWORD
@@ -61,8 +59,6 @@ spec:
           value: "false"
         - name: env.SPRING_PROFILES_ACTIVE
           value: "no-db"
-        - name: env.SPRING_APPLICATION_JSON
-          value: '{"gateway":{"responseBodyFilter":{"enabled":false}},"secure":{"ignore":{"urls":["/api/offline/**","/openapi.json","/openapi","/v3/api-docs","/v3/api-docs/**","/actuator/**","/api/vms/healthz","/api/vms/actuator/**"]}}}'
         # Routes: offline openapi
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_0_ID
           value: offline-openapi-prefixed
@@ -82,13 +78,13 @@ spec:
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_FILTERS_0
           value: StripPrefix=2
         # Routes: vms healthz mapping
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_ID
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_ID
           value: vms-health
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_URI
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_URI
           value: http://vehicle-model-service.miker-dev.svc.cluster.local:80
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_PREDICATES_0
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_PREDICATES_0
           value: Path=/api/vms/healthz
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_FILTERS_0
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_FILTERS_0
           value: SetPath=/actuator/health
   destination:
     server: https://kubernetes.default.svc
