@@ -15,11 +15,11 @@ spec:
       releaseName: backend-gateway-saas
       parameters:
         - name: image.registry
-          value: chek-images-cn-beijing.cr.volces.com
+          value: chek-images-cn-beijing.cr-volces.com
         - name: image.repository
           value: prod/backend-gateway-saas
         - name: image.tag
-          value: sha-24bd0dd
+          value: sha-2f6552d
         - name: service.type
           value: NodePort
         - name: service.port
@@ -56,6 +56,14 @@ spec:
           value: "no-db"
         - name: env.SPRING_CLOUD_NACOS_CONFIG_ENABLED
           value: "false"
+        # Nacos discovery credentials
+        - name: env.SPRING_CLOUD_NACOS_DISCOVERY_USERNAME
+          value: "nacos"
+        - name: env.SPRING_CLOUD_NACOS_DISCOVERY_PASSWORD
+          value: "tnM*fb6P"
+        # Explicitly disable response body filter, and set security ignore list
+        - name: env.SPRING_APPLICATION_JSON
+          value: '{"gateway":{"responseBodyFilter":{"enabled":false}},"secure":{"ignore":{"urls":["/api/offline/**","/api/vms/openapi.json","/api/vms/v3/api-docs","/api/vms/v3/api-docs/**","/openapi.json","/openapi","/v3/api-docs","/v3/api-docs/**","/actuator/**","/api/vms/healthz","/api/vms/actuator/**"]}}}'
         # Gateway routes: offline openapi under prefix
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_0_ID
           value: offline-openapi-prefixed
@@ -64,16 +72,25 @@ spec:
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_0_PREDICATES_0
           value: Path=/api/offline/openapi.json
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_0_FILTERS_0
-          value: SetPath=/api/osm-gateway/openapi.json
+          value: SetPath=/openapi.json
         # Gateway routes: vms service
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_ID
           value: vehicle-model-service
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_URI
-          value: http://vehicle-model-service.miker-prod.svc.cluster.local:8080
+          value: http://vehicle-model-service.miker-prod.svc.cluster.local:80
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_PREDICATES_0
           value: Path=/api/vms/**
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_FILTERS_0
           value: StripPrefix=2
+        # Gateway routes: vms healthz mapping to actuator/health
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_ID
+          value: vms-health
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_URI
+          value: http://vehicle-model-service.miker-prod.svc.cluster.local:80
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_PREDICATES_0
+          value: Path=/api/vms/healthz
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_FILTERS_0
+          value: SetPath=/actuator/health
         # Gateway routes: osm-gateway (business, keep prefix)
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_ID
           value: osm-gateway-biz
@@ -88,11 +105,20 @@ spec:
           value: http://osm-gateway.miker-prod.svc.cluster.local:80
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_PREDICATES_0
           value: Path=/api/osm-gateway/openapi.json
-        # Security whitelist
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_FILTERS_0
+          value: SetPath=/openapi.json
+        # Gateway routes: vms OpenAPI rewrite
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_5_ID
+          value: vms-openapi
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_5_URI
+          value: http://vehicle-model-service.miker-prod.svc.cluster.local:80
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_5_PREDICATES_0
+          value: Path=/api/vms/openapi.json
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_5_FILTERS_0
+          value: SetPath=/openapi.json
+        # Security whitelist (legacy env still kept for readability, real source via SPRING_APPLICATION_JSON)
         - name: env.SECURE_IGNORE_URLS
-          value: /api/offline/openapi.json,/openapi.json,/openapi,/actuator/**,/api/vms/healthz,/api/vms/actuator/**,/api/osm-gateway/healthz,/api/osm-gateway/actuator/**,/api/osm-gateway/openapi.json
-        - name: env.ROLL_TS
-          value: "20251115T033947Z"
+          value: /api/offline/**,/api/vms/openapi.json,/api/vms/v3/api-docs,/api/vms/v3/api-docs/**,/openapi.json,/openapi,/v3/api-docs,/v3/api-docs/**,/actuator/**,/api/vms/healthz,/api/vms/actuator/**
   destination:
     server: https://kubernetes.default.svc
     namespace: miker-prod
