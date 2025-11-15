@@ -1,0 +1,57 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-gateway-https-biz
+  namespace: miker-prod
+  annotations:
+    alb.ingress.kubernetes.io/group.name: chek-prod-alb
+    alb.ingress.kubernetes.io/group.order: '1'
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/certificate-ids: cert-04cc9e57f1b34a4ca9a0c834b2d3784b
+    ingress.vke.volcengine.com/address-type: internet
+    ingress.vke.volcengine.com/target-type: instance
+    ingress.vke.volcengine.com/backend-protocol: HTTP
+    alb.ingress.kubernetes.io/target-type: instance
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=120
+    alb.ingress.kubernetes.io/healthcheck-host: api.chekkk.com
+    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '10'
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: '3'
+    alb.ingress.kubernetes.io/healthy-threshold-count: '3'
+    alb.ingress.kubernetes.io/success-codes: '200'
+    ingress.vke.volcengine.com/alb-instance-name: chek-prod-alb
+spec:
+  ingressClassName: chek-prod-alb
+  rules:
+  - host: api.chekkk.com
+    http:
+      paths:
+      - path: /api/offline/
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-gateway-saas
+            port:
+              number: 80
+      - path: /api/vms/
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-gateway-saas
+            port:
+              number: 80
+      - path: /api/osmgw/
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-gateway-saas
+            port:
+              number: 80
+      - path: /api/osm-gateway/
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-gateway-saas
+            port:
+              number: 80
