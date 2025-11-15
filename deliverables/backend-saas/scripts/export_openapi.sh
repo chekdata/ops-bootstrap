@@ -31,11 +31,10 @@ for i in $(seq 1 180); do
   sleep 2
 done
 
-echo "OpenAPI export failed after waiting. Tail of build/app.log:" >&2
+echo "OpenAPI export failed after waiting. Tail of build/app.log and actuator mappings (if available):" >&2
+echo "== build/app.log tail ==" >&2
 tail -n 400 build/app.log || true
+echo >&2
+echo "== actuator mappings ==" >&2
+curl -fsS http://127.0.0.1:4010/actuator/mappings | head -c 20000 || true
 exit 1
-
-
-
-
-
