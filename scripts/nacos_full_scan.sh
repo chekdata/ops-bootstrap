@@ -89,3 +89,4 @@ kubectl -n miker-prod delete pod nacos-curl --ignore-not-found >/dev/null 2>&1 |
 echo "Done."
 
 
+

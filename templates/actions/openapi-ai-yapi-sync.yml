@@ -1,0 +1,125 @@
+name: openapi-ai-yapi-sync
+
+on:
+  workflow_call:
+    inputs:
+      openapi_path:
+        required: true
+        type: string
+      yapi_url:
+        required: false
+        type: string
+        default: https://yapi.chekkk.com
+      llm_endpoint:
+        required: false
+        type: string
+        default: https://api.openai.com/v1
+      llm_model:
+        required: false
+        type: string
+        default: gpt-4o-mini
+      run_envs:
+        required: false
+        type: string
+        default: DEV,STG,PROD
+    secrets:
+      LLM_API_KEY:
+        required: true
+      YAPI_TOKEN_DEV:
+        required: false
+      YAPI_TOKEN_STG:
+        required: false
+      YAPI_TOKEN_PROD:
+        required: false
+
+jobs:
+  enrich-and-import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Write enrich script
+        run: |
+          cat > scripts_yapi_llm_enrich.py <<'PY'
+          import os, sys, json, time, urllib.parse, urllib.request
+          def http_post_json(url, data, headers):
+              req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers=headers, method="POST")
+              with urllib.request.urlopen(req, timeout=60) as resp:
+                  raw = resp.read().decode("utf-8", "ignore")
+              try: return json.loads(raw)
+              except: return {"_raw": raw}
+          def http_post_form(url, form):
+              data = urllib.parse.urlencode(form).encode("utf-8")
+              req = urllib.request.Request(url, data=data, method="POST")
+              req.add_header("Content-Type","application/x-www-form-urlencoded")
+              with urllib.request.urlopen(req, timeout=60) as resp:
+                  raw = resp.read().decode("utf-8","ignore")
+              try: return json.loads(raw)
+              except: return {"_raw": raw}
+          def llm(api_key, endpoint, model, op, path, method):
+              desc = (op.get("description") or "").strip()
+              if len(desc) >= 50: return desc
+              sys_prompt = "你是资深后端与文档工程师。请用简体中文为接口补充简洁而信息量高的说明，包含用途、入参要点、典型用法示例。限制在 150-220 字。"
+              user_prompt = {"path": path, "method": method.upper(), "summary": op.get("summary") or "", "params_hint":[{"in":p.get("in"),"name":p.get("name"),"required":p.get("required")} for p in (op.get("parameters") or [])]}
+              payload = {"model": model, "messages":[{"role":"system","content":sys_prompt},{"role":"user","content":json.dumps(user_prompt, ensure_ascii=False)}], "temperature":0.2, "max_tokens":300}
+              headers = {"Authorization": f"Bearer {api_key}", "Content-Type":"application/json"}
+              try:
+                  r = http_post_json(f"{endpoint.rstrip('/')}/chat/completions", payload, headers)
+                  return ((((r.get("choices") or [{}])[0]).get("message") or {}).get("content") or "").strip() or desc
+              except Exception:
+                  return desc
+          def enrich(swagger, api_key, endpoint, model):
+              paths = swagger.get("paths") or {}
+              for path, methods in paths.items():
+                  for method, op in (methods or {}).items():
+                      if not isinstance(op, dict): continue
+                      op["description"] = llm(api_key, endpoint, model, op, path, method)
+                      time.sleep(0.2)
+              return swagger
+          def import_yapi(yapi, token, path):
+              with open(path, "r", encoding="utf-8") as f: content = f.read()
+              return http_post_form(f"{yapi.rstrip('/')}/api/open/import_data", {"type":"swagger","merge":"1","token":token,"json":content})
+          def main():
+              openapi_path = os.environ["OPENAPI_PATH"]
+              yapi = os.environ.get("YAPI_URL","https://yapi.chekkk.com")
+              endpoint = os.environ.get("LLM_ENDPOINT","https://api.openai.com/v1")
+              model = os.environ.get("LLM_MODEL","gpt-4o-mini")
+              api_key = os.environ["LLM_API_KEY"]
+              with open(openapi_path, "r", encoding="utf-8") as f: swagger = json.load(f)
+              enriched = enrich(swagger, api_key, endpoint, model)
+              out = "swagger_enriched.json"
+              with open(out,"w",encoding="utf-8") as f: json.dump(enriched, f, ensure_ascii=False, separators=(",",":"))
+              print(json.dumps({"enriched": out}, ensure_ascii=False))
+              run_envs = [e.strip() for e in os.environ.get("RUN_ENVS","DEV,STG,PROD").split(",") if e.strip()]
+              results = {}
+              for env in run_envs:
+                  tok = os.environ.get(f"YAPI_TOKEN_{env}")
+                  if not tok: continue
+                  try: results[env] = import_yapi(yapi, tok, out)
+                  except Exception as e: results[env] = {"err": str(e)}
+              print(json.dumps({"yapi_import": results}, ensure_ascii=False))
+          if __name__ == "__main__": main()
+          PY
+
+      - name: Enrich and Import
+        env:
+          OPENAPI_PATH: ${{ inputs.openapi_path }}
+          YAPI_URL: ${{ inputs.yapi_url }}
+          LLM_ENDPOINT: ${{ inputs.llm_endpoint }}
+          LLM_MODEL: ${{ inputs.llm_model }}
+          RUN_ENVS: ${{ inputs.run_envs }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          YAPI_TOKEN_DEV: ${{ secrets.YAPI_TOKEN_DEV }}
+          YAPI_TOKEN_STG: ${{ secrets.YAPI_TOKEN_STG }}
+          YAPI_TOKEN_PROD: ${{ secrets.YAPI_TOKEN_PROD }}
+        run: |
+          python3 scripts_yapi_llm_enrich.py
+
+
+
