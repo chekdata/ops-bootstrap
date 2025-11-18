@@ -19,7 +19,7 @@ spec:
         - name: image.repository
           value: prod/backend-gateway-saas
         - name: image.tag
-          value: v0.1.2
+          value: v0.1.1
         - name: service.type
           value: NodePort
         - name: service.port
