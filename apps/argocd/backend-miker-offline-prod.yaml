@@ -14,6 +14,7 @@ spec:
         image:
           registry: chek-images-cn-beijing.cr.volces.com
           repository: prod/backend-miker-offline
+          tag: v1.0.0
         containerPort: 8088
         service:
           type: NodePort
