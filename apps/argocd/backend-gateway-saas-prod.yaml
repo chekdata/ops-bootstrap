@@ -140,7 +140,7 @@ spec:
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_8_PREDICATES_0
           value: Path=/api/auth/**
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_8_FILTERS_0
-          value: StripPrefix=2
+          value: ""
         # Security whitelist (legacy env still kept for readability, real source via SPRING_APPLICATION_JSON)
         - name: env.SECURE_IGNORE_URLS
           value: /api/offline/**,/api/vms/openapi.json,/api/vms/v3/api-docs,/api/vms/v3/api-docs/**,/openapi.json,/openapi,/v3/api-docs,/v3/api-docs/**,/actuator/**,/api/vms/healthz,/api/vms/actuator/**,/api/auth/healthz,/api/auth/openapi.json
