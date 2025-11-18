@@ -67,3 +67,17 @@ spec:
             name: backend-gateway-saas
             port:
               number: 80
+      - path: /api/backend-app/
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-gateway-saas
+            port:
+              number: 80
+      - path: /api/backend-saas/
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-gateway-saas
+            port:
+              number: 80

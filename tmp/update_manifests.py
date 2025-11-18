@@ -23,30 +23,61 @@ def ensure_required(app: str, image_repo: str, envs: List[str]) -> None:
         raise SystemExit("Missing APP/IMAGE_REPO/ENVS")
 
 
-def target_dirs(app: str, envs: List[str]) -> List[Path]:
-    roots = []
+def target_paths(app: str, envs: List[str]) -> List[Path]:
+    """
+    Return a list of paths (dirs or files) that should be scanned/updated
+    for the given app+envs.
+
+    - For frontend-* / yapi：按目录扫描（保持兼容）
+    - 对于 backend-* 等基础服务：直接指定 apps/argocd 下的 Application 清单文件，
+      由 Mode B 负责更新其中的 image.registry/repository/tag。
+    """
+    roots: List[Path] = []
+
+    # Directory-based mappings (existing behavior)
     if app == "frontend-saas":
-        mapping = {
+        dir_mapping = {
             "dev": "frontend-saas-dev",
             "staging": "frontend-saas-staging",
             "prod": "frontend-saas-prod",
         }
     elif app == "frontend-app":
-        mapping = {
+        dir_mapping = {
             "dev": "frontend-app-dev",
             "staging": "frontend-app-staging",
             "prod": "frontend-app-prod",
         }
     elif app == "yapi":
-        mapping = {
+        dir_mapping = {
             "prod": "platform/yapi-prod",
         }
     else:
-        mapping = {}
+        dir_mapping = {}
+
+    # File-based mappings for ArgoCD Applications (Mode B)
+    file_mapping = {}
+    if app == "backend-gateway-saas":
+        file_mapping = {
+            "prod": ["apps/argocd/backend-gateway-saas-prod.yaml"],
+        }
+    elif app == "backend-app":
+        file_mapping = {
+            "prod": ["apps/argocd/backend-app-prod.yaml"],
+        }
+    elif app == "backend-saas":
+        file_mapping = {
+            "prod": ["apps/argocd/backend-saas-prod.yaml"],
+        }
+
     for e in envs:
-        d = mapping.get(e)
+        d = dir_mapping.get(e)
         if d:
             roots.append(Path(d))
+        files = file_mapping.get(e) if file_mapping else None
+        if files:
+            for f in files:
+                roots.append(Path(f))
+
     return roots
 
 
@@ -114,10 +145,14 @@ def main():
     new_image = build_new_image(image_repo, image_tag, image_digest)
 
     changed = 0
-    for root in target_dirs(app, envs):
+    for root in target_paths(app, envs):
         if not root.exists():
             continue
-        for p in root.rglob("*"):
+        if root.is_dir():
+            paths = list(root.rglob("*"))
+        else:
+            paths = [root]
+        for p in paths:
             if p.suffix in (".yaml", ".yml"):
                 if replace_images_in_file(p, image_repo, new_image):
                     changed += 1

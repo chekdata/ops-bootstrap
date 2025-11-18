@@ -59,50 +59,6 @@ spec:
           value: "false"
         - name: env.SPRING_PROFILES_ACTIVE
           value: "no-db"
-        # Routes: offline openapi
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_0_ID
-          value: offline-openapi-prefixed
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_0_URI
-          value: http://backend-miker-offline.miker-dev.svc.cluster.local:80
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_0_PREDICATES_0
-          value: Path=/api/offline/openapi.json
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_0_FILTERS_0
-          value: SetPath=/openapi.json
-        # Routes: vehicle-model-service
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_ID
-          value: vehicle-model-service
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_URI
-          value: lb://vehicle-model-service
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_PREDICATES_0
-          value: Path=/api/vms/**
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_FILTERS_0
-          value: StripPrefix=2
-        # Routes: vms healthz mapping
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_ID
-          value: vms-health
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_URI
-          value: lb://vehicle-model-service
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_PREDICATES_0
-          value: Path=/api/vms/healthz
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_FILTERS_0
-          value: SetPath=/actuator/health
-        # Routes: backend-app (biz + OpenAPI)
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_ID
-          value: backend-app-biz
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_URI
-          value: lb://backend-app
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_PREDICATES_0
-          value: Path=/api/backend-app/**
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_FILTERS_0
-          value: StripPrefix=2
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_ID
-          value: backend-app-openapi
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_URI
-          value: lb://backend-app
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_PREDICATES_0
-          value: Path=/api/backend-app/openapi.json
-        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_FILTERS_0
-          value: SetPath=/openapi.json
   destination:
     server: https://kubernetes.default.svc
     namespace: miker-dev

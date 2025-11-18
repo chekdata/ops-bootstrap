@@ -1,0 +1,32 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vecr-mirror-eclipse-temurin-17-jre
+  namespace: ops
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: skopeo
+          image: quay.io/skopeo/stable:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -euo pipefail
+              SRC="docker://docker.m.daocloud.io/library/eclipse-temurin:17-jre"
+              DST="docker://chek-images-cn-beijing.cr-volces.com/devops/library/eclipse-temurin:17-jre"
+              echo "Copy $SRC -> $DST"
+              skopeo copy --override-os=linux --override-arch=amd64 --dest-authfile /auth/.dockerconfigjson "$SRC" "$DST"
+          volumeMounts:
+            - name: vecr-auth
+              mountPath: /auth
+              readOnly: true
+      volumes:
+        - name: vecr-auth
+          secret:
+            secretName: vecr-auth
+
+

@@ -11,6 +11,9 @@ quay.io/jetstack/cert-manager-cainjector:v1.13.3
 curlimages/curl:8.10.1
 library/busybox:1.36
 
+# Java base images (JRE/JDK) used by backend services
+docker.m.daocloud.io/library/eclipse-temurin:17-jre
+
 # GitHub Actions self-hosted runner (Solution A)
 docker.io/summerwind/actions-runner:latest
 
