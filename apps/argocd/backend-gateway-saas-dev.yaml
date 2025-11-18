@@ -86,6 +86,23 @@ spec:
           value: Path=/api/vms/healthz
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_FILTERS_0
           value: SetPath=/actuator/health
+        # Routes: backend-app (biz + OpenAPI)
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_ID
+          value: backend-app-biz
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_URI
+          value: lb://backend-app
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_PREDICATES_0
+          value: Path=/api/backend-app/**
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_FILTERS_0
+          value: StripPrefix=2
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_ID
+          value: backend-app-openapi
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_URI
+          value: lb://backend-app
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_PREDICATES_0
+          value: Path=/api/backend-app/openapi.json
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_FILTERS_0
+          value: SetPath=/openapi.json
   destination:
     server: https://kubernetes.default.svc
     namespace: miker-dev

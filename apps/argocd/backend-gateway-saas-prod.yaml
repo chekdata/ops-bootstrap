@@ -42,6 +42,9 @@ spec:
           value: "false"
         - name: env.SPRING_CLOUD_NACOS_CONFIG_NAMESPACE
           value: "a15810b5-cca6-4eb2-9f6d-7a2c0d68fa76"
+        # Enable Nacos discovery for downstream routing (gateway itself不注册)
+        - name: env.SPRING_CLOUD_NACOS_DISCOVERY_ENABLED
+          value: "true"
         - name: env.SPRING_AUTOCONFIGURE_EXCLUDE
           value: "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration,org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceAutoConfigure,org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration,org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration"
         - name: env.MANAGEMENT_HEALTH_DB_ENABLED
@@ -90,14 +93,14 @@ spec:
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_ID
           value: osm-gateway-biz
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_URI
-          value: http://osm-gateway.miker-prod.svc.cluster.local:80
+          value: lb://osm-gateway
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_PREDICATES_0
           value: Path=/api/osm-gateway/**
         # Gateway routes: osm-gateway OpenAPI rewrite
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_ID
           value: osm-gateway-openapi
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_URI
-          value: http://osm-gateway.miker-prod.svc.cluster.local:80
+          value: lb://osm-gateway
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_PREDICATES_0
           value: Path=/api/osm-gateway/openapi.json
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_FILTERS_0
@@ -124,7 +127,7 @@ spec:
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_7_ID
           value: osm-gateway-health
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_7_URI
-          value: http://osm-gateway.miker-prod.svc.cluster.local:80
+          value: lb://osm-gateway
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_7_PREDICATES_0
           value: Path=/api/osm-gateway/healthz
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_7_FILTERS_0
