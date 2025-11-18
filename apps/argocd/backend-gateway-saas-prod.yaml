@@ -15,11 +15,11 @@ spec:
       releaseName: backend-gateway-saas
       parameters:
         - name: image.registry
-          value: chek-images-cn-beijing.cr-volces.com
+          value: chek-images-cn-beijing.cr.volces.com
         - name: image.repository
           value: prod/backend-gateway-saas
         - name: image.tag
-          value: sha-2f6552d
+          value: sha-36caadf
         - name: service.type
           value: NodePort
         - name: service.port
