@@ -72,7 +72,7 @@ spec:
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_ID
           value: vehicle-model-service
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_URI
-          value: http://vehicle-model-service.miker-staging.svc.cluster.local:80
+          value: lb://vehicle-model-service
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_PREDICATES_0
           value: Path=/api/vms/**
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_FILTERS_0
@@ -81,7 +81,7 @@ spec:
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_ID
           value: vms-health
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_URI
-          value: http://vehicle-model-service.miker-staging.svc.cluster.local:80
+          value: lb://vehicle-model-service
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_PREDICATES_0
           value: Path=/api/vms/healthz
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_FILTERS_0
