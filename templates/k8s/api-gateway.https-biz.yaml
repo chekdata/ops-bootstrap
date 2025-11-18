@@ -12,6 +12,11 @@ metadata:
     ingress.vke.volcengine.com/address-type: internet
     ingress.vke.volcengine.com/target-type: instance
     ingress.vke.volcengine.com/backend-protocol: HTTP
+    # 与集群现状对齐，避免 admission webhook 拒绝更新
+    ingress.vke.volcengine.com/alb-instance-id: alb-1pg8j4wnye0w0845wfacnard9
+    ingress.vke.volcengine.com/loadbalancer-port: '443'
+    ingress.vke.volcengine.com/loadbalancer-protocol: https
+    ingress.vke.volcengine.com/success-codes: '200'
     alb.ingress.kubernetes.io/target-type: instance
     alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=120
     alb.ingress.kubernetes.io/healthcheck-host: api.chekkk.com
@@ -27,6 +32,13 @@ spec:
   - host: api.chekkk.com
     http:
       paths:
+      - path: /api/auth/
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-gateway-saas
+            port:
+              number: 80
       - path: /api/offline/
         pathType: Prefix
         backend:
