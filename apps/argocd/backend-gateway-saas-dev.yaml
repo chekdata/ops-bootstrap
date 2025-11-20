@@ -61,7 +61,7 @@ spec:
           value: "no-db"
   destination:
     server: https://kubernetes.default.svc
-    namespace: miker-dev
+    namespace: platform-dev
   syncPolicy:
     automated:
       prune: true

@@ -2,7 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: api-gateway-https-biz
-  namespace: miker-prod
+  namespace: platform-prod
   annotations:
     alb.ingress.kubernetes.io/group.name: chek-prod-alb
     alb.ingress.kubernetes.io/group.order: '1'

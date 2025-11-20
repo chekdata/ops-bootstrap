@@ -105,7 +105,7 @@ spec:
           value: SetPath=/openapi.json
   destination:
     server: https://kubernetes.default.svc
-    namespace: miker-staging
+    namespace: platform-staging
   syncPolicy:
     automated:
       prune: true

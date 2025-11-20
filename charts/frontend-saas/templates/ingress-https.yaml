@@ -11,7 +11,7 @@ metadata:
     ingress.vke.volcengine.com/listener-port: "443"
   {{- end }}
 spec:
-  ingressClassName: {{ .Values.ingress.className | default "nginx" }}
+  ingressClassName: {{ .Values.ingress.className | default "alb" }}
   # TLS 终止由 ALB 证书注解完成；不依赖本地 Secret
   rules:
     - host: {{ .Values.ingress.host | default "" }}

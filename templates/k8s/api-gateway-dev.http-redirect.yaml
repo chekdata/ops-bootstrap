@@ -1,10 +1,10 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: api-gateway-http-osm
-  namespace: platform-prod
+  name: api-gateway-dev-http-redirect
+  namespace: platform-dev
   annotations:
-    alb.ingress.kubernetes.io/group.name: chek-prod-alb
+    alb.ingress.kubernetes.io/group.name: chek-dev-alb
     alb.ingress.kubernetes.io/group.order: '0'
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
     alb.ingress.kubernetes.io/scheme: internet-facing
@@ -12,9 +12,9 @@ metadata:
     ingress.vke.volcengine.com/target-type: instance
     ingress.vke.volcengine.com/backend-protocol: HTTP
 spec:
-  ingressClassName: chek-prod-alb
+  ingressClassName: chek-dev-alb
   rules:
-  - host: api.chekkk.com
+  - host: api-dev.chekkk.com
     http:
       paths:
       - path: /
@@ -24,6 +24,5 @@ spec:
             name: http-redirect
             port:
               number: 80
-
 
 
