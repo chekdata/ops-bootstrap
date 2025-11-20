@@ -33,79 +33,79 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-import os,sys,hmac,hashlib,urllib.parse,subprocess,json
-from datetime import datetime
+          import os,sys,hmac,hashlib,urllib.parse,subprocess,json
+          from datetime import datetime
 
-AK=os.environ.get('VOLC_AK','')
-SK=os.environ.get('VOLC_SK','')
-REGION=os.environ.get('VOLC_REGION','cn-beijing')
-ALB_IDS=[x.strip() for x in os.environ.get('ALB_IDS','').split(',') if x.strip()]
-EP=f"alb.{REGION}.volcengineapi.com"
-SERVICE="alb"
+          AK=os.environ.get('VOLC_AK','')
+          SK=os.environ.get('VOLC_SK','')
+          REGION=os.environ.get('VOLC_REGION','cn-beijing')
+          ALB_IDS=[x.strip() for x in os.environ.get('ALB_IDS','').split(',') if x.strip()]
+          EP=f"alb.{REGION}.volcengineapi.com"
+          SERVICE="alb"
 
-def h(key,msg):
-  if isinstance(msg,str): msg=msg.encode()
-  return hmac.new(key,msg,hashlib.sha256).digest()
+          def h(key,msg):
+            if isinstance(msg,str): msg=msg.encode()
+            return hmac.new(key,msg,hashlib.sha256).digest()
 
-def sign_url(action,version,params):
-  t=datetime.utcnow(); amz=t.strftime('%Y%m%dT%H%M%SZ'); dat=t.strftime('%Y%m%d')
-  query={'Action':action,'Version':version,'Region':REGION, **params}
-  qs='&'.join(['{}={}'.format(urllib.parse.quote_plus(k),urllib.parse.quote_plus(str(v))) for k,v in sorted(query.items())])
-  ch='host:{}\n'.format(EP) + 'x-volc-date:{}\n'.format(amz)
-  canonical='\n'.join(['GET','/',qs,ch,'host;x-volc-date',hashlib.sha256(b'').hexdigest()])
-  scope='{}/{}/{}/request'.format(dat,REGION,SERVICE)
-  sts='\n'.join(['HMAC-SHA256',amz,scope,hashlib.sha256(canonical.encode()).hexdigest()])
-  kDate=h(('VOLC'+SK).encode(),dat); kRegion=h(kDate,REGION); kService=h(kRegion,SERVICE); kSign=h(kService,'request')
-  sig=hmac.new(kSign,sts.encode(),hashlib.sha256).hexdigest()
-  auth='HMAC-SHA256 Credential={}/{}, SignedHeaders=host;x-volc-date, Signature={}'.format(AK,scope,sig)
-  url='https://{}/?{}&X-Volc-Date={}&Authorization={}'.format(EP,qs,urllib.parse.quote_plus(amz),urllib.parse.quote_plus(auth))
-  return url
+          def sign_url(action,version,params):
+            t=datetime.utcnow(); amz=t.strftime('%Y%m%dT%H%M%SZ'); dat=t.strftime('%Y%m%d')
+            query={'Action':action,'Version':version,'Region':REGION, **params}
+            qs='&'.join(['{}={}'.format(urllib.parse.quote_plus(k),urllib.parse.quote_plus(str(v))) for k,v in sorted(query.items())])
+            ch='host:{}\n'.format(EP) + 'x-volc-date:{}\n'.format(amz)
+            canonical='\n'.join(['GET','/',qs,ch,'host;x-volc-date',hashlib.sha256(b'').hexdigest()])
+            scope='{}/{}/{}/request'.format(dat,REGION,SERVICE)
+            sts='\n'.join(['HMAC-SHA256',amz,scope,hashlib.sha256(canonical.encode()).hexdigest()])
+            kDate=h(('VOLC'+SK).encode(),dat); kRegion=h(kDate,REGION); kService=h(kRegion,SERVICE); kSign=h(kService,'request')
+            sig=hmac.new(kSign,sts.encode(),hashlib.sha256).hexdigest()
+            auth='HMAC-SHA256 Credential={}/{}, SignedHeaders=host;x-volc-date, Signature={}'.format(AK,scope,sig)
+            url='https://{}/?{}&X-Volc-Date={}&Authorization={}'.format(EP,qs,urllib.parse.quote_plus(amz),urllib.parse.quote_plus(auth))
+            return url
 
-def curl_json(url):
-  out=subprocess.check_output(['curl','-sS',url])
-  try:
-    return json.loads(out.decode())
-  except Exception:
-    return {'raw':out.decode()[:400]}
+          def curl_json(url):
+            out=subprocess.check_output(['curl','-sS',url])
+            try:
+              return json.loads(out.decode())
+            except Exception:
+              return {'raw':out.decode()[:400]}
 
-def extract_listeners(doc):
-  for path in (('Result','Listeners'),('Listeners',),('ListenerSet',)):
-    cur=doc
-    ok=True
-    for k in path:
-      if isinstance(cur,dict) and k in cur: cur=cur[k]
-      else: ok=False; break
-    if ok and isinstance(cur,list): return cur
-  return []
+          def extract_listeners(doc):
+            for path in (('Result','Listeners'),('Listeners',),('ListenerSet',)):
+              cur=doc
+              ok=True
+              for k in path:
+                if isinstance(cur,dict) and k in cur: cur=cur[k]
+                else: ok=False; break
+              if ok and isinstance(cur,list): return cur
+            return []
 
-report={}
-for alb in ALB_IDS:
-  rep={'listeners':[]}
-  for ver in ('2020-04-01','2020-11-26','2023-01-01'):
-    u=sign_url('DescribeListeners',ver,{'LoadBalancerId':alb})
-    d=curl_json(u)
-    ls=extract_listeners(d)
-    if ls:
-      for l in ls:
-        lid=l.get('ListenerId') or l.get('Id')
-        proto=l.get('Protocol'); port=l.get('Port')
-        # rules/attrs
-        u2=sign_url('DescribeListenerAttributes',ver,{'ListenerId':lid})
-        a=curl_json(u2)
-        rep['listeners'].append({'ListenerId':lid,'Protocol':proto,'Port':port,'Attrs':a})
-      break
-  report[alb]=rep
+          report={}
+          for alb in ALB_IDS:
+            rep={'listeners':[]}
+            for ver in ('2020-04-01','2020-11-26','2023-01-01'):
+              u=sign_url('DescribeListeners',ver,{'LoadBalancerId':alb})
+              d=curl_json(u)
+              ls=extract_listeners(d)
+              if ls:
+                for l in ls:
+                  lid=l.get('ListenerId') or l.get('Id')
+                  proto=l.get('Protocol'); port=l.get('Port')
+                  # rules/attrs
+                  u2=sign_url('DescribeListenerAttributes',ver,{'ListenerId':lid})
+                  a=curl_json(u2)
+                  rep['listeners'].append({'ListenerId':lid,'Protocol':proto,'Port':port,'Attrs':a})
+                break
+            report[alb]=rep
 
-summary=[]
-for alb,info in report.items():
-  summary.append(f'ALB {alb}')
-  for it in info.get('listeners',[]):
-    proto=str(it.get('Protocol')); port=str(it.get('Port')); lid=str(it.get('ListenerId'))
-    summary.append(f'  - Listener {lid} {proto}:{port}')
-  summary.append('')
+          summary=[]
+          for alb,info in report.items():
+            summary.append(f'ALB {alb}')
+            for it in info.get('listeners',[]):
+              proto=str(it.get('Protocol')); port=str(it.get('Port')); lid=str(it.get('ListenerId'))
+              summary.append(f'  - Listener {lid} {proto}:{port}')
+            summary.append('')
 
-print(json.dumps(report,ensure_ascii=False))
-with open(os.environ.get('GITHUB_STEP_SUMMARY','/dev/stdout'),'a') as f:
-  f.write('\n'.join(summary))
-PY
+          print(json.dumps(report,ensure_ascii=False))
+          with open(os.environ.get('GITHUB_STEP_SUMMARY','/dev/stdout'),'a') as f:
+            f.write('\n'.join(summary))
+          PY
 
