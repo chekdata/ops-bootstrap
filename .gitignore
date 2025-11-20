@@ -17,6 +17,8 @@ tmp/
 
 # Credentials and configs
 **/*kubeconfig*.conf
+tools/kube-conf/**
+tools/证书/**
 **/*kubeconfig*.yaml
 **/*.pem
 **/*.p12
@@ -28,6 +30,7 @@ tmp/
 **/yapi_tokens.json
 **/yapi_bmo_token.json
 mappings/feishu_userid_to_enterprise_email.yaml
+**/*.crt
 
 # OS/editor
 .DS_Store

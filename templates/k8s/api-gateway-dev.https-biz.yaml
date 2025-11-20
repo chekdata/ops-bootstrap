@@ -20,8 +20,8 @@ metadata:
     ingress.vke.volcengine.com/address-type: internet
     ingress.vke.volcengine.com/alb-instance-name: chek-dev-alb
     ingress.vke.volcengine.com/backend-protocol: HTTP
-    ingress.vke.volcengine.com/loadbalancer-port: "443"
-    ingress.vke.volcengine.com/loadbalancer-protocol: https
+    ingress.vke.volcengine.com/loadbalancer-port: "80"
+    ingress.vke.volcengine.com/loadbalancer-protocol: http
     ingress.vke.volcengine.com/target-type: instance
 spec:
   ingressClassName: chek-dev-alb

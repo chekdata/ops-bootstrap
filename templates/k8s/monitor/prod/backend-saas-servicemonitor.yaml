@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: backend-saas
+  namespace: monitoring
+  labels:
+    volcengine.vmp: "true"
+spec:
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: saas-prod
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backend-saas
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+
+

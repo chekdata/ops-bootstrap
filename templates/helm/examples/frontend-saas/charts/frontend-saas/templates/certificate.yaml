@@ -1,0 +1,22 @@
+{{- if and .Values.certificate.enabled .Values.ingress.host }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    acme.cert-manager.io/http01-ingress-class: {{ .Values.ingress.className | default "nginx" }}
+spec:
+  secretName: {{ .Values.ingress.tlsSecret | default (printf "%s-tls" .Release.Name) }}
+  issuerRef:
+    name: {{ .Values.certificate.issuerRefName | default "letsencrypt-http" }}
+    kind: {{ .Values.certificate.issuerRefKind | default "ClusterIssuer" }}
+  dnsNames:
+    {{- if .Values.certificate.dnsNames }}
+    {{- toYaml .Values.certificate.dnsNames | nindent 4 }}
+    {{- else }}
+    - {{ .Values.ingress.host }}
+    {{- end }}
+{{- end }}
+
+

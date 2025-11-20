@@ -10,8 +10,9 @@ ops-bootstrap/
   .github/               # PR/Issue 模板（onboarding、变更自检）
   templates/             # 可复用模板（Actions/Helm/Docker/K8s）
   scripts/               # 工具脚本（无密钥；用于镜像、清单、列表等）
+    dev-tools/           # 开发者个人/诊断脚本（如 Cursor 聊天恢复），不参与流水线/发布
   tools/                 # 通用工具（Kaniko Dockerfile 等，无集群机密）
-  apps/argocd/           # 示例清单（建议视作 examples，而非生产真源）
+  templates/helm/examples/argocd/  # ArgoCD 示例清单（示例用途，非生产真源）
   研发使用指南.md         # 面向团队的完整操作与约束（四段式）
   README.md              # 本文档（目的、用法、目录）
   secrets.enc.yaml       # SOPS 加密的机密文件（仓库根目录，建议）
@@ -78,6 +79,7 @@ git commit -m "chore(spec-kit): add ops-bootstrap submodule and SpecKit links"
 - `_local/**`（任何本地密钥/令牌/个人配置）
 - `tmp/**`（一次性/环境特定脚本与中间产物、kubeconfig、证书等）
 - 任何 kubeconfig/凭据/证书/私钥（例如：`**/*kubeconfig*.{conf,yaml}`、`**/*-tls.*`、`**/*.pem`、`**/*.json` 中包含 Token）
+  - 实际落地路径建议使用 `tools/kube-conf/` 与 `tools/证书/`，并依赖 `.gitignore` 保证不被提交
 - 账户/令牌类文件（例如：`vecr_login.env`、`yapi_tokens.json`、`yapi_bmo_token.json` 等）
 - 个人或组织通讯录映射等敏感数据（例如：`mappings/feishu_userid_to_enterprise_email.yaml`）
 
@@ -95,7 +97,7 @@ git commit -m "chore(spec-kit): add ops-bootstrap submodule and SpecKit links"
 - `tools/**`
   - `kaniko/Dockerfile` 等通用工具
   - 排除任何携带集群凭据的 `.conf/.yaml`（如存在，勿提交）
-- `apps/argocd/**`
+- `templates/helm/examples/argocd/**`
   - 作为示例展示（建议迁入 `templates/helm/examples/`），生产真源应在专门的 `infra` 仓库由 GitOps 管理
 - 文档：`研发使用指南.md`、`GitHub 项目分类与管理原则.md`
 

@@ -17,7 +17,7 @@ spec:
             - |
               set -euo pipefail
               SRC="docker://docker.m.daocloud.io/library/eclipse-temurin:17-jre"
-              DST="docker://chek-images-cn-beijing.cr.volces.com/devops/library/eclipse-temurin:17-jre"
+              DST="docker://chek-images-cn-beijing.cr-volces.com/devops/library/eclipse-temurin:17-jre"
               echo "Copy $SRC -> $DST"
               skopeo copy --override-os=linux --override-arch=amd64 --dest-authfile /auth/.dockerconfigjson "$SRC" "$DST"
           volumeMounts:
