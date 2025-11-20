@@ -7,20 +7,91 @@ def h(key,msg):
     return hmac.new(key,msg,hashlib.sha256).digest()
 
 def sign_url(ak, sk, region, service, endpoint, action, version, params):
-    t=datetime.utcnow(); amz=t.strftime('%Y%m%dT%H%M%SZ'); dat=t.strftime('%Y%m%d')
-    query={'Action':action,'Version':version,'Region':region}; query.update(params or {})
-    qs='&'.join(['{}={}'.format(urllib.parse.quote_plus(k),urllib.parse.quote_plus(str(v))) for k,v in sorted(query.items())])
-    ch='host:{}\n'.format(endpoint)+'x-volc-date:{}\n'.format(amz)
-    canonical='\n'.join(['GET','/',qs,ch,'host;x-volc-date',hashlib.sha256(b'').hexdigest()])
-    scope='{}/{}/{}/request'.format(dat,region,service)
-    sts='\n'.join(['HMAC-SHA256',amz,scope,hashlib.sha256(canonical.encode()).hexdigest()])
-    kDate=h(('VOLC'+sk).encode(),dat); kRegion=h(kDate,region); kService=h(kRegion,service); kSign=h(kService,'request')
-    sig=hmac.new(kSign,sts.encode(),hashlib.sha256).hexdigest()
-    auth='HMAC-SHA256 Credential={}/{}, SignedHeaders=host;x-volc-date, Signature={}'.format(ak,scope,sig)
-    return 'https://{}/?{}&X-Volc-Date={}&Authorization={}'.format(endpoint,qs,urllib.parse.quote_plus(amz),urllib.parse.quote_plus(auth))
+    """
+    完全按卷上 Query 样例实现的预签名 URL：
+    - 使用 X-Algorithm/X-Credential/X-Date/X-Expires/X-NotSignBody/X-SignedHeaders/X-SignedQueries
+    - 可选携带 X-Security-Token
+    - 不使用 Authorization 头与 X-Date 头，只签名 Query
+    """
+    t = datetime.utcnow()
+    amz = t.strftime('%Y%m%dT%H%M%SZ')
+    dat = t.strftime('%Y%m%d')
+
+    security_token = os.environ.get('SECURITY_TOKEN') or os.environ.get('X_SECURITY_TOKEN') or os.environ.get('VOLC_SECURITY_TOKEN')
+
+    algorithm = 'HMAC-SHA256'
+    scope = '{}/{}/{}/request'.format(dat, region, service)
+    credential = '{}/{}'.format(ak, scope)
+
+    base = {
+        'Action': action,
+        'Version': version,
+        'X-Algorithm': algorithm,
+        'X-Credential': credential,
+        'X-Date': amz,
+        'X-Expires': '3600',
+        'X-NotSignBody': '1',
+    }
+    if security_token:
+        base['X-Security-Token'] = security_token
+
+    signed_order = ['Action', 'Version', 'X-Algorithm', 'X-Credential', 'X-Date', 'X-Expires', 'X-NotSignBody']
+    if security_token:
+        signed_order.append('X-Security-Token')
+    signed_order.extend(['X-SignedHeaders', 'X-SignedQueries'])
+
+    base['X-SignedHeaders'] = ''
+    base['X-SignedQueries'] = ';'.join(signed_order)
+
+    # canonical_qs：仅包含被签名字段，顺序严格按照 X-SignedQueries
+    canonical_items = []
+    for k in signed_order:
+        v = base.get(k, '')
+        canonical_items.append(
+            '{}={}'.format(urllib.parse.quote_plus(k), urllib.parse.quote_plus(str(v)))
+        )
+    canonical_qs = '&'.join(canonical_items)
+
+    canonical = '\n'.join([
+        'GET',
+        '/',
+        canonical_qs,
+        '',
+        '',
+        hashlib.sha256(b'').hexdigest(),
+    ])
+    sts = '\n'.join([
+        algorithm,
+        amz,
+        scope,
+        hashlib.sha256(canonical.encode()).hexdigest(),
+    ])
+    kDate = h(('VOLC' + sk).encode(), dat)
+    kRegion = h(kDate, region)
+    kService = h(kRegion, service)
+    kSign = h(kService, 'request')
+    sig = hmac.new(kSign, sts.encode(), hashlib.sha256).hexdigest()
+
+    all_params = {}
+    all_params.update(params or {})
+    all_params.update(base)
+    all_params['X-Signature'] = sig
+
+    qs = '&'.join(
+        '{}={}'.format(urllib.parse.quote_plus(k), urllib.parse.quote_plus(str(v)))
+        for k, v in sorted(all_params.items())
+    )
+    return 'https://{}/?{}'.format(endpoint, qs)
 
 def curl_json(url):
-    out=subprocess.check_output(['curl','-sS',url])
+    if isinstance(url, tuple):
+        url, headers = url
+    else:
+        headers = {}
+    cmd = ['curl', '-sS', url]
+    for k, v in headers.items():
+        cmd.extend(['-H', f'{k}: {v}'])
+    out=subprocess.check_output(cmd)
     try: return json.loads(out.decode())
     except: return {}
 
@@ -56,15 +127,45 @@ def main():
     host=os.environ.get('HOST','api.chekkk.com')
     endpoint=f'alb.{region}.volcengineapi.com'
     service='alb'
-    if not (ak and sk and alb_id):
+    list_alb = os.environ.get('LIST_ALB') == '1'
+    if not (ak and sk) or (not list_alb and not alb_id):
         print('missing AK/SK/ALB_ID', file=sys.stderr); return 2
 
-    # 1) find HTTP:80 listener
+    # 模式一：仅列出当前账号下的 ALB（用于根据名称查 ID）
+    if list_alb:
+        doc = {}
+        for ver in ('2020-04-01','2020-11-26','2023-01-01'):
+            doc = curl_json(sign_url(ak,sk,region,service,endpoint,'DescribeLoadBalancers',ver,{}))
+            if doc:
+                break
+        print(json.dumps(doc, ensure_ascii=False))
+        return 0
+
+    # 1) list listeners
     ls=[]
     for ver in ('2020-04-01','2020-11-26','2023-01-01'):
         d=curl_json(sign_url(ak,sk,region,service,endpoint,'DescribeListeners',ver,{'LoadBalancerId':alb_id}))
         ls=extract_listeners(d)
         if ls: break
+
+    # 只读模式：导出所有监听器及其规则（不做删除）
+    dump_only = os.environ.get('DUMP_ONLY') == '1'
+    if dump_only:
+        rules_by_listener = {}
+        for l in ls:
+            lid = l.get('ListenerId') or l.get('Id')
+            if not lid:
+                continue
+            rlist = []
+            for ver in ('2020-04-01','2020-11-26','2023-01-01'):
+                rlist = find_rules_anywhere(curl_json(sign_url(ak,sk,region,service,endpoint,'DescribeRules',ver,{'ListenerId':lid})))
+                if rlist:
+                    break
+            rules_by_listener[lid] = rlist
+        print(json.dumps({'listeners': ls, 'rulesByListener': rules_by_listener}, ensure_ascii=False))
+        return 0
+
+    # 2) find HTTP:80 listener（删除模式仍然只动 HTTP:80）
     http80=None
     for l in ls:
         proto=str(l.get('Protocol','')).upper(); port=int(l.get('Port') or 0)
@@ -75,13 +176,13 @@ def main():
     if not lid:
         print('no ListenerId', file=sys.stderr); return 3
 
-    # 2) list rules
+    # 3) list rules
     rules=[]
     for ver in ('2020-04-01','2020-11-26','2023-01-01'):
         rules=find_rules_anywhere(curl_json(sign_url(ak,sk,region,service,endpoint,'DescribeRules',ver,{'ListenerId':lid})))
         if rules: break
 
-    # 3) pick business rules to delete
+    # 4) pick business rules to delete
     del_ids=[]
     for r in rules:
         rid=pick([r.get('RuleId'), r.get('Id')])

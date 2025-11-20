@@ -4,4 +4,4 @@ resources:
   - ../../http-redirect.miker-prod.yaml
   - ../../api-gateway.http-redirect-osm.yaml
   - ../../api-gateway.https-biz.yaml
-namespace: miker-prod
+namespace: platform-prod

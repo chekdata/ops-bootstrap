@@ -1,3 +1,16 @@
+.logs/
+logs/
+tmp/
+tmp_note
+_merge_tmp/
+temp_user/
+*.log
+*.zip
+*.tgz
+*.gz
+node_modules/
+dist/
+.DS_Store
 # Local/private content (do NOT upload)
 _local/
 tmp/

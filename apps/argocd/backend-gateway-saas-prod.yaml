@@ -69,7 +69,7 @@ spec:
           value: /api/offline/**,/api/vms/openapi.json,/api/vms/v3/api-docs,/api/vms/v3/api-docs/**,/openapi.json,/openapi,/v3/api-docs,/v3/api-docs/**,/actuator/**,/api/vms/healthz,/api/vms/actuator/**,/api/auth/healthz,/api/auth/openapi.json
   destination:
     server: https://kubernetes.default.svc
-    namespace: miker-prod
+    namespace: platform-prod
   syncPolicy:
     automated:
       prune: true
