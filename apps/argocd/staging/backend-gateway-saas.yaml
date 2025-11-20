@@ -1,0 +1,118 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: backend-gateway-saas-staging
+  namespace: argocd
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: backend-gateway-saas=chek-images-cn-beijing.cr.volces.com/dev/backend-gateway-saas
+    argocd-image-updater.argoproj.io/backend-gateway-saas.allow-tags: sha-*
+    argocd-image-updater.argoproj.io/backend-gateway-saas.update-strategy: latest
+    argocd-image-updater.argoproj.io/write-back-method: helm
+    argocd-image-updater.argoproj.io/helm.image-name: image.repository
+    argocd-image-updater.argoproj.io/helm.image-tag: image.tag
+spec:
+  project: default
+  source:
+    repoURL: ssh://git@ssh.github.com:443/chekdata/backend-gateway-saas.git
+    targetRevision: main
+    path: charts/backend-gateway-saas
+    helm:
+      releaseName: backend-gateway-saas
+      parameters:
+        - name: image.registry
+          value: chek-images-cn-beijing.cr.volces.com
+        - name: image.repository
+          value: dev/backend-gateway-saas
+        # 显式放行健康与只读端点（覆盖旧版本网关可能缺少的默认白名单）
+        - name: env.SECURE_IGNORE_URLS
+          value: "/openapi.json,/v3/api-docs,/v3/api-docs/**,/actuator/**,/api/**/healthz,/api/auth/actuator/**,/api/backend-app/actuator/**,/api/backend-saas/actuator/**,/api/osm-gateway/actuator/**,/api/osmgw/actuator/**,/api/vms/actuator/**,/api/offline/actuator/**,/api/offline/diag/**,/api/offline/docs,/api/offline/openapi.json"
+        - name: image.tag
+          value: sha-2f6552d
+        - name: service.type
+          value: NodePort
+        - name: service.port
+          value: "80"
+        - name: service.targetPort
+          value: "12000"
+        - name: containerPort
+          value: "12000"
+        - name: env.NACOS_HOST
+          value: "172.31.120.5"
+        - name: env.NACOS_PORT
+          value: "8848"
+        - name: env.SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR
+          value: "172.31.120.5:8848"
+        - name: env.SPRING_CLOUD_NACOS_DISCOVERY_NAMESPACE
+          value: "a15810b5-cca6-4eb2-9f6d-7a2c0d68fa76"
+        - name: env.SPRING_CLOUD_NACOS_DISCOVERY_ENABLED
+          value: "true"
+        - name: env.SPRING_CLOUD_NACOS_DISCOVERY_REGISTER_ENABLED
+          value: "false"
+        - name: env.SPRING_CLOUD_NACOS_DISCOVERY_USERNAME
+          value: "nacos"
+        - name: env.SPRING_CLOUD_NACOS_DISCOVERY_PASSWORD
+          value: "tnM*fb6P"
+        - name: env.SPRING_AUTOCONFIGURE_EXCLUDE
+          value: "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration,org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,com.alibaba.druid.spring.boot.autoconfigure.DruidDataSourceAutoConfigure,org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration,org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration"
+        - name: env.MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED
+          value: "true"
+        - name: env.MANAGEMENT_HEALTH_DB_ENABLED
+          value: "false"
+        - name: env.MANAGEMENT_HEALTH_REDIS_ENABLED
+          value: "false"
+        - name: env.SPRING_PROFILES_ACTIVE
+          value: "no-db"
+        # Routes: offline openapi
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_0_ID
+          value: offline-openapi-prefixed
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_0_URI
+          value: http://backend-miker-offline.miker-staging.svc.cluster.local:80
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_0_PREDICATES_0
+          value: Path=/api/offline/openapi.json
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_0_FILTERS_0
+          value: SetPath=/openapi.json
+        # Routes: vehicle-model-service
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_ID
+          value: vehicle-model-service
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_URI
+          value: lb://vehicle-model-service
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_PREDICATES_0
+          value: Path=/api/vms/**
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_1_FILTERS_0
+          value: StripPrefix=2
+        # Routes: vms healthz mapping
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_ID
+          value: vms-health
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_URI
+          value: lb://vehicle-model-service
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_PREDICATES_0
+          value: Path=/api/vms/healthz
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_2_FILTERS_0
+          value: SetPath=/actuator/health
+        # Routes: backend-app (biz + OpenAPI)
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_ID
+          value: backend-app-biz
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_URI
+          value: lb://backend-app
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_PREDICATES_0
+          value: Path=/api/backend-app/**
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_FILTERS_0
+          value: StripPrefix=2
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_ID
+          value: backend-app-openapi
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_URI
+          value: lb://backend-app
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_PREDICATES_0
+          value: Path=/api/backend-app/openapi.json
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_FILTERS_0
+          value: SetPath=/openapi.json
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: platform-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+
