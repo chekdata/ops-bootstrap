@@ -1,32 +1,3 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: http-redirect
-  namespace: platform-dev
-  labels:
-    app.kubernetes.io/name: http-redirect
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: http-redirect
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: http-redirect
-    spec:
-      containers:
-      - name: node-redirect
-        image: chek-images-cn-beijing.cr.volces.com/devops/yapi:1.10.2
-        command: ["node"]
-        args:
-          - -e
-          - |
-            require('http').createServer((req,res)=>{res.statusCode=301;res.setHeader('Location','https://'+req.headers.host+req.url);res.end();}).listen(8080)
-        ports:
-        - containerPort: 8080
-          name: http
----
 apiVersion: v1
 kind: Service
 metadata:
@@ -35,13 +6,11 @@ metadata:
   labels:
     app.kubernetes.io/name: http-redirect
 spec:
-  type: NodePort
-  selector:
-    app.kubernetes.io/name: http-redirect
+  type: ClusterIP
   ports:
   - name: http
     port: 80
-    targetPort: http
+    targetPort: 80
     protocol: TCP
 
 
