@@ -6,7 +6,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: ssh://git@ssh.github.com:443/chekdata/backend-miker-offline.git
+    repoURL: https://github.com/chekdata/backend-miker-offline.git
     targetRevision: main
     path: charts/backend-miker-offline
     helm:
