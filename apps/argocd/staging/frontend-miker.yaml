@@ -6,7 +6,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: ssh://git@ssh.github.com:443/chekdata/ops-bootstrap.git
+    repoURL: https://github.com/chekdata/ops-bootstrap.git
     targetRevision: main
     path: templates/k8s/kustomize/frontend-miker-staging
   destination:
