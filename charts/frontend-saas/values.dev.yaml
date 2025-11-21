@@ -1,6 +1,6 @@
 image:
   repository: chek-images-cn-beijing.cr.volces.com/saas/frontend-saas
-  tag: sha-PLACEHOLDER
+  tag: dev
 service:
   port: 80
   targetPort: 80
