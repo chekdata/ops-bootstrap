@@ -93,25 +93,25 @@ jobs:
           kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
           VALUES=$(mktemp)
           cat > "$VALUES" <<YAML
-          image:
-            registry: "$IMG_REG"
-            repository: "$IMG_REPO/$SERVICE"
-            tag: "$IMG_TAG"
-          containerPort: $CON_PORT
-          service:
-            type: ClusterIP
-            port: $SVC_PORT
-            targetPort: $TGT_PORT
-          YAML
+image:
+  registry: "$IMG_REG"
+  repository: "$IMG_REPO/$SERVICE"
+  tag: "$IMG_TAG"
+containerPort: $CON_PORT
+service:
+  type: ClusterIP
+  port: $SVC_PORT
+  targetPort: $TGT_PORT
+YAML
           HELM_ARGS=()
           if [ -n "$HOST" ] && [ -n "$TLS" ]; then
             EXTRA=$(mktemp)
-            cat > "$EXTRA" <<V
-            ingress:
-              enabled: true
-              host: $HOST
-              tlsSecret: $TLS
-            V
+            cat > "$EXTRA" <<EOF
+ingress:
+  enabled: true
+  host: $HOST
+  tlsSecret: $TLS
+EOF
             HELM_ARGS+=( -f "$EXTRA" )
           fi
           if [ -n "$EXTRA_VALUES" ]; then
