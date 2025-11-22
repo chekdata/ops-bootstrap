@@ -28,10 +28,16 @@ spec:
             - name: {{ $k }}
               value: "{{ $v }}"
             {{- end }}
-          {{- if .Values.envFromSecret }}
+          {{- if or .Values.envFromSecret .Values.envFromSecrets }}
           envFrom:
+          {{- if .Values.envFromSecret }}
             - secretRef:
                 name: {{ .Values.envFromSecret }}
+          {{- end }}
+          {{- range .Values.envFromSecrets }}
+            - secretRef:
+                name: {{ . }}
+          {{- end }}
           {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

@@ -29,6 +29,8 @@ env: {}
 
 # optional secret name; if set, will be attached via envFrom.secretRef
 envFromSecret: ""
+# optional extra secrets; if set, each name will be attached via envFrom.secretRef
+envFromSecrets: []
 
 persistence:
   enabled: false
