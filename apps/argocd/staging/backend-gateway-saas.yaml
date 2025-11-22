@@ -93,7 +93,7 @@ spec:
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_ID
           value: backend-app-biz
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_URI
-          value: lb://backend-app
+          value: http://backend-app.app-staging.svc.cluster.local:80
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_PREDICATES_0
           value: Path=/api/backend-app/**
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_3_FILTERS_0
@@ -101,7 +101,7 @@ spec:
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_ID
           value: backend-app-openapi
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_URI
-          value: lb://backend-app
+          value: http://backend-app.app-staging.svc.cluster.local:80
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_PREDICATES_0
           value: Path=/api/backend-app/openapi.json
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_FILTERS_0
@@ -156,6 +156,15 @@ spec:
           value: Path=/api/osm-gateway/openapi.json
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_10_FILTERS_0
           value: SetPath=/openapi.json
+        # Routes: backend-app health (unified)
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_11_ID
+          value: backend-app-health
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_11_URI
+          value: http://backend-app.app-staging.svc.cluster.local:80
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_11_PREDICATES_0
+          value: Path=/api/backend-app/healthz
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_11_FILTERS_0
+          value: SetPath=/actuator/health
   destination:
     server: https://kubernetes.default.svc
     namespace: platform-staging
