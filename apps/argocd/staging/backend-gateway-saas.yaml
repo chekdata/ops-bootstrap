@@ -106,6 +106,31 @@ spec:
           value: Path=/api/backend-app/openapi.json
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_4_FILTERS_0
           value: SetPath=/openapi.json
+        # Routes: backend-saas (biz + health + OpenAPI)
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_5_ID
+          value: backend-saas-biz
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_5_URI
+          value: lb://backend-saas
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_5_PREDICATES_0
+          value: Path=/api/backend-saas/**
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_5_FILTERS_0
+          value: StripPrefix=2
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_6_ID
+          value: backend-saas-health
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_6_URI
+          value: lb://backend-saas
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_6_PREDICATES_0
+          value: Path=/api/backend-saas/healthz
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_6_FILTERS_0
+          value: SetPath=/actuator/health
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_7_ID
+          value: backend-saas-openapi
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_7_URI
+          value: lb://backend-saas
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_7_PREDICATES_0
+          value: Path=/api/backend-saas/openapi.json
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_7_FILTERS_0
+          value: SetPath=/openapi.json
   destination:
     server: https://kubernetes.default.svc
     namespace: platform-staging

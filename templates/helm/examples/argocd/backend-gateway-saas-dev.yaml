@@ -23,6 +23,8 @@ spec:
           value: chek-images-cn-beijing.cr.volces.com
         - name: image.repository
           value: dev/backend-gateway-saas
+        - name: env.SECURE_IGNORE_URLS
+          value: "/openapi.json,/v3/api-docs,/v3/api-docs/**,/actuator/**,/api/**/healthz,/api/auth/actuator/**,/api/backend-app/actuator/**,/api/backend-saas/actuator/**,/api/osm-gateway/actuator/**,/api/osmgw/actuator/**,/api/vms/actuator/**,/api/offline/actuator/**,/api/offline/diag/**,/api/offline/docs,/api/offline/openapi.json"
         - name: image.tag
           value: sha-2f6552d
         - name: service.type
