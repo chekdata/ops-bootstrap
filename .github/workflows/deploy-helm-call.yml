@@ -111,7 +111,7 @@ jobs:
               enabled: true
               host: $HOST
               tlsSecret: $TLS
-            EOF
+          EOF
             HELM_ARGS+=( -f "$EXTRA" )
           fi
           if [ -n "$EXTRA_VALUES" ]; then
