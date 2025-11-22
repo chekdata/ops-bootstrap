@@ -13,7 +13,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: ssh://git@ssh.github.com:443/chekdata/backend-gateway-saas.git
+    repoURL: https://github.com/chekdata/backend-gateway-saas.git
     targetRevision: main
     path: charts/backend-gateway-saas
     helm:
