@@ -110,7 +110,7 @@ spec:
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_5_ID
           value: backend-saas-biz
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_5_URI
-          value: lb://backend-saas
+          value: http://backend-saas.saas-staging.svc.cluster.local:80
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_5_PREDICATES_0
           value: Path=/api/backend-saas/**
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_5_FILTERS_0
@@ -118,7 +118,7 @@ spec:
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_6_ID
           value: backend-saas-health
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_6_URI
-          value: lb://backend-saas
+          value: http://backend-saas.saas-staging.svc.cluster.local:80
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_6_PREDICATES_0
           value: Path=/api/backend-saas/healthz
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_6_FILTERS_0
@@ -126,10 +126,35 @@ spec:
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_7_ID
           value: backend-saas-openapi
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_7_URI
-          value: lb://backend-saas
+          value: http://backend-saas.saas-staging.svc.cluster.local:80
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_7_PREDICATES_0
           value: Path=/api/backend-saas/openapi.json
         - name: env.SPRING_CLOUD_GATEWAY_ROUTES_7_FILTERS_0
+          value: SetPath=/openapi.json
+        # Routes: osm-gateway (biz + health + OpenAPI)
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_8_ID
+          value: osm-gateway-biz
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_8_URI
+          value: http://osm-gateway.miker-staging.svc.cluster.local:80
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_8_PREDICATES_0
+          value: Path=/api/osm-gateway/**
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_8_FILTERS_0
+          value: StripPrefix=2
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_9_ID
+          value: osm-gateway-health
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_9_URI
+          value: http://osm-gateway.miker-staging.svc.cluster.local:80
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_9_PREDICATES_0
+          value: Path=/api/osm-gateway/healthz
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_9_FILTERS_0
+          value: SetPath=/healthz
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_10_ID
+          value: osm-gateway-openapi
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_10_URI
+          value: http://osm-gateway.miker-staging.svc.cluster.local:80
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_10_PREDICATES_0
+          value: Path=/api/osm-gateway/openapi.json
+        - name: env.SPRING_CLOUD_GATEWAY_ROUTES_10_FILTERS_0
           value: SetPath=/openapi.json
   destination:
     server: https://kubernetes.default.svc
